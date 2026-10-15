@@ -58,9 +58,9 @@ Decisions here supersede anything contradictory elsewhere; if you find a contrad
 - `*.localhost` resolves to loopback on macOS with no configuration (verified), in Chromium and Firefox, and is
   reserved forever (RFC 6761). Caddy gives `.localhost` names local-CA certificates automatically. So the default
   fronted setup needs **no DNS server at all**.
-- Custom domains (e.g. `myname.internal`, or a personal pseudo-TLD like `firstname.lastname`, which the author intends
-  to use) are supported via dnsmasq + `/etc/resolver/<domain>`. The domain is a config value, so the
-  "which TLD is allowed?" question becomes the user's choice with guidance, not a product decision.
+- Custom domains are supported via dnsmasq + `/etc/resolver/<domain>`; **`.internal` is the recommended custom
+  choice** (e.g. `myname.internal`) and is used in all examples (D24). The domain is a config value, so "which TLD is
+  allowed?" becomes the user's choice with guidance, not a product decision. Made-up TLDs are allowed, with a warning.
 - `.local` is refused (mDNS). Real delegated TLDs (`.dev`, `.app`, …) are refused or warned about (HSTS preload).
 - **Rejected:** `.local` (mDNS conflict, no wildcards); `.test` as default (fine, but Caddy would try public ACME
   unless forced, and it needs dnsmasq); a fixed project-chosen domain.
@@ -68,7 +68,7 @@ Decisions here supersede anything contradictory elsewhere; if you find a contrad
 ### D6 — HTTPS is mandatory in fronted mode
 
 - `http://<custom-host>` is not a secure context; secure-context APIs would silently break.
-- With a locally trusted CA, a pseudo-TLD that is later delegated and HSTS-preloaded still works locally.
+- With a locally trusted CA, even a made-up TLD that is later delegated and HSTS-preloaded still works locally.
 - The author explicitly wants TLS.
 
 ### D7 — YAML on disk is the source of truth; one write module
@@ -143,6 +143,41 @@ Decisions here supersede anything contradictory elsewhere; if you find a contrad
 - `spaghetti-junction.daemon`, `spaghetti-junction.caddy`, `spaghetti-junction.dnsmasq` (if not using Homebrew's),
   `spaghetti-junction.app.<slug>`. Makes them easy to find, audit and tear down, and impossible to confuse with
   user-created jobs.
+
+### D20 — Default daemon port 7724 (approved by the author)
+
+- "SPAG" on a phone keypad, following Local Review's 5622 = "LOCA" convention; easy to remember, and it ties the port to
+  the name.
+- IANA registers 7724 to a 2008 enterprise endpoint product (Novell Snap-in Deep Freeze Control), not a realistic
+  conflict on a developer machine. Avoids 5000/7000 (macOS AirPlay). `--port`/`$PORT` override it; `EADDRINUSE` gets a
+  clear message.
+
+### D21 — `sj run` is the one command agents use to start servers (approved by the author)
+
+- The successor to Paddock's `pm start`: registers the app, keeps or assigns a stable port, hands the process to
+  launchd so it outlives the agent's session, waits until it is listening, prints the URL and exits. Not persistent
+  across reboots unless `--persist`, but always remembered. Full behaviour in `04-apps-health-services.md`.
+- Without a one-command alternative to `npm run dev`, agents keep creating orphans, so this is the habit-changing half
+  of the product (paired with the agent guide snippet and optional hook in `06`).
+
+### D22 — The tab title and favicon show trouble (approved by the author)
+
+- `(N down) Spaghetti Junction` and a status-marked favicon, live over SSE; only `down`/`unhealthy` count. A pinned tab
+  becomes a passive monitor without any notification system. Details in `05-ui.md`.
+
+### D23 — Visual identity: British motorway signage (approved by the author)
+
+- Draws on the name (Gravelly Hill Interchange, M6 junction 6): blue sign panels, white rounded lettering, ports as
+  junction-number plates, hostnames as destinations. Borrow the visual language, don't replicate signs, and use only
+  freely licensed type. Details in `05-ui.md`.
+- **Rejected:** a departures-board/switchboard look (good, but generic), and generic admin-template styling.
+
+### D24 — Examples and the recommended custom domain use `.internal`
+
+- The author has no attachment to a personal made-up TLD; `.internal` is ICANN-reserved for private use, never
+  delegated, and gets Caddy's local CA automatically, so it is the simplest custom domain that is also correct.
+- The *default* stays `localhost` (D5): it needs no dnsmasq, which `.internal` still does. `.internal` is the answer
+  when someone wants their own namespace.
 
 ## Alternatives considered for the whole product
 

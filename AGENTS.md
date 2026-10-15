@@ -27,7 +27,7 @@ Before writing any code, read, in order:
 - **Never require root in the daemon.** Privileged steps belong only in `sj setup` / `sj teardown`, printed before
   they run.
 - **Keep it generic.** Examples, defaults and docs must not assume any particular employer, machine, username or
-  network. Use `example.com`, `firstname.lastname`, `~/Code/my-app` and similar placeholders.
+  network. Use `example.com`, `myname.internal`, `~/Code/my-app` and similar placeholders.
 - Follow the conventions of the author's sibling project Local Review (https://github.com/edspencer/local-review):
   stack, data-home layout, SSE pattern, security middleware, agent guide, release process. `docs/11-research-notes.md`
   summarises the relevant internals.

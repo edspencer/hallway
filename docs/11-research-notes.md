@@ -7,8 +7,7 @@ run, file read, page fetched); "reported" means taken from a secondary source. R
 
 - **IANA root zone, checked 2026-09-30** (`https://data.iana.org/TLD/tlds-alpha-by-domain.txt`, header
   `# Version 2026093000`): 1,439 TLDs. `.dev` and `.app` **are** delegated. **Not** delegated: `.internal`, `.test`,
-  `.local`, `.example`, `.invalid`, `.localhost`, `.home`, `.lan`. The author's surname (their intended pseudo-TLD) was
-  not delegated. *Verified.*
+  `.local`, `.example`, `.invalid`, `.localhost`, `.home`, `.lan`. *Verified.*
 - `.local` — reserved for multicast DNS by RFC 6762; macOS's mDNSResponder intercepts `.local` lookups, so unicast
   resolver configuration for `.local` is unreliable and wildcard resolution does not work. *Reported by multiple
   sources; consistent with long-standing macOS behaviour.*
@@ -20,7 +19,8 @@ run, file read, page fetched); "reported" means taken from a secondary source. R
 
 ## ICANN 2026 new gTLD round
 
-*Reported, from ICANN announcements and coverage; fetched 2026-09-30 and 2026-10-14.*
+Relevant only to users who pick a made-up TLD (`03-networking.md`): it is why such TLDs get a warning and an IANA
+check in `sj doctor`. *Reported, from ICANN announcements and coverage; fetched 2026-09-30 and 2026-10-14.*
 
 - Application window: 30 April – 12 August 2026.
 - 1,616 applications proceeding (announced September 2026).
@@ -30,8 +30,8 @@ run, file read, page fetched); "reported" means taken from a secondary source. R
 - Replacement period 8–21 October 2026; **String Confirmation Day 17 November 2026** (final string list and contention
   sets); prioritisation draw expected in the first half of 2027. Delegations follow evaluation, i.e. years out.
 - The Reveal Day **contention-sets CSV** (`https://newgtldprogram.icann.org/en/application-rounds/round2/reveal-day-contention-sets.csv`)
-  did not contain the author's surname as of 2026-10-14. *Verified* — but that file only lists contested strings, so an
-  uncontested brand application would not appear in it.
+  lists only *contested* strings, so it cannot show whether an uncontested (e.g. brand) string was applied for. Use the
+  APS site or the String Confirmation Day list for that.
 
 Sources:
 - https://www.icann.org/en/announcements/details/icann-reveals-2026-round-applications-for-new-generic-top-level-domains-07-10-2026-en
@@ -51,6 +51,9 @@ Sources:
   (but exposes it to the network). *Verified 2026-10-14.*
 - **Ports 80/443 already in use** on the author's machine by an `ssh` process owned by the user — a container-runtime
   VM's port forward. *Verified 2026-10-14.*
+- **IANA port registry, checked 2026-10-15** (`service-names-port-numbers.csv`): 7724 is registered to
+  `nsdeepfreezectl` ("Novell Snap-in Deep Freeze Control", 2008) for TCP and UDP; 7721–7723 and 7729–7733 are
+  unassigned. *Verified.* Kept as the default (D20): it is not a realistic conflict on a developer machine.
 - **AirPlay Receiver** listens on 5000 and 7000. *Reported; the reason Local Review moved its default off 5000.*
 - **`lsof` noise:** on the author's machine, listening sockets from IDE language servers and agent-tool helpers on
   ephemeral ports (49152–65535, loopback) outnumbered dev servers roughly ten to one. *Verified 2026-09-16.*
@@ -66,7 +69,7 @@ Sources:
 
 - Names that never get public ACME certificates (served from Caddy's local CA): `localhost`, and anything under
   `.localhost`, `.local`, `.internal`, `.home.arpa`; IP addresses. Every other name qualifies for public ACME — so
-  **`.test` and pseudo-TLDs need the internal issuer forced** (`local_certs` global option or `tls internal`).
+  **`.test` and made-up TLDs need the internal issuer forced** (`local_certs` global option or `tls internal`).
 - Automatic HTTPS redirects HTTP → HTTPS.
 - On first use Caddy tries to install its root into the system trust store; this is best-effort and may fail when
   running as an unprivileged service; `caddy trust` retries (needs privileges); `caddy untrust` removes it;
@@ -113,7 +116,12 @@ Read 2026-10-14. Relevant internals:
 - Runs on the author's machine as a user LaunchAgent with `RunAtLoad`, `KeepAlive`, `ThrottleInterval 10`, absolute
   `node` path, `WorkingDirectory`, `StandardOutPath`/`StandardErrorPath` and an explicit `PATH` — the template for
   service generation. That `PATH` contains a per-shell `fnm_multishells/<pid>_<ts>/bin` directory: the **PATH trap**
-  described in `04`.
+  described in `04`. Paddock generates the plist in `packages/server/src/cli/service/launchd.ts` (`renderPlist`),
+  taking `pathEnv` verbatim from `process.env.PATH` at install time (`cli/paddock.ts`; default in `cli/service/spec.ts`).
+  Checked 2026-10-15 (fnm 1.39.0): the multishell directory still existed (a symlink to the same Node version as the
+  plist's absolute `node`), 95,810 multishell directories had accumulated, fnm offers no clean/prune command, and with
+  that entry removed `node`/`npm`/`npx` did not resolve on the plist's `PATH`. Filed as
+  [edspencer/paddock#974](https://github.com/edspencer/paddock/issues/974).
 - Listens on 7233 locally.
 - `scripts/pm` (vendored in the repo; installed as `/usr/local/bin/pm` in its dev-box image): a CommonJS Node script
   wrapping PM2 with a JSON port registry. Commands `start/stop/restart/rm/status [--json]/logs/ports`. Assigns stable

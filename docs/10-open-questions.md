@@ -22,7 +22,6 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
 | ID | Question | Current leaning |
 |----|----------|-----------------|
 | Q-STORE | Health samples/rollups in `node:sqlite` or JSONL? | `node:sqlite` if Q-NODE-MIN allows: rollups and pruning are trivial in SQL, and no dependency. JSONL day-files otherwise. |
-| Q-PORT | Daemon default port. Proposed **7724** ("SPAG" on a keypad, echoing Local Review's 5622 = "LOCA"). | Check IANA's registry and common dev-tool defaults for conflicts. Never 5000/7000 (AirPlay). |
 | Q-DASHBOARD-HOST | Default dashboard hostname in `localhost` mode: `junction.localhost` (current spec), `sj.localhost`, or bare `localhost`? | `junction.localhost`. Bare `localhost` on :443 may collide with other tools. |
 | Q-VALIDATION | Hand-rolled validation or a small schema library? | Hand-rolled (Local Review style) unless the schema grows; the agent-guide file reference should be generated from whatever is chosen. |
 | Q-BOOKMARK-HEALTH | Health-check remote bookmarks? | Off by default; maybe opt-in per link later. Remote checks leak timing/traffic and often hit auth walls. |
@@ -36,16 +35,9 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
 | Q-IPV6 | Listeners bound only to `::1`. | Probe and proxy to the address actually bound (scanner records it). |
 | Q-SYNC | Sharing bookmarks across machines. | Out of scope; the data home can live in a dotfiles repo (generated `.gitignore` excludes state). |
 
-## Author's personal follow-ups (not product work)
-
-- The author intends to use a personal pseudo-TLD for their own install. As of 2026-10-14 it was not in IANA's root
-  zone and not in ICANN's 2026-round Reveal Day contention sets (which only cover *contested* strings, so this is weak
-  evidence). Check the full applied-for list after **String Confirmation Day, 17 November 2026**. Not blocking: with
-  HTTPS and a resolver file, even a later delegation would not break the local setup (see `03-networking.md`).
-
 ## Project-setup TODOs
 
-- [ ] Create the public GitHub repository; push this spec.
+- [x] Create the public GitHub repository and push this spec: https://github.com/edspencer/spaghetti-junction
 - [ ] Decide licence (Q-LICENSE) and add `LICENSE`.
 - [ ] `package.json` with `name: spaghetti-junction`, `bin: { sj, spaghetti-junction }`, `engines.node`, `files`,
       `publishConfig: { access: public, provenance: true }` (copy Local Review's shape).

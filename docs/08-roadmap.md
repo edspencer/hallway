@@ -49,12 +49,14 @@ Acceptance criteria:
 5. `sj run demo -- npx vite --port $PORT --strictPort` returns within 30 s printing the URL; closing the terminal
    that ran it does not stop the server; after a reboot it is `stopped` and listed under "Lost at last reboot";
    with `--persist` it is running again after a reboot.
-6. A generated plist contains no ephemeral version-manager directories in `PATH`; `sj doctor` flags one that does.
+6. A generated plist's `PATH` starts with the resolved Node's `bin` directory and contains no per-shell
+   version-manager directories (e.g. `fnm_multishells`) or non-existent entries; `sj doctor` flags a plist that does.
 7. Stopping the daemon makes `https://junction.localhost` serve the fallback page listing all apps with working links.
 8. With something else holding :443, `sj doctor` names the process and PID and suggests a fix; `sj setup` stops
    instead of fighting it.
-9. `sj setup --domain firstname.lastname` makes `https://firstname.lastname` and `https://review.firstname.lastname`
-   work; `sj doctor` reports dnsmasq bound to loopback only and checks the TLD against IANA's list.
+9. `sj setup --domain myname.internal` makes `https://myname.internal` and `https://review.myname.internal` work;
+   `sj doctor` reports dnsmasq bound to loopback only. With a made-up TLD instead, `sj doctor` warns and checks the TLD
+   against IANA's list.
 10. `sj setup --domain foo.local` is refused with an explanation of the mDNS conflict.
 11. `sj teardown` returns the machine to its prior state (no LaunchDaemons, resolver file, drop-ins or trusted root
     left behind) and the dashboard keeps working in direct mode.

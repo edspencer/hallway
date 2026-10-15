@@ -62,8 +62,9 @@ Mirror Local Review (D16). Keep dependencies minimal.
 
 - Single source of truth: a tiny `server/port.ts` that only exports `DEFAULT_PORT`, so the Vite config can import it
   without loading the server (Local Review's pattern).
-- **Proposed: 7724** — "SPAG" on a phone keypad, echoing Local Review's 5622 = "LOCA". Not yet checked against
-  well-known port registries (Q-PORT).
+- **`DEFAULT_PORT = 7724`** (decided, D20) — "SPAG" on a phone keypad, echoing Local Review's 5622 = "LOCA". Put the
+  mnemonic in the comment, as Local Review does. IANA lists 7724 as "Novell Snap-in Deep Freeze Control" (2008), an
+  enterprise endpoint product that is not a realistic conflict on a developer's machine.
 - Never use 5000 or 7000: macOS's AirPlay Receiver listens there (Local Review moved off 5000 for exactly this).
 - `--port <n>` and `$PORT` override. Fail with a clear message on `EADDRINUSE` / `EACCES`.
 

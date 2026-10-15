@@ -66,7 +66,7 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D2 | Standalone, generic, open-source project. Not a feature of any other tool. |
 | D3 | It owns its own app registry and uses **native launchd** (systemd later) to keep services alive. No PM2. |
 | D4 | **Caddy** is the reverse proxy and TLS terminator. Spaghetti Junction generates Caddy's config; it does not proxy traffic itself. |
-| D5 | Default domain is **`localhost`** (`<slug>.localhost`): resolves to loopback with zero DNS setup and gets Caddy's local CA automatically. Custom domains are supported via dnsmasq + `/etc/resolver`. |
+| D5 | Default domain is **`localhost`** (`<slug>.localhost`): resolves to loopback with zero DNS setup and gets Caddy's local CA automatically. Custom domains are supported via dnsmasq + `/etc/resolver`; `.internal` (e.g. `myname.internal`) is the recommended custom choice. |
 | D6 | **HTTPS is required** in fronted mode. |
 | D7 | **YAML on disk is the source of truth.** The API, CLI and MCP are all wrappers around one write module. Hand edits are first-class. |
 | D8 | MCP is served by **the same process and port** as the dashboard (`/mcp`, Streamable HTTP), plus an `sj mcp` stdio bridge. |
@@ -78,6 +78,14 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D14 | One YAML file per entity, not one big file. |
 | D15 | Ship a useful **v0 with no DNS, no proxy and no sudo**: dashboard linking to `http://localhost:<port>`. |
 | D16 | Tech stack and conventions mirror the author's existing open-source project Local Review (Node ≥ 22, TypeScript, Hono, React, Vite, chokidar, `yaml`). |
+| D17 | Never reassign an existing app's port. |
+| D18 | Record what the scanner observes while processes are alive, so losses can be reported after a reboot. |
+| D19 | All launchd jobs use the `spaghetti-junction.*` label prefix. |
+| D20 | Default daemon port **7724** ("SPAG" on a keypad). |
+| D21 | **`sj run`** is the one command agents use to start a server: launchd-owned, stable port, prints URL, exits. |
+| D22 | The **tab title and favicon** show when something is down. |
+| D23 | Visual identity: **British motorway signage** (blue panels, white rounded lettering, ports as junction numbers). |
+| D24 | Docs use `.internal` for every custom-domain example. |
 
 ## 5. Glossary
 

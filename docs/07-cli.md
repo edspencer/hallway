@@ -81,5 +81,5 @@ printed). Every listing command supports `--json` for agents and scripts. Milest
 | Variable | Meaning |
 |----------|---------|
 | `SPAGHETTI_JUNCTION_HOME` | Data home (default `~/.spaghetti-junction`) |
-| `PORT` | Daemon port for `sj serve` (default 7724, proposed) |
+| `PORT` | Daemon port for `sj serve` (default 7724) |
 | `SPAGHETTI_JUNCTION_DEV` | Development mode (API next to Vite's dev server port, as Local Review does) |

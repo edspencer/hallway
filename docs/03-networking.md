@@ -32,10 +32,10 @@ Why this is the default:
 
 ### Custom domains
 
-Users can set `domain.base` to anything else, e.g. `myname.internal` or a personal pseudo-TLD such as
-`firstname.lastname`. With a custom base the dashboard defaults to the bare apex (`https://firstname.lastname`) and
-apps live underneath (`https://app.firstname.lastname`). The author intends to use a personal pseudo-TLD of exactly
-this shape. Custom domains need dnsmasq and a resolver file (below).
+Users can set `domain.base` to something else; **the recommended choice is a name under `.internal`**, e.g.
+`myname.internal`. With a custom base the dashboard defaults to the bare apex (`https://myname.internal`) and apps
+live underneath (`https://app.myname.internal`). Custom domains need dnsmasq and a resolver file (below). The examples
+throughout this spec use `myname.internal`.
 
 Guidance the docs and `sj doctor` must give:
 
@@ -45,14 +45,14 @@ Guidance the docs and `sj doctor` must give:
 | `*.internal` | ✅ recommended custom | ICANN reserved `.internal` for private use (2024); never delegated. Caddy uses its local CA automatically. |
 | `*.test` | ✅ fine | Reserved by RFC 6761. **But** Caddy's automatic rule does not list `.test`, so it would attempt public ACME — must force the internal issuer (below). |
 | `*.home.arpa` | ✅ fine | RFC 8375, intended for home networks. Long. |
-| pseudo-TLD (e.g. `firstname.lastname`) | ⚠️ works, with caveats | Not reserved: you are squatting on namespace that could be delegated later. Caddy will attempt public ACME unless forced to the internal issuer. See risk analysis below. |
+| made-up TLD (e.g. `name.surname`) | ⚠️ allowed, with a warning | Not reserved: it squats on namespace that could be delegated later. Caddy will attempt public ACME unless forced to the internal issuer. See the note below. |
 | subdomain of a domain you own (e.g. `local.example.com`) | ✅ possible, advanced | Public DNS records pointing at `127.0.0.1` need no local DNS server at all, and real publicly-trusted certificates are available via ACME DNS-01 (no local CA). Downsides: requires a DNS provider API token; every hostname issued appears in public Certificate Transparency logs, leaking your app names; longer names. Not a v1 target. |
 | `*.local` | ❌ refuse | Reserved for mDNS/Bonjour (RFC 6762). macOS's mDNSResponder intercepts `.local` lookups; unicast resolver files for `.local` are unreliable and **wildcards do not work**. |
 | `*.dev`, `*.app`, `*.page`, other real TLDs | ❌ refuse (or loud warning) | Real, delegated TLDs. `.dev` and `.app` are on the browser HSTS preload list; the historical "`.dev` for local development" setups all broke when the TLD was delegated and preloaded. |
 
-**Pseudo-TLD risk analysis** (recorded because the author wants one):
+**Made-up TLDs** — why they are allowed but warned about (some users will want one; steer them to `.internal`):
 
-- DNS protocol: a name like `firstname.lastname` is perfectly valid. Nothing forbids resolving names under an
+- DNS protocol: a name like `name.surname` is perfectly valid. Nothing forbids resolving names under an
   undelegated TLD locally.
 - If the TLD is later delegated, the local setup **keeps working**: `/etc/resolver/<domain>` takes precedence on the
   machine, and because fronted mode is always HTTPS with a locally trusted CA, the `.dev`-style failure (HSTS preload
@@ -66,8 +66,8 @@ Guidance the docs and `sj doctor` must give:
 
 - Dashboard: `domain.dashboard` (default `junction.localhost`; the apex for custom domains).
 - Apps: `<slug>.<base>`, plus any `proxy.aliases`.
-- Name a resolver file after the **full base domain** (`/etc/resolver/firstname.lastname`), never just the TLD
-  (`/etc/resolver/lastname`), so only your own names are captured.
+- Name a resolver file after the **full base domain** (`/etc/resolver/myname.internal`), never just the TLD
+  (`/etc/resolver/internal`), so only your own names are captured.
 - Verified on the author's machine with an existing resolver file for a two-label domain: macOS resolver files
   scope **both the apex and all subdomains**, so the apex can serve the dashboard.
 
@@ -129,7 +129,7 @@ via the admin API):
 
 ```caddyfile
 {
-    # Force the internal CA for everything: needed for .test and pseudo-TLDs,
+    # Force the internal CA for everything: needed for .test and made-up TLDs,
     # harmless for .localhost/.internal (already internal by default).
     local_certs
 }
@@ -185,7 +185,7 @@ daemon is down and how to restart it (`sj service restart` or `launchctl kicksta
 
 ### Why HTTPS is mandatory in fronted mode (D6)
 
-`http://localhost:<port>` is a **secure context** in browsers. `http://app.firstname.lastname` is **not**. Without
+`http://localhost:<port>` is a **secure context** in browsers. `http://app.myname.internal` is **not**. Without
 TLS, moving an app behind a custom hostname silently breaks `crypto.subtle`, service workers, `getUserMedia`, the
 async clipboard API and anything else gated on secure contexts. (`http://*.localhost` is treated as potentially
 trustworthy by modern browsers — verify per browser, Q-SECURE-CONTEXT — but HTTPS everywhere removes the question.)
@@ -198,8 +198,8 @@ Only needed when `domain.base` is not `localhost`.
 - Config (a drop-in owned by Spaghetti Junction, e.g. `$(brew --prefix)/etc/dnsmasq.d/spaghetti-junction.conf`, with
   `conf-dir` enabled in the main config):
   ```
-  address=/firstname.lastname/127.0.0.1
-  address=/firstname.lastname/::1
+  address=/myname.internal/127.0.0.1
+  address=/myname.internal/::1
   listen-address=127.0.0.1
   bind-interfaces
   ```
@@ -252,7 +252,7 @@ Read-only diagnostics, each with a pass/warn/fail line and a suggested fix:
 - (custom domain) TLD not in IANA's delegated list; not `.local`; not an HSTS-preloaded TLD
 - apps bound to `0.0.0.0`
 - two declared apps on one port
-- launchd jobs whose `PATH` contains ephemeral version-manager shim directories (see `04`)
+- launchd jobs whose `PATH` contains per-shell version-manager directories or entries that no longer exist (see `04`)
 
 ## Linux notes (later)
 

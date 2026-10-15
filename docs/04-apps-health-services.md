@@ -232,15 +232,28 @@ LaunchAgents start at **user login**, not at boot. That is the right behaviour f
 ### The PATH trap (important)
 
 launchd jobs inherit no shell environment, so `PATH` must be set explicitly. But naïvely capturing the current
-shell's `PATH` is a latent bug: version managers put **per-shell, ephemeral shim directories** on `PATH` — the plist the
-author uses for Paddock contains a directory of the form `~/.local/state/fnm_multishells/<pid>_<timestamp>/bin`,
-which the version manager deletes later. After a reboot the job cannot find `node`/`npm` and fails, silently.
+shell's `PATH` is a latent bug: some version managers put **per-shell directories** on `PATH`. fnm, for example, adds
+`~/.local/state/fnm_multishells/<pid>_<timestamp>/bin`, a symlink created for one terminal session. Copy that into a
+plist and the service's only route to `node`/`npm`/`npx` is a leftover from a shell that closed long ago.
+
+This was found in the plist that Paddock's own `paddock service install` generates (filed as
+[edspencer/paddock#974](https://github.com/edspencer/paddock/issues/974)). On the author's machine the directory still
+existed two months and two reboots later, so nothing had broken *yet*: fnm never cleans these up and has no command to
+(95,810 of them had piled up). But with that one entry removed, `node`, `npm` and `npx` all failed to resolve on the
+service's `PATH`. So:
+- deleting it (the obvious cleanup) silently breaks every `#!/usr/bin/env node` tool the service spawns, while the
+  service itself keeps running, because it was started via an absolute `node` path;
+- if the installing shell had a different version selected than the absolute `node` path, child `node` invocations
+  silently run a different version.
 
 The generator must:
 - resolve `command[0]` (and the Node binary, for Node scripts) to an **absolute, real path** (`realpath` of `which`),
   pointing at the version manager's stable install directory (e.g. `~/.local/share/fnm/node-versions/<v>/installation/bin`),
   not a shim;
-- build `PATH` from stable directories only, dropping known ephemeral patterns (`fnm_multishells`, etc.);
+- **put the resolved Node's own `bin` directory first** in `PATH`, so `node`/`npm`/`npx` always resolve, and resolve to
+  the same Node that runs the service;
+- build the rest of `PATH` from stable directories only, dropping per-shell patterns (`fnm_multishells`, etc.) and any
+  entry that does not exist;
 - record the resolved Node version, so `sj doctor` can warn when that version has been uninstalled (the absolute path
   will break), and `sj service regenerate <slug>` can fix it.
 
@@ -253,7 +266,7 @@ The generator must:
   it Vite silently picks another port when the one it wants is busy, and the app "moves"), Astro `--port`, Next `-p`.
 - **Never reassign an app's existing port.** Apps hardcode their own ports in helper scripts, dev-proxy configs and
   baked-in site URLs (both seen in the motivating incident). A claimed or declared app keeps the port it already uses.
-- New apps with no port get one from `ports.assignRange` (proposed default 5100–5999; avoid 5000 for AirPlay),
+- New apps with no port get one from `ports.assignRange` (default 5100–5999; avoids 5000 for AirPlay),
   skipping ports that are declared, observed listening, or well known. Assignment is stable: stored in the YAML.
 
 ### Logs
