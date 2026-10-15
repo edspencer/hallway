@@ -1,0 +1,122 @@
+# 11 — Research notes
+
+Facts gathered during design, with when and how they were established. "Verified" means checked directly (command
+run, file read, page fetched); "reported" means taken from a secondary source. Re-verify anything time-sensitive.
+
+## TLDs and reserved names
+
+- **IANA root zone, checked 2026-09-30** (`https://data.iana.org/TLD/tlds-alpha-by-domain.txt`, header
+  `# Version 2026093000`): 1,439 TLDs. `.dev` and `.app` **are** delegated. **Not** delegated: `.internal`, `.test`,
+  `.local`, `.example`, `.invalid`, `.localhost`, `.home`, `.lan`. The author's surname (their intended pseudo-TLD) was
+  not delegated. *Verified.*
+- `.local` — reserved for multicast DNS by RFC 6762; macOS's mDNSResponder intercepts `.local` lookups, so unicast
+  resolver configuration for `.local` is unreliable and wildcard resolution does not work. *Reported by multiple
+  sources; consistent with long-standing macOS behaviour.*
+- `.test`, `.example`, `.invalid`, `.localhost` — reserved by RFC 6761.
+- `home.arpa` — RFC 8375, for home networks.
+- `.internal` — reserved by ICANN for private use (2024).
+- `.dev` and `.app` — real TLDs on the browser HSTS preload list; the historical "use `.dev` locally" pattern broke
+  when `.dev` was delegated.
+
+## ICANN 2026 new gTLD round
+
+*Reported, from ICANN announcements and coverage; fetched 2026-09-30 and 2026-10-14.*
+
+- Application window: 30 April – 12 August 2026.
+- 1,616 applications proceeding (announced September 2026).
+- **Reveal Day: 7 October 2026.** ICANN's announcement: 1,615 applications, including 333 brand, 16 community-based,
+  15 geographic, 21 IDN and 9 variant applications. Published via the Application Publication and Statistics (APS)
+  site, `https://newgtldprogram-aps.icann.org/applications`.
+- Replacement period 8–21 October 2026; **String Confirmation Day 17 November 2026** (final string list and contention
+  sets); prioritisation draw expected in the first half of 2027. Delegations follow evaluation, i.e. years out.
+- The Reveal Day **contention-sets CSV** (`https://newgtldprogram.icann.org/en/application-rounds/round2/reveal-day-contention-sets.csv`)
+  did not contain the author's surname as of 2026-10-14. *Verified* — but that file only lists contested strings, so an
+  uncontested brand application would not appear in it.
+
+Sources:
+- https://www.icann.org/en/announcements/details/icann-reveals-2026-round-applications-for-new-generic-top-level-domains-07-10-2026-en
+- https://www.icann.org/en/announcements/details/icann-2026-round-closes-with-more-than-1600-new-gtld-applications-13-08-2026-en
+- https://newgtldprogram.icann.org/en/application-rounds/round2
+- https://icannwiki.org/New_gTLD_Program_(2026)
+
+## macOS behaviour (Darwin 27, author's machine)
+
+- **`*.localhost` resolves with no configuration.** `dscacheutil -q host -a name foo.localhost` and
+  `… a.b.localhost` return `127.0.0.1` / `::1`; `curl http://foo.localhost:<port>/` reached a local server
+  (HTTP 200). *Verified 2026-10-14.*
+- **Resolver files cover the apex.** With an existing `/etc/resolver/<two-label-domain>` file, `scutil --dns` listed
+  the domain as its own resolver and the apex itself resolved through it. *Verified 2026-09-30.*
+- **Unprivileged low-port binding:** as a normal user, `listen(444, '127.0.0.1')` → `EACCES`;
+  `listen(446, '::1')` → `EACCES`; `listen(445, '0.0.0.0')` → OK. So loopback :443 needs root; wildcard :443 does not
+  (but exposes it to the network). *Verified 2026-10-14.*
+- **Ports 80/443 already in use** on the author's machine by an `ssh` process owned by the user — a container-runtime
+  VM's port forward. *Verified 2026-10-14.*
+- **AirPlay Receiver** listens on 5000 and 7000. *Reported; the reason Local Review moved its default off 5000.*
+- **`lsof` noise:** on the author's machine, listening sockets from IDE language servers and agent-tool helpers on
+  ephemeral ports (49152–65535, loopback) outnumbered dev servers roughly ten to one. *Verified 2026-09-16.*
+- **Orphan identification:** dev servers' command lines were often relative (`node dist/index.js`); the reliable
+  identifier was the process cwd via `lsof -a -p <pid> -d cwd -Fn`, then `package.json`/README/git. Worktree siblings
+  were distinguishable only by branch. After a reboot the cwd of dead processes was unrecoverable; they could only be
+  matched afterwards by cross-referencing build-cache mtimes, inconclusively. *Verified 2026-09-30.*
+- `node:sqlite` works without a flag on Node v24.15.0 (SQLite 3.51.3). *Verified 2026-10-14.*
+
+## Caddy
+
+*From https://caddyserver.com/docs/automatic-https, fetched 2026-10-14.*
+
+- Names that never get public ACME certificates (served from Caddy's local CA): `localhost`, and anything under
+  `.localhost`, `.local`, `.internal`, `.home.arpa`; IP addresses. Every other name qualifies for public ACME — so
+  **`.test` and pseudo-TLDs need the internal issuer forced** (`local_certs` global option or `tls internal`).
+- Automatic HTTPS redirects HTTP → HTTPS.
+- On first use Caddy tries to install its root into the system trust store; this is best-effort and may fail when
+  running as an unprivileged service; `caddy trust` retries (needs privileges); `caddy untrust` removes it;
+  `skip_install_trust` disables it.
+- Homebrew versions on 2026-09-30: **caddy 2.11.4**, **dnsmasq 2.93**. *Verified (`brew info`).*
+
+## Prior art status (checked 2026-09-16 via GitHub API / npm)
+
+| Project | Last push | Stars | Notes |
+|---------|-----------|-------|-------|
+| typicode/hotel | 2023-10-23 | ~10k | 122 open issues; dashboard at `hotel.localhost`; `hotel add 'npm start'` |
+| peterldowns/localias | 2025-11-07 | ~1.5k | Caddy + `/etc/hosts`; TLS auto-trust; `.local` via mDNS; **no wildcards, no boot persistence, no process management** (from its README) |
+| Unitech/pm2 | 2026-09-04 | ~43k | v7.0.4 on npm; launchd startup issues #4318, #5084 |
+
+## The author's sibling projects (public, MIT)
+
+### Local Review — https://github.com/edspencer/local-review (npm `local-review`, v0.9.0 when read)
+
+Read 2026-10-14. Relevant internals:
+
+- **Dependencies:** `hono`, `@hono/node-server`, `chokidar`, `yaml`, `@resvg/resvg-js`, `opentype.js`. Dev: React 19,
+  Vite, TypeScript, tsx, Playwright, changesets, concurrently.
+- **`server/port.ts`:** only `export const DEFAULT_PORT = 5622;` — "5622 spells LOCA on a phone keypad. (It was 5000
+  until 0.2.0, which clashes with the macOS AirPlay Receiver.)"
+- **`server/config.ts`:** `packageRoot()` walks up to its own `package.json`; data home
+  `$LOCAL_REVIEW_HOME || ~/.local-review` with `projects/<slug>/{project.yaml, prs/, reviews/, assets/}`,
+  `backups/<ISO>/`, `examples/`; `SAFE_NAME = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/`.
+- **`server/events.ts`:** chokidar watch of `projects/` (`ignoreInitial`, depth 3, ignores `*.tmp`), path → typed
+  event mapping, **150 ms per-key debounce**, in-process subscriber set, plus git-state polling.
+- **`server/index.ts`:** Hono app; `app.use('*', localOnly)`; `/api/events` via `streamSSE` (hello event, `change`
+  events with ids, 25 s heartbeat); `/api/health` → `{ ok: true }`; `/llms.txt`, `/llms-full.txt`,
+  `/agent-guide.md` rendered with live data; thumbnails at `/api/projects/:project/thumb.svg` with ETag/304; serves
+  `dist/web` statically; binds `127.0.0.1` only.
+- **`server/security.ts`:** `localOnly` middleware — Host must be `localhost`/`127.0.0.1`/`[::1]`; non-GET writes
+  must be JSON (or a specific image type for uploads); Origin, if present, must be local. **This is why fronting
+  needs Host rewriting (D9).**
+- **`server/stackviz.ts`:** `svgToPng()` via resvg with bundled Inter / JetBrains Mono fonts and system fonts
+  disabled for deterministic output.
+- **CLI:** default command `serve`; `--port`/`$PORT`; friendly `EADDRINUSE`/`EACCES` messages; exit 2 on usage
+  errors. No service-install command and **no MCP**.
+
+### Paddock — https://github.com/edspencer/paddock (npm `@edspencer/paddock`)
+
+- Runs on the author's machine as a user LaunchAgent with `RunAtLoad`, `KeepAlive`, `ThrottleInterval 10`, absolute
+  `node` path, `WorkingDirectory`, `StandardOutPath`/`StandardErrorPath` and an explicit `PATH` — the template for
+  service generation. That `PATH` contains a per-shell `fnm_multishells/<pid>_<ts>/bin` directory: the **PATH trap**
+  described in `04`.
+- Listens on 7233 locally.
+- `scripts/pm` (vendored in the repo; installed as `/usr/local/bin/pm` in its dev-box image): a CommonJS Node script
+  wrapping PM2 with a JSON port registry. Commands `start/stop/restart/rm/status [--json]/logs/ports`. Assigns stable
+  ports from 5001–5999; injects `PORT` and `HOST=0.0.0.0`; scrubs production-data env vars and refuses commands
+  referencing production data paths; writes the registry atomically (tmp + rename); config resolution env → KEY=VALUE
+  file (`$PM_CONFIG`, default `/etc/paddock-servers/pm.env`) → default. Registry format in `04`.
