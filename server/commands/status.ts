@@ -82,14 +82,17 @@ function printObserved(ctx: Ctx, observed: ObservedListener[]) {
     ctx.out('Nothing unnamed is listening.\n');
     return;
   }
+  // the column only when something has a supervisor: `launchd: com.example.api`, `systemd: api.service`
+  const sup = observed.some((o) => o.identity.supervisor);
   ctx.out(
     table(
-      ['PORT', 'ID', 'NAME', 'DIRECTORY', 'COMMAND'],
+      ['PORT', 'ID', 'NAME', 'DIRECTORY', ...(sup ? ['SUPERVISED BY'] : []), 'COMMAND'],
       observed.map((o) => [
         String(o.port),
         o.id,
-        o.identity.label ?? o.identity.name ?? o.title ?? '-',
+        o.identity.label ?? o.identity.name ?? o.identity.displayName ?? o.title ?? '-',
         o.identity.projectDir ?? o.identity.cwd ? show((o.identity.projectDir ?? o.identity.cwd)!) : '-',
+        ...(sup ? [o.identity.supervisor ? `${o.identity.supervisor.manager}: ${o.identity.supervisor.label}` : '-'] : []),
         o.identity.command ?? o.identity.process ?? '-',
       ]),
     ),

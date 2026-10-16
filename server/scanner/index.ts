@@ -15,6 +15,7 @@ import { ObservedStore, labelListeners, normaliseCommand, observationId, recordB
 import { type Sniff, sniff } from './sniff.js';
 
 export { suggestSlug } from './claim.js';
+export { fallbackName } from './observations.js';
 export { type FilterOptions, type IgnoreRules, noiseReason } from './filter.js';
 export type { Observation } from './types.js';
 
@@ -232,6 +233,7 @@ function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: numb
     cwd: info.cwd,
     startedAt: info.startTime === null ? null : new Date(info.startTime).toISOString(),
     orphan: info.orphan,
+    supervisor: info.supervisor ?? null,
     project: identity.project,
     git: identity.git,
     label: '',

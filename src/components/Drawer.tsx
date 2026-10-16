@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { AppHistory, AppView, Expected, HistoryWindow, StateResponse } from '../../shared/api';
 import { getHistory, patchApp, thumbUrl } from '../api';
 import { paintFor } from '../lib/colour';
-import { ago, displayUrl, duration, millis, percent, tildify } from '../lib/format';
+import { ORPHANED_HINT, ago, displayUrl, duration, exposedHint, millis, percent, supervisedBy, tildify } from '../lib/format';
 import { STATE_META, doorState, isScanning } from '../lib/status';
 import { CloseIcon, CopyIcon, ExternalIcon } from './icons';
 import { LatencyChart } from './LatencyChart';
@@ -195,10 +195,13 @@ function Identity({ app, home, scanning }: { app: AppView; home: string | null; 
   if (id.bindAddress) rows.push(['Bound to', <span>
     <code>{id.bindAddress}</code>
     {id.exposed ? <span className="hw-badge hw-badge--warn">exposed: reachable from the network</span> : null}
+    {id.exposed ? <p className="hw-note">{exposedHint(id.bindAddress, port)}</p> : null}
   </span>]);
+  if (id.supervisor) rows.push(['Supervised by', <code>{supervisedBy(id.supervisor)}</code>]);
   if (id.ppid !== null) rows.push(['Parent', <span>
     <span className="hw-num">{id.ppid}</span>
     {id.orphaned ? <span className="hw-badge">orphaned: the session that started it is gone</span> : null}
+    {id.orphaned && !app.managed ? <p className="hw-note">{ORPHANED_HINT}</p> : null}
   </span>]);
   if (id.command) rows.push(['Command', <code className="hw-wrap">{id.command}</code>]);
   return (

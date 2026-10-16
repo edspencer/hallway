@@ -1,6 +1,7 @@
 // The slug a Claim form is pre-filled with (docs/04-apps-health-services.md, "Claim"). The claim itself (the
 // `apps/<slug>.yaml` it writes) is the daemon core's (server/api.ts), through the store.
 import type { Observation } from './types.js';
+import { fallbackName } from './observations.js';
 
 /** A valid app slug: a DNS label, because it becomes `<slug>.<base>` in fronted mode (docs/02-architecture.md). */
 export const SLUG = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -19,11 +20,11 @@ export function slugify(s: string): string {
 }
 
 /**
- * A slug for an observation: from the package (or project) name, plus the branch for a worktree sibling, made unique
- * against `taken` with a numeric suffix.
+ * A slug for an observation: from the package (or project) name, else its supervisor or executable, plus the branch
+ * for a worktree sibling, made unique against `taken` with a numeric suffix.
  */
 export function suggestSlug(obs: Observation, taken: ReadonlySet<string> = new Set()): string {
-  let base = slugify(obs.project?.name ?? obs.process ?? '') || `app-${obs.port}`;
+  let base = slugify(obs.project?.name ?? fallbackName(obs) ?? obs.process ?? '') || `app-${obs.port}`;
   const branch = obs.git?.branch;
   if (obs.label.includes(' @ ') && branch && !['main', 'master', 'trunk'].includes(branch))
     base = slugify(`${base}-${branch}`) || base;

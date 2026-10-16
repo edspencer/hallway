@@ -1,0 +1,7 @@
+PID	Status	Label
+-	0	com.apple.SafariHistoryServiceAgent
+1201	0	com.example.api
+-	78	homebrew.mxcl.postgresql@16
+3302	0	homebrew.mxcl.llm-server
+512	0	application.com.example.Editor.1234567.1234570
+-	-9	com.example.crashed

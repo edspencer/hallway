@@ -23,6 +23,13 @@ export interface Listener {
   addresses: string[];
 }
 
+/** The service manager keeping a process running: a loaded launchd job, or a systemd unit whose cgroup it's in. */
+export interface Supervisor {
+  manager: 'launchd' | 'systemd';
+  /** The job's label (`com.example.api`) or the unit's name (`api.service`). */
+  label: string;
+}
+
 /** What the scanner needs to know about the process behind a listener. Fields the OS won't tell us are null. */
 export interface ProcessInfo {
   pid: number;
@@ -37,9 +44,12 @@ export interface ProcessInfo {
   startTime: number | null;
   /**
    * The parent has been replaced by init or a subreaper, i.e. the session that launched it is gone (PPID 1 under
-   * launchd; on Linux, PID 1 or a `systemd --user` manager that adopted it).
+   * launchd; on Linux, PID 1 or a `systemd --user` manager that adopted it) and no service manager supervises it. A
+   * LaunchAgent or a systemd service has the same parent as a true orphan, so `supervisor` is what tells them apart.
    */
   orphan: boolean;
+  /** What keeps it running, when a service manager does (absent: not looked up, as on Windows). */
+  supervisor?: Supervisor | null;
 }
 
 /** Merge a PID's sockets on one port (IPv4 + IPv6, or several addresses) into one listener, ordered by port then PID. */

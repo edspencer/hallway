@@ -21,10 +21,38 @@ export function observationId(root: string | null, port: number, normalisedComma
   return crypto.createHash('sha256').update(`${root ?? ''}\0${port}\0${normalisedCommand}`).digest('hex').slice(0, 16);
 }
 
+/** Runtimes and shells that say nothing about what they run: `node` alone doesn't name a server. */
+const RUNTIMES = /^(node|nodejs|bun|deno|python[\d.]*|ruby|java|php|perl|dotnet|sh|bash|zsh|dash|fish|env|npm|npx|pnpm|yarn|uv|tsx)(\.exe)?$/i;
+
+/**
+ * A supervisor's label, shortened to what it names: `homebrew.mxcl.<formula>` and other reverse-DNS launchd labels
+ * to their last part (`com.example.api` → `api`), a launchd-started application (`application.com.example.App.123.456`)
+ * to the app, a systemd unit to its name without `.service`.
+ */
+export function supervisorName(label: string): string {
+  const unit = /^(.+)\.service$/.exec(label);
+  if (unit) return unit[1];
+  const parts = label.replace(/^application\./, '').split('.');
+  while (parts.length > 1 && /^\d+$/.test(parts.at(-1)!)) parts.pop();
+  return parts.at(-1) || label;
+}
+
+/**
+ * What to call a listener that has no project (its working directory is `/`, the home directory or a prefix such as
+ * /opt/homebrew): its supervisor's label, else its executable unless that's a bare runtime. Null if neither says
+ * anything, and the page's `<title>` (or `process :port`) is all there is.
+ */
+export function fallbackName(o: Pick<Observation, 'supervisor' | 'argv' | 'process'>): string | null {
+  if (o.supervisor) return supervisorName(o.supervisor.label);
+  const exe = o.argv?.[0] ? o.argv[0].split(/[\\/]/).at(-1)! : o.process;
+  return exe && !RUNTIMES.test(exe) ? exe.replace(/\.exe$/i, '') : null;
+}
+
 /**
  * What to call each listener. Worktree siblings (listeners from different checkouts of one repository) become
  * `repo @ branch`, so three copies of one dashboard on three ports can be told apart; a lone linked worktree is
- * labelled the same way. Everything else is its project name, else its process name and port.
+ * labelled the same way. Everything else is its project name, else its supervisor's label or its executable
+ * (`fallbackName`), else its process name and port.
  */
 export function labelListeners(list: Observation[]): void {
   const checkouts = new Map<string, Set<string>>();
@@ -37,7 +65,7 @@ export function labelListeners(list: Observation[]): void {
   for (const l of list) {
     const g = l.git;
     if (g && g.branch && (g.worktree || (checkouts.get(g.commonDir)?.size ?? 0) > 1)) l.label = `${g.repo} @ ${g.branch}`;
-    else l.label = l.project?.name ?? `${l.process ?? 'unknown'} :${l.port}`;
+    else l.label = l.project?.name ?? fallbackName(l) ?? `${l.process ?? 'unknown'} :${l.port}`;
   }
 }
 

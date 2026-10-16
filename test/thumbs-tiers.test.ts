@@ -268,7 +268,7 @@ describe('the thumbnailer with every tier', () => {
     providers.register({
       name: 'fake-prober',
       appHealth: (slug) => (health.has(slug) ? { ...UNKNOWN_HEALTH, state: health.get(slug)! } : null),
-      appIdentity: ({ slug }) => (slug === 'web' ? { pid: 42, ppid: 1, process: 'node', command: 'vite', cwd: '/x', projectDir: '/x', name: 'web', description: null, repo: 'web', branch: 'main', worktree: false, lastCommitAt: null, framework: 'vite', bindAddress: '127.0.0.1', exposed: false, orphaned: false, startedAt: null, label: null } : null),
+      appIdentity: ({ slug }) => (slug === 'web' ? { pid: 42, ppid: 1, process: 'node', command: 'vite', cwd: '/x', projectDir: '/x', name: 'web', description: null, repo: 'web', branch: 'main', worktree: false, lastCommitAt: null, framework: 'vite', bindAddress: '127.0.0.1', exposed: false, orphaned: false, supervisor: null, displayName: null, startedAt: null, label: null } : null),
     });
     const f = fakePlaywright();
     const fetchNone = (async () => {

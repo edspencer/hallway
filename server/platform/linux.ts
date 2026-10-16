@@ -106,6 +106,20 @@ export function isOrphan(ppid: number, parentComm: string | null): boolean {
   return ppid <= 1 || parentComm === 'systemd' || parentComm === 'init';
 }
 
+/**
+ * /proc/<pid>/cgroup → the systemd service whose cgroup the process is in, or null. cgroup v2 has one line,
+ * `0::/user.slice/user-1000.slice/user@1000.service/app.slice/api.service`; v1 has one per hierarchy, and systemd's
+ * own is `name=systemd`. Only the innermost unit counts: a terminal's shell sits in a `.scope` (a session, or an app
+ * scope under `user@1000.service`), which is not supervision; nor is the user manager's own `user@<uid>.service`.
+ */
+export function parseCgroupService(text: string): string | null {
+  const lines = text.split('\n').filter(Boolean);
+  const line = lines.find((l) => /^0::/.test(l)) ?? lines.find((l) => /^\d+:name=systemd:/.test(l));
+  if (!line) return null;
+  const unit = line.slice(line.indexOf(':', line.indexOf(':') + 1) + 1).split('/').filter(Boolean).at(-1) ?? '';
+  return /\.service$/.test(unit) && !/^user@\d+\.service$/.test(unit) ? unit : null;
+}
+
 /** The USER_HZ that /proc/<pid>/stat counts in: 100 on every mainstream Linux, but asked once anyway. */
 let clockTicks: Promise<number> | undefined;
 const ticksPerSecond = () => (clockTicks ??= run('getconf', ['CLK_TCK']).then(({ stdout }) => Number(stdout.trim()) || 100));
@@ -225,6 +239,8 @@ export const linux: Platform = {
       }
       const argv = parseCmdline(read(`/proc/${pid}/cmdline`) ?? '');
       const parent = stat.ppid > 1 ? parseProcStat(read(`/proc/${stat.ppid}/stat`) ?? '') : null;
+      // a systemd service's main process has PID 1 (or `systemd --user`) as its parent, just like an orphan
+      const unit = parseCgroupService(read(`/proc/${pid}/cgroup`) ?? '');
       out.set(pid, {
         pid,
         ppid: stat.ppid,
@@ -232,7 +248,8 @@ export const linux: Platform = {
         argv: argv.length ? argv : null,
         cwd,
         startTime: btime === null ? null : btime + Math.round((stat.startTicks / hz) * 1000),
-        orphan: isOrphan(stat.ppid, parent?.comm ?? null),
+        orphan: isOrphan(stat.ppid, parent?.comm ?? null) && !unit,
+        supervisor: unit ? { manager: 'systemd', label: unit } : null,
       });
     }
     return out;

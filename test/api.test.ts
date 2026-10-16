@@ -56,6 +56,8 @@ const OBS: ObservedListener = {
     bindAddress: '0.0.0.0',
     exposed: true,
     orphaned: true,
+    supervisor: null,
+    displayName: null,
     startedAt: null,
     label: null,
   },

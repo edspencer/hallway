@@ -34,7 +34,7 @@ function offlineNotice(ctx: Ctx): LostNotice | null {
           pid: o?.pid ?? null, ppid: o?.ppid ?? null, process: o?.process ?? null, command: o?.command ?? r.command?.join(' ') ?? null, cwd: o?.cwd ?? r.cwd,
           projectDir: o?.project?.root ?? null, name: o?.project?.name ?? null, description: o?.project?.description ?? null, repo: o?.git?.repo ?? null,
           branch: o?.git?.branch ?? null, worktree: o?.git?.worktree ?? false, lastCommitAt: o?.git?.lastCommitAt ?? null, framework: o?.project?.framework ?? null,
-          bindAddress: null, exposed: false, orphaned: false, startedAt: o?.startedAt ?? null, label: null,
+          bindAddress: null, exposed: false, orphaned: false, supervisor: o?.supervisor ?? null, displayName: null, startedAt: o?.startedAt ?? null, label: null,
         },
         firstSeen: r.firstSeen,
         lastSeen: r.lastSeen,

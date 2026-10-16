@@ -93,15 +93,25 @@ named it — what is it?"*
    identifier**:
    - cwd: `lsof -a -p <pid> -d cwd -Fn`
    - full command: `ps -o command= -p <pid>`; start time: `ps -o lstart= -p <pid>`
-   - parent: `ps -o ppid= -p <pid>` — PPID 1 means reparented to launchd (its launching session is gone: an orphan)
-   - project root: walk up from cwd to the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `.git`
+   - parent: `ps -o ppid= -p <pid>` — PPID 1 means reparented to launchd, but launchd is also the parent of every job it
+     runs, so PPID 1 alone isn't an orphan (D62)
+   - supervisor: on macOS, `launchctl list` (once per scan, and only when something has PPID 1) maps PIDs to the loaded
+     jobs' labels; on Linux, `/proc/<pid>/cgroup`'s innermost unit, if it's a `.service`. A supervised process is
+     shown as `launchd: <label>` / `systemd: <unit>` and is never **orphaned**: orphaned means PPID 1 (or a subreaper)
+     *and* no service manager runs it. Windows has no lookup (a scheduled task's process has a live parent anyway)
+   - project root: walk up from cwd to the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `.git`,
+     stopping at a known non-project location (D62): `/`, the home directory, a package-manager prefix
+     (`/opt/homebrew`, `/usr/local/Homebrew`, `/home/linuxbrew/.linuxbrew`, …) or a system directory. A listener
+     started there has no project and no git identity (Homebrew's prefix is a git repository on branch `stable`); it
+     is named by its supervisor's label (`homebrew.mxcl.<formula>` → `<formula>`), else its executable unless that's
+     a bare runtime (`node`, `python3`), with the HTTP `<title>` as the display hint
    - name/description: `package.json` `name`/`description`, else first README heading, else directory name
    - git: `git -C <dir> rev-parse --show-toplevel`, `--abbrev-ref HEAD`, `log -1 --format=%cI`; **worktree
      detection** by comparing `--git-dir` with `--git-common-dir` (they differ in a worktree; the common dir points at
      the parent repository)
    - framework guess from the command and dependencies (vite, astro, next, remix, sveltekit, express, fastify, hono,
      flask, django, rails…) — used for an icon and for service-command hints
-   - bind address: `127.0.0.1`/`::1` vs `*` (exposed on the network)
+   - bind address: `127.0.0.1`/`::1` vs `*` (exposed on the network: other devices on the LAN can reach it)
 5. **Label worktree siblings.** Several listeners from worktrees of the same repository are shown as `repo @ branch`
    so they are distinguishable (the motivating incident had three copies of one dashboard on 4666/4670/4671).
 6. **Persist** to `state/observed.json`, keyed by a **stable observation id** = hash(project root + port + normalised

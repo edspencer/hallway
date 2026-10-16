@@ -403,7 +403,8 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
 - **Identity cache:** per PID, keyed also on the start time and command so a reused PID isn't confused with the old
   process, for 10 minutes; the HTTP sniff runs on every scan (titles change), at most 8 at once.
 - **Orphans:** PPID 1 on both platforms; on Linux also a parent named `systemd` (the `systemd --user` subreaper).
-  Under launchd a LaunchAgent is PPID 1 too, so "orphan" means "not attached to a session", not "lost".
+  Under launchd a LaunchAgent is PPID 1 too, so "orphan" means "not attached to a session", not "lost". *Amended by
+  D62:* a process a service manager runs is supervised, not orphaned.
 - **Starting:** while a managed service is in its start grace period and not listening, its state is `unknown` with
   `starting: true`, so no new state is needed in `AppState`. Starting probes are not uptime samples.
 - **Flap damping applies to any move away from `healthy`** (to `unhealthy`, `down` or `stopped`), counting consecutive
@@ -1049,3 +1050,45 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
 | PM2 + dnsmasq + Caddy, hand-wired | A recipe, not a product; nothing ties registry, routing and dashboard together. |
 | Coolify / Dokploy | Server PaaS; far too heavy. |
 | launchd plists by hand | Verbose, error-prone (the PATH trap), no overview. |
+
+### D62 — Orphaned means nothing supervises it; a cwd that says nothing doesn't name the listener (2026-10-16)
+
+Run on a real Mac, 0.5.0 flagged a LaunchAgent in its own project directory, a `brew services` job and a job started
+in `/` as **orphaned**, named the `brew services` job after Homebrew's own repository ("Homebrew @ stable", its cwd
+being `/opt/homebrew`), and showed **exposed** with no explanation.
+
+- **Orphaned = PPID 1 (or a `systemd --user` subreaper) *and* no service manager runs it.** launchd is the parent of
+  every job it runs as well as of every true orphan, so PPID 1 can't tell them apart.
+  - **macOS:** `launchctl list`, run as the user, prints `PID  Status  Label` for the jobs loaded in the user's domain
+    (`brew services` jobs included); a PID in it is that job's process. It's run once per scan, and only when a
+    process has PPID 1, through the same runner as `ps` and `lsof` (`darwinProcesses` is the pure part). Root's
+    LaunchDaemons aren't listed, and needn't be: their sockets belong to another user, which lsof doesn't show.
+  - **Linux:** `/proc/<pid>/cgroup`'s innermost unit (cgroup v2's `0::` line, else v1's `name=systemd`), if it's a
+    `.service` other than `user@<uid>.service`. A terminal's shell is in a `.scope` (a login session, or an app scope
+    under the user manager), which isn't supervision. This also catches a process *below* a service's main process.
+  - **Windows:** nothing to look up. Windows doesn't re-parent, so orphaned already means the parent has exited, and
+    a scheduled task's process (Hallway's `hallway supervise`, D60) has a live parent. `supervisor` is null there.
+  - The supervisor is reported: `Observation.supervisor` and `ListenerIdentity.supervisor` (`{ manager, label }`),
+    shown as `launchd: <label>` / `systemd: <unit>` in the observed tray, the drawer, `hallway scan` (a SUPERVISED BY
+    column when any row has one) and `--json`, and the Claim form notes that the service manager already keeps it
+    running, so it needn't also become a Hallway service.
+- **Known non-project directories don't identify a listener** (`nonProjectDir`, server/scanner/identify.ts): exactly
+  `/`, the home directory, `/tmp`, `/var`, `/opt`, `/usr`, `/usr/local`, `/srv`, `/Users`, `/home` and a few more
+  (projects can live below these), and anything at or below a package-manager prefix or system directory
+  (`/opt/homebrew`, `/usr/local/Homebrew`, `/usr/local/Cellar`, `/home/linuxbrew/.linuxbrew`, `/nix`, `/usr/lib`,
+  `/System`, `/Library`, `~/Library`, `C:\Windows`, `C:\Program Files`, …). The project-root walk stops at them too,
+  so a subdirectory of `/opt/homebrew` doesn't find Homebrew's `.git`. Such a listener has no project and no git.
+- **Naming order:** the project in a real cwd; else the supervisor's label, shortened (`homebrew.mxcl.<formula>` and
+  other reverse-DNS labels to their last part, `application.<bundle id>.<n>.<n>` to the app, `<unit>.service` to the
+  unit); else the executable, unless it's a bare runtime or shell (`node`, `python3`, `bash`…); else, as before, the
+  HTTP `<title>` in the dashboard and `process :port` in the label. The fallback is `ListenerIdentity.displayName`,
+  and the suggested slug uses it too.
+- **Exposed explains itself:** an accessible tooltip on the badge (focusable, `aria-describedby`, shown on hover and
+  focus, hidden on Escape) and a note under "Bound to" in the drawer, both with the actual socket (`*:4666`).
+- **Rejected:** a list of supervisor parents (`launchd`, `systemd`) instead of a lookup: it's what made every
+  LaunchAgent an orphan. `launchctl print gui/<uid>` for the PIDs: its format is documented as not for parsing, and
+  `list`'s three columns are stable. `launchctl procinfo <pid>`: needs root. Reading a LaunchAgent's plist to match
+  its program against the command line: slow, and wrong for wrappers. Excluding non-project cwds from identification
+  only at `/` and `~` (as before): `/opt/homebrew` is a git repository, so a prefix has to be named.
+- **Observation ids** hash the project root or else the cwd, so a listener that used to be identified by a prefix's
+  repository gets a new id (and a new row in `observed.json`) once; nothing else changes for it.

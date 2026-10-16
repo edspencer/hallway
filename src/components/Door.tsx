@@ -6,9 +6,10 @@ import type { CSSProperties } from 'react';
 import type { AppView } from '../../shared/api';
 import { thumbUrl } from '../api';
 import { paintFor } from '../lib/colour';
-import { displayUrl, millis, percent } from '../lib/format';
+import { ORPHANED_HINT, displayUrl, exposedHint, millis, percent } from '../lib/format';
 import { STATE_META, doorState, subtitle } from '../lib/status';
 import { StateMark } from './StateMark';
+import { TipBadge } from './Tip';
 import { Tile, isGlyph, useImageColour } from './Tile';
 import { UptimeBar } from './UptimeBar';
 import { CopyIcon, MoreIcon } from './icons';
@@ -117,21 +118,27 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
 
 function Badges({ app, warnings }: { app: AppView; warnings: number }) {
   const id = app.identity;
-  const out: { key: string; text: string; tone?: 'warn' | 'alarm'; title: string }[] = [];
+  const out: { key: string; text: string; tone?: 'warn' | 'alarm'; title: string; tip?: boolean }[] = [];
   // an error is shown in full on the card; warnings get a badge
   if (warnings && !app.problems.some((p) => p.severity === 'error')) out.push({ key: 'warn', text: `${warnings} warning${warnings === 1 ? '' : 's'}`, tone: 'warn', title: app.problems.map((p) => p.message).join('\n') });
-  if (id?.orphaned && !app.managed) out.push({ key: 'orphaned', text: 'orphaned', title: 'The session that started it has gone (its parent is PID 1)' });
-  if (id?.exposed) out.push({ key: 'exposed', text: 'exposed', tone: 'warn', title: `Listening on every interface (${id.bindAddress ?? '0.0.0.0'}), not just this machine` });
+  if (id?.orphaned && !app.managed) out.push({ key: 'orphaned', text: 'orphaned', title: ORPHANED_HINT, tip: true });
+  if (id?.exposed) out.push({ key: 'exposed', text: 'exposed', tone: 'warn', title: exposedHint(id.bindAddress, app.config?.port), tip: true });
   if (app.managed) out.push({ key: 'managed', text: 'managed', title: 'Kept running by Hallway as a service' });
   if (app.source === 'discovered') out.push({ key: 'source', text: `discovered: ${app.adapter ?? 'adapter'}`, title: 'Read from another tool; edit it there' });
   if (!out.length) return null;
   return (
     <ul className="hw-badges" aria-label="Notes">
-      {out.map((b) => (
-        <li key={b.key} className={`hw-badge${b.tone ? ` hw-badge--${b.tone}` : ''}`} title={b.title}>
-          {b.text}
-        </li>
-      ))}
+      {out.map((b) =>
+        b.tip ? (
+          <li key={b.key}>
+            <TipBadge text={b.text} tone={b.tone} tip={b.title} />
+          </li>
+        ) : (
+          <li key={b.key} className={`hw-badge${b.tone ? ` hw-badge--${b.tone}` : ''}`} title={b.title}>
+            {b.text}
+          </li>
+        ),
+      )}
     </ul>
   );
 }

@@ -212,8 +212,18 @@ export interface ListenerIdentity {
   bindAddress: string | null;
   /** Listening on every interface, not just loopback. */
   exposed: boolean;
-  /** Its parent is PID 1: the session that started it is gone. */
+  /** Its parent is PID 1 (or a subreaper) and no service manager supervises it: the session that started it is gone. */
   orphaned: boolean;
+  /**
+   * The service manager keeping it running, when one is: a loaded launchd job (`com.example.api`) or the systemd service
+   * whose cgroup it's in (`api.service`). Null when nothing does, or it can't be told (Windows).
+   */
+  supervisor: { manager: 'launchd' | 'systemd'; label: string } | null;
+  /**
+   * What to call it when it has no project (its directory is `/`, the home directory, a package-manager prefix…): the
+   * supervisor's label (`com.example.api` → `api`), else its executable, never a bare runtime such as `node`.
+   */
+  displayName: string | null;
   startedAt: string | null;
   /** `repo @ branch` for worktree siblings, else null (docs/04, step 5). */
   label: string | null;

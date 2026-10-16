@@ -97,3 +97,18 @@ export function slugify(s: string): string {
 }
 
 export const SLUG = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** `*`, `0.0.0.0`, `::` and a port → how the OS would print the socket: `*:4666`, `0.0.0.0:4666`, `[::]:4666`. */
+export const socketAddress = (address: string, port: number | null | undefined) =>
+  port == null ? address : `${address.includes(':') ? `[${address}]` : address}:${port}`;
+
+/** Why `exposed` matters, with the actual bind address: the badge's tooltip and the drawer's note (docs/05-ui.md). */
+export const exposedHint = (address: string | null, port: number | null | undefined) =>
+  `Listening on all network interfaces (${socketAddress(address ?? '*', port)}), so other devices on your network can reach it. Bind it to 127.0.0.1 if that isn't intended.`;
+
+/** The orphaned badge's explanation. */
+export const ORPHANED_HINT =
+  'Its parent is PID 1 and no service manager (launchd, systemd) runs it: the terminal or agent session that started it has gone, and nothing will restart it.';
+
+/** `launchd: com.example.api`, `systemd: api.service`. */
+export const supervisedBy = (s: { manager: string; label: string }) => `${s.manager}: ${s.label}`;

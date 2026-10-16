@@ -11,12 +11,44 @@ import { run } from '../platform/listeners.js';
 export const PROJECT_MARKERS = ['package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'Gemfile', '.git'];
 
 /**
- * The nearest directory at or above `cwd` holding a project marker. Never the home directory or `/` themselves: a
- * dotfiles repository in `~` would otherwise claim everything under it.
+ * Directories that say nothing about what runs in them, only these exact ones: services and daemons are started in
+ * them (`/` for a launchd job with no WorkingDirectory, the home directory, a temp directory), but a project can live
+ * below them.
+ */
+const PLACES = ['/', '/tmp', '/private/tmp', '/var', '/private/var', '/opt', '/usr', '/usr/local', '/srv', '/Users', '/home', '/Applications', '/Volumes'];
+
+/**
+ * Directories that are never a project, nor is anything below them: package-manager prefixes (Homebrew's is a git
+ * repository on branch `stable`, so a `brew services` job started in it would be named "Homebrew @ stable") and the
+ * system's own directories.
+ */
+const PREFIXES = [
+  '/opt/homebrew', '/usr/local/Homebrew', '/usr/local/Cellar', '/usr/local/opt', '/usr/local/var', '/home/linuxbrew/.linuxbrew',
+  '/opt/local', '/nix', '/snap', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/private/etc', '/usr/bin', '/usr/sbin', '/usr/lib',
+  '/usr/libexec', '/usr/share', '/var/lib', '/var/run', '/run', '/proc', '/sys', '/dev', '/System', '/Library',
+];
+
+const WINDOWS_SYSTEM = /^[a-z]:\\(windows|program files( \(x86\))?|programdata)(\\|$)/i;
+
+/**
+ * Whether a working directory is a known non-project location, where git and README identity would mislead: `/`, the
+ * home directory (and its ~/Library), a package-manager prefix or a system directory. Windows' own directories too.
+ */
+export function nonProjectDir(dir: string, home = os.homedir()): boolean {
+  const d = path.resolve(dir);
+  if (d === home || d === path.dirname(d)) return true;
+  if (WINDOWS_SYSTEM.test(dir) || WINDOWS_SYSTEM.test(d)) return true;
+  const under = (p: string) => d === p || d.startsWith(p.endsWith(path.sep) ? p : p + path.sep);
+  return PLACES.includes(d) || [...PREFIXES, path.join(home, 'Library')].some(under);
+}
+
+/**
+ * The nearest directory at or above `cwd` holding a project marker. Never the home directory, `/` or another
+ * non-project location (`nonProjectDir`): a dotfiles repository in `~` would otherwise claim everything under it.
  */
 export function projectRoot(cwd: string, home = os.homedir()): string | null {
   for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
-    if (dir === home || dir === path.dirname(dir)) return null;
+    if (nonProjectDir(dir, home)) return null;
     if (PROJECT_MARKERS.some((m) => fs.existsSync(path.join(dir, m)))) return dir;
   }
 }
@@ -168,8 +200,9 @@ export async function identify(
   home = os.homedir(),
 ): Promise<Pick<Observation, 'project' | 'git'>> {
   // no marker anywhere above (`python3 -m http.server` in a folder of files): the directory itself is the project,
-  // unless it's somewhere that says nothing (`/`, the home directory)
-  const root = cwd ? (projectRoot(cwd, home) ?? (cwd === home || cwd === path.dirname(cwd) ? null : cwd)) : null;
+  // unless it's somewhere that says nothing (`/`, the home directory, /opt/homebrew): then the executable, the
+  // supervisor's label and the page's title name it instead (observations.ts)
+  const root = cwd ? (projectRoot(cwd, home) ?? (nonProjectDir(cwd, home) ? null : cwd)) : null;
   const project = root ? { root, ...projectName(root), framework: guessFramework(argv, root) } : null;
   const g = root ? await gitInfo(root) : null;
   return { project, git: g };
