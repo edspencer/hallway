@@ -3,7 +3,7 @@
 > The front door for everything you vibe-coded on a random port.
 
 **Status:** pre-release. The implementation has started (package, CI, release machinery, a daemon skeleton and a
-placeholder dashboard: see `AGENTS.md`); the domain logic is still to be built. This document set is written to be
+dashboard: see `AGENTS.md`); the domain logic is still to be built. This document set is written to be
 handed to an implementing agent (or person) who was not present for any of the design discussion. Anything not written down here is lost, so
 the spec errs heavily on the side of detail, rationale, and recording what was considered and rejected.
 

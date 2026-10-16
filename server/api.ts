@@ -56,6 +56,19 @@ async function jsonBody(c: Context): Promise<unknown> {
 /** If-Match / If-None-Match: * from the request. */
 const writeOpts = (c: Context): WriteOptions => ({ ifMatch: c.req.header('if-match') ?? null, createOnly: c.req.header('if-none-match')?.trim() === '*' });
 
+/**
+ * An icon or thumbnail, with its ETag. Some are SVGs fetched from other sites, so they're served as inert images: no
+ * scripts, no styles from elsewhere, no sniffing, even when opened directly rather than through an `<img>`.
+ */
+function image(c: Context, t: { body: Uint8Array; contentType: string; etag: string }) {
+  c.header('ETag', t.etag);
+  c.header('Cache-Control', 'no-cache');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+  if (c.req.header('if-none-match') === t.etag) return c.body(null, 304);
+  return c.body(t.body as Uint8Array<ArrayBuffer>, 200, { 'Content-Type': t.contentType });
+}
+
 const withEtag = (c: Context, e: Entry<unknown>) => {
   if (e.etag) c.header('ETag', e.etag);
 };
@@ -154,13 +167,20 @@ export function apiRoutes({ store, bus, providers, startedAt }: ApiOptions) {
     const slug = c.req.param('slug');
     const t = providers.first('thumb', slug);
     if (!t) return fail(c, 404, { error: `no thumbnail for '${slug}'` });
-    c.header('ETag', t.etag);
-    c.header('Cache-Control', 'no-cache');
-    if (c.req.header('if-none-match') === t.etag) return c.body(null, 304);
-    return c.body(t.body as Uint8Array<ArrayBuffer>, 200, { 'Content-Type': t.contentType });
+    return image(c, t);
   });
 
   // ---------------- bookmarks ----------------
+  // A bookmark's favicon: only for a URL that is in the group, so this never becomes a way to fetch anything.
+  api.get('/bookmarks/:group/icon', (c) => {
+    const link = store.groups.get(c.req.param('group'))?.value?.links.find((l) => l.url === c.req.query('url'));
+    if (!link) return fail(c, 404, { error: 'no such bookmark' });
+    const t = providers.first('bookmarkIcon', link, c.req.param('group'));
+    // nothing (yet): 204 rather than 404, so a dashboard asking for a chip's icon isn't an error in the console
+    if (!t) return c.body(null, 204, { 'Cache-Control': 'no-store' });
+    return image(c, t);
+  });
+
   api.get('/bookmarks', (c) => c.json({ groups: groupViews(store) } satisfies BookmarksResponse));
 
   api.get('/bookmarks/:group', (c) => {

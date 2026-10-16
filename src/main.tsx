@@ -1,6 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+// the typefaces (all OFL, D37): bundled into dist/web, so the dashboard never asks the network for a font
+import '@fontsource-variable/fraunces/opsz.css';
+import '@fontsource-variable/inter/opsz.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
 import './theme/tokens.css';
 import './styles.css';
 

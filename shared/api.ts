@@ -282,6 +282,11 @@ export interface AppView {
   history: AppHistory | null;
   /** The process listening on the app's port, if the scanner knows it. */
   identity: ListenerIdentity | null;
+  /**
+   * The ETag of its thumbnail (`GET /api/apps/:slug/thumb`), or null while there's none: the dashboard draws a
+   * monogram instead of asking. Provider: the thumbnailer. Absent from daemons older than the field.
+   */
+  thumb?: string | null;
 }
 
 /** A bookmark group: `GET /api/bookmarks` (`groups`), and `bookmarks` in `/api/state`. Sorted by order, then title. */
@@ -311,6 +316,8 @@ export interface DaemonInfo {
   version: string;
   /** The URL this request reached the daemon on: `http://localhost:4255`. */
   url: string;
+  /** The machine's name, for the dashboard's header when `dashboard.title` isn't set. */
+  hostname?: string;
   /** The data home, absolute, and as people see it (`~/.hallway`). */
   dataHome: string;
   dataHomeDisplay: string;

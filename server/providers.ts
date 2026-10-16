@@ -42,6 +42,8 @@ export interface StateProvider {
   discovered?(): DiscoveredApp[];
   /** A thumbnail for an app (`GET /api/apps/:slug/thumb`). */
   thumb?(slug: string): { body: Uint8Array; contentType: string; etag: string } | null;
+  /** A bookmark's favicon (`GET /api/bookmarks/:group/icon?url=`), from its `url` and `icon:` (the thumbnailer). */
+  bookmarkIcon?(link: { url: string; icon: string }, group?: string): { body: Uint8Array; contentType: string; etag: string } | null;
 }
 
 export class ProviderRegistry {

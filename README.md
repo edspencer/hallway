@@ -21,7 +21,7 @@ Hallway gives them all a front door:
 ## Status
 
 **Pre-release — not on npm yet, and not usable day to day.** The design is complete ([spec.md](spec.md) and
-[docs/](docs/)); the implementation has just started: the daemon skeleton and a placeholder dashboard exist, and the
+[docs/](docs/)); the implementation has started: the daemon core and the dashboard exist, and the rest of the
 features above arrive milestone by milestone ([docs/08-roadmap.md](docs/08-roadmap.md)). macOS and Linux.
 
 ## Development quick start
