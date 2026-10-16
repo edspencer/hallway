@@ -162,6 +162,9 @@ try {
   const doc = JSON.parse(execFileSync(process.execPath, [cli, 'doctor', '--json'], { cwd: work, env, encoding: 'utf8' }));
   const failed = doc.checks.filter((c) => c.status === 'fail');
   assert.deepEqual(failed, [], 'doctor finds no problems');
+  // the jobs' PATHs are what Hallway itself wrote: doctor must find nothing wrong with them (on Windows it once split
+  // them on `:`, which cut every `C:\…` entry in two)
+  assert.deepEqual(doc.checks.filter((c) => c.id === 'job-path'), [], 'no PATH warnings');
   console.log(doc.checks.map((c) => `${c.status} ${c.message}`).join('\n'));
 
   step('clean up');
