@@ -79,7 +79,7 @@ src/               the dashboard (React, built by Vite into dist/web)
 public/            static files copied into dist/web (favicon.svg)
 test/              node:test suites, run from source via tsx
 scripts/           start, smoke:pack, check:nul, sync-guide
-website/           the docs site (separate project; may not exist yet)
+website/           the docs site (separate project)
 ```
 
 ## Commands

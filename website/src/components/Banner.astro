@@ -1,0 +1,38 @@
+---
+/**
+ * Overrides Starlight's Banner (astro.config.mjs → `components`) so that EVERY docs page says Hallway is
+ * pre-release, without each page having to remember a `banner:` frontmatter entry. A page that does set one gets its
+ * own instead. Delete the default text when v0 ships (or reword it to point at the roadmap for v1/v2).
+ */
+const { banner } = Astro.locals.starlightRoute.entry.data;
+const content =
+	banner?.content ??
+	'<strong>Pre-release.</strong> Hallway is being built from a detailed spec, and nothing on this site is shipped yet. Each feature is marked <span class="b-ms">v0</span>, <span class="b-ms">v1</span> or <span class="b-ms">v2</span> by the release it is planned for: see the <a href="/roadmap/">roadmap</a>.';
+---
+
+<div class="sl-banner" data-pagefind-ignore set:html={content} />
+
+<style>
+	@layer starlight.core {
+		.sl-banner {
+			padding: 0.55rem var(--sl-nav-pad-x);
+			background-color: var(--sl-color-accent-low);
+			color: var(--sl-color-gray-2);
+			border-bottom: 1px solid var(--sl-color-hairline);
+			font-size: var(--sl-text-sm);
+			line-height: var(--sl-line-height-headings);
+			text-align: center;
+			text-wrap: balance;
+		}
+		.sl-banner :global(a) {
+			color: var(--sl-color-text-accent);
+		}
+		.sl-banner :global(strong) {
+			color: var(--sl-color-white);
+		}
+		.sl-banner :global(.b-ms) {
+			font-family: var(--sl-font-mono);
+			font-size: 0.9em;
+		}
+	}
+</style>

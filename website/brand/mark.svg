@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Hallway (placeholder mark)</title>
+  <!-- PLACEHOLDER mark, not final branding: an arched door left ajar, with lamplight spilling out. Colours are the
+       tokens in src/styles/tokens.css. Rebuild the derived files with `npm run brand` after editing. -->
+  <defs>
+    <linearGradient id="hw-light" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7c87e"/>
+      <stop offset="1" stop-color="#f0b45a"/>
+    </linearGradient>
+    <linearGradient id="hw-spill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0b45a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#f0b45a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect id="tile" x="0" y="0" width="64" height="64" rx="14" fill="#1f1a14"/>
+  <!-- the doorway: lit from inside -->
+  <path d="M19 53V27a13 13 0 0 1 26 0v26z" fill="url(#hw-light)"/>
+  <!-- the door leaf, swung most of the way shut -->
+  <path d="M19 53V27a13 13 0 0 1 20.4-10.7L39 53z" fill="#5a4330"/>
+  <!-- the knob, in brass -->
+  <circle cx="34.5" cy="37" r="1.9" fill="#d9a55b"/>
+  <!-- light spilling across the floorboards -->
+  <path d="M39 53h6l9 7H40z" fill="url(#hw-spill)"/>
+  <!-- the frame -->
+  <path d="M19 53V27a13 13 0 0 1 26 0v26" fill="none" stroke="#e9dcc6" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M14 53h36" stroke="#e9dcc6" stroke-width="2.4" stroke-linecap="round"/>
+</svg>
