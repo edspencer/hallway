@@ -14,6 +14,9 @@ hallway service install      # run the daemon at every login
 hallway open
 ```
 
+Only trying it out? `npx hallway` runs the dashboard in the foreground, until you close the terminal. Install it as
+above to keep it: Hallway won't install a service from npx's cache, which npm can delete at any time.
+
 The dashboard opens at `http://localhost:4255`. The page title is your machine's name.
 
 ## 2. Meet what is already running

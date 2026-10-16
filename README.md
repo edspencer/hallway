@@ -42,6 +42,10 @@ hallway service install    # run the daemon as a LaunchAgent (macOS) or a system
 hallway open               # or browse to http://localhost:4255
 ```
 
+To try it first, `npx hallway` runs the dashboard in the foreground until you close the terminal. To keep it, install
+it: `npm i -g hallway && hallway service install`. (Hallway won't install a service from npx: npm can delete its
+cache at any time, which would break the service at the next login.)
+
 Hallway now lists every web server it finds listening on this machine. **Claim** one to give it a door (that writes
 `~/.hallway/apps/<slug>.yaml`), or declare one yourself:
 
