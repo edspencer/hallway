@@ -32,7 +32,8 @@ fs.writeFileSync(server, "require('node:http').createServer((q, r) => r.end('<ti
 const env = { ...process.env, HALLWAY_HOME: path.join(tmp, 'data') };
 for (const k of ['PORT', 'HALLWAY_DEV', 'HALLWAY_DEV_BIND', 'HALLWAY_DEV_ALLOWED_HOSTS', 'NODE_OPTIONS']) delete env[k];
 const step = (s) => console.log(`supervisors-real: ${s}`);
-const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+// every call has a timeout: a hang here would otherwise hold the job until GitHub cancels it
+const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isFree = (port) => new Promise((resolve) => {
   const s = net.createServer().once('error', () => resolve(false)).listen(port, '127.0.0.1', () => s.close(() => resolve(true)));
@@ -46,6 +47,7 @@ async function freePort(not) {
 }
 const listening = (port) => new Promise((resolve) => {
   const s = net.connect(port, '127.0.0.1').once('connect', () => (s.destroy(), resolve(true))).once('error', () => resolve(false));
+  s.setTimeout(2000, () => (s.destroy(), resolve(false)));
 });
 async function until(what, fn, ms = 20000) {
   const end = Date.now() + ms;
@@ -79,19 +81,22 @@ try {
     sh('launchctl', ['bootstrap', `gui/${uid}`, plist]);
     step(`loaded the LaunchAgent ${label} on :${supPort}`);
     // a true orphan: the shell that starts it exits, and launchd (PID 1) adopts it
-    execFileSync('/bin/sh', ['-c', `cd "${work}" && "${node}" "${server}" ${orphanPort} >/dev/null 2>&1 &`]);
+    step('starting the orphan');
+    execFileSync('/bin/sh', ['-c', `cd "${work}" && "${node}" "${server}" ${orphanPort} </dev/null >/dev/null 2>&1 &`], { stdio: 'ignore', timeout: 30_000 });
   } else {
     sh('systemd-run', ['--user', `--unit=${label}`, `--working-directory=${work}`, node, server, String(supPort)]);
     cleanups.push(() => sh('systemctl', ['--user', 'stop', label]));
     step(`started the transient user service ${label} on :${supPort}`);
     // a true orphan, as a terminal makes one: in a scope (not a service), its shell exits, the user manager adopts it
-    sh('systemd-run', ['--user', '--scope', '--unit=hallway-orphan-check', '/bin/sh', '-c', `cd "${work}" && "${node}" "${server}" ${orphanPort} >/dev/null 2>&1 &`]);
+    sh('systemd-run', ['--user', '--scope', '--unit=hallway-orphan-check', '/bin/sh', '-c', `cd "${work}" && "${node}" "${server}" ${orphanPort} </dev/null >/dev/null 2>&1 &`]);
   }
+  step('waiting for both to listen');
   await until(`:${supPort}`, () => listening(supPort));
   await until(`:${orphanPort}`, () => listening(orphanPort));
   step(`the orphan is on :${orphanPort}`);
 
-  const { observed } = JSON.parse(execFileSync(node, [cli, 'scan', '--json'], { cwd: work, env, encoding: 'utf8' }));
+  step('hallway scan --json');
+  const { observed } = JSON.parse(execFileSync(node, [cli, 'scan', '--json'], { cwd: work, env, encoding: 'utf8', timeout: 60_000 }));
   const at = (port) => observed.find((o) => o.port === port);
   const sup = at(supPort);
   const orphan = at(orphanPort);
@@ -103,7 +108,7 @@ try {
   assert.equal(sup.identity.orphaned, false, 'a supervised job is not orphaned');
   assert.equal(orphan.identity.supervisor, null, 'nothing supervises the orphan');
   assert.equal(orphan.identity.orphaned, true, 'the orphan is orphaned');
-  const text = execFileSync(node, [cli, 'scan'], { cwd: work, env, encoding: 'utf8' });
+  const text = execFileSync(node, [cli, 'scan'], { cwd: work, env, encoding: 'utf8', timeout: 60_000 });
   assert.match(text, new RegExp(`${manager}: ${label.replace(/\./g, '\\.')}`), '`hallway scan` shows the supervisor');
   step(`ok: ${manager}: ${label} is supervised, the orphan is orphaned`);
 } finally {
@@ -116,7 +121,7 @@ try {
   }
   // the orphan: nothing else will stop it
   try {
-    const pid = execFileSync('lsof', ['-t', `-iTCP:${orphanPort}`, '-sTCP:LISTEN'], { encoding: 'utf8' }).trim();
+    const pid = execFileSync('lsof', ['-t', `-iTCP:${orphanPort}`, '-sTCP:LISTEN'], { encoding: 'utf8', timeout: 10_000 }).trim();
     for (const p of pid.split(/\s+/).filter(Boolean)) process.kill(Number(p));
   } catch {
     /* gone, or no lsof: the runner is thrown away anyway */
