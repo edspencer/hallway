@@ -9,10 +9,9 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import type { Observation } from '../server/scanner/types.ts';
-import { claimDraft, slugify, suggestSlug } from '../server/scanner/claim.ts';
+import { slugify, suggestSlug } from '../server/scanner/claim.ts';
 import { type FilterOptions, EMPTY_IGNORE, noiseReason } from '../server/scanner/filter.ts';
 import { gitInfo, guessFramework, identify, projectName, projectRoot, readmeTitle, repoName } from '../server/scanner/identify.ts';
-import { parseIgnoreYaml } from '../server/scanner/ignore.ts';
 import { ObservedStore, labelListeners, normaliseCommand, observationId, recordBoot } from '../server/scanner/observations.ts';
 import { htmlFavicon, htmlTitle, sniff } from '../server/scanner/sniff.ts';
 import { createScanner } from '../server/scanner/index.ts';
@@ -85,15 +84,6 @@ describe('noise filtering', () => {
     assert.equal(noiseReason(L(4600), opts({ ignore }), '/home/someone/scratch/x'), 'ignored');
     assert.equal(noiseReason(L(4600), opts({ ignore }), '/home/someone/scratch'), 'ignored');
     assert.equal(noiseReason(L(4600), opts({ ignore }), '/home/someone/scratchpad'), null);
-  });
-
-  test('parsing ignore.yaml: flow and block lists, comments, quotes, ~', () => {
-    const rules = parseIgnoreYaml(
-      ['# hide these', 'ports: [631, "5000", nope]   # AirPlay', 'processes:', '  - rapportd', "  - 'Control Center' # quoted", 'dirs:', '  - ~/scratch', 'other: [1]'].join('\n'),
-      '/home/someone',
-    );
-    assert.deepEqual(rules, { ports: [631, 5000], processes: ['rapportd', 'Control Center'], dirs: ['/home/someone/scratch'] });
-    assert.deepEqual(parseIgnoreYaml(''), EMPTY_IGNORE);
   });
 });
 
@@ -178,6 +168,7 @@ function obs(o: Partial<Observation> = {}): Observation {
     id: 'x',
     port: 4567,
     pid: 100,
+    ppid: 1,
     process: 'node',
     addresses: ['127.0.0.1'],
     bind: 'loopback',
@@ -261,7 +252,7 @@ describe('observations', () => {
   });
 });
 
-describe('claim', () => {
+describe('claim slugs', () => {
   test('slugs from the package name; reserved and taken ones get a suffix', () => {
     assert.equal(slugify('@acme/My_Dashboard'), 'my-dashboard');
     assert.equal(suggestSlug(obs()), 'my-app');
@@ -270,44 +261,6 @@ describe('claim', () => {
     assert.equal(suggestSlug(obs({ project: null, process: null, port: 4567 })), 'app-4567');
     const wt = obs({ label: 'my-app @ branch-a', git: { toplevel: '/x', repo: 'my-app', branch: 'branch-a', lastCommitAt: null, worktree: true, commonDir: '/c', remote: null } });
     assert.equal(suggestSlug(wt), 'my-app-branch-a');
-  });
-
-  test('the YAML keeps the observed port, is adhoc, records the dir, and comments out the command', () => {
-    const { slug, yaml } = claimDraft(
-      obs({ port: 4666, project: { root: '/home/someone/Code/my-app', name: 'my-app', description: 'Does: things', framework: null } }),
-      {},
-      new Set(),
-      { home: '/home/someone', now: new Date('2026-10-16T12:00:00Z') },
-    );
-    assert.equal(slug, 'my-app');
-    assert.equal(
-      yaml,
-      [
-        '# Claimed from a listener Hallway observed on port 4666 (2026-10-16).',
-        'name: my-app',
-        'description: "Does: things"',
-        'port: 4666',
-        'expected: adhoc',
-        'project:',
-        '  dir: "~/Code/my-app"',
-        '',
-        '# The command it was running with. Uncomment to have Hallway keep it running as a service (v1).',
-        '# service:',
-        '#   command: ["node", "dist/index.js"]',
-        '#   cwd: "~/Code/my-app"',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  test('options, an IPv6-only listener, and invalid input', () => {
-    const { yaml } = claimDraft(obs({ addresses: ['::1'], bind: 'loopback' }), { slug: 'deck', name: 'Talk deck', expected: 'running' });
-    assert.match(yaml, /^name: Talk deck$/m);
-    assert.match(yaml, /^host: "::1"$/m);
-    assert.match(yaml, /^expected: running$/m);
-    assert.throws(() => claimDraft(obs(), { slug: 'Not Valid' }), /not a valid slug/);
-    assert.throws(() => claimDraft(obs(), { slug: 'api' }), /reserved/);
-    assert.throws(() => claimDraft(obs(), { expected: 'sometimes' as 'adhoc' }), /expected must be/);
   });
 });
 

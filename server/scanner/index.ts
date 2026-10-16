@@ -11,12 +11,12 @@ import { dataPaths } from '../config.js';
 import { type Listener, type Platform, type ProcessInfo, bindScope, connectAddress, currentPlatform, mergeListeners } from '../platform/index.js';
 import { EMPTY_IGNORE, type IgnoreRules, noiseReason } from './filter.js';
 import { identify } from './identify.js';
-import { readIgnoreFile } from './ignore.js';
 import { ObservedStore, labelListeners, normaliseCommand, observationId, recordBoot } from './observations.js';
 import { type Sniff, sniff } from './sniff.js';
 
-export { claimDraft, suggestSlug } from './claim.js';
-export type { IgnoreRules } from './filter.js';
+export { suggestSlug } from './claim.js';
+export { type FilterOptions, type IgnoreRules, noiseReason } from './filter.js';
+export type { Observation } from './types.js';
 
 /** `scan:` in config.yaml (docs/02-architecture.md). */
 export interface ScanSettings {
@@ -45,7 +45,7 @@ export interface ScannerOptions {
   home: string;
   platform?: Platform;
   settings?: () => ScanSettings;
-  /** Default: read ignore.yaml from the data home on every scan. */
+  /** ignore.yaml's rules (the store's parsed copy), read on every scan. Default: ignore nothing. */
   ignore?: () => IgnoreRules;
   /** Ports owned by declared or discovered apps. */
   knownPorts?: () => Iterable<number>;
@@ -89,7 +89,7 @@ export function createScanner(opts: ScannerOptions) {
   const platform = opts.platform ?? currentPlatform();
   const paths = dataPaths(opts.home);
   const settings = opts.settings ?? (() => DEFAULT_SCAN);
-  const ignore = opts.ignore ?? (() => readIgnoreFile(paths.ignore) ?? EMPTY_IGNORE);
+  const ignore = opts.ignore ?? (() => EMPTY_IGNORE);
   const now = opts.now ?? Date.now;
   const homeDir = opts.homeDir ?? os.homedir();
   const ttl = opts.identityTtlMs ?? 10 * 60_000;
@@ -220,6 +220,7 @@ function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: numb
     id: observationId(identity.project?.root ?? info.cwd, l.port, norm),
     port: l.port,
     pid: l.pid,
+    ppid: info.ppid,
     process: l.process,
     addresses: l.addresses,
     bind: bindScope(l.addresses),

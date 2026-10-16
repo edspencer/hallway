@@ -68,6 +68,8 @@ function claimFile(o: ObservedListener, req: ClaimRequest) {
     name: req.name?.trim() || id.name || req.slug,
     ...(id.description ? { description: id.description } : {}),
     port: o.port,
+    // listening on IPv6 loopback only: the default host (127.0.0.1) wouldn't reach it
+    ...(id.bindAddress === '::1' ? { host: '::1' } : {}),
     expected: req.expected ?? 'adhoc',
     ...(dir ? { project: { dir: tildify(dir) } } : {}),
   };

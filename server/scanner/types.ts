@@ -10,6 +10,7 @@ export interface Observation {
   id: string;
   port: number;
   pid: number | null;
+  ppid: number | null;
   /** The short process name (`node`, `python3`). */
   process: string | null;
   addresses: string[];

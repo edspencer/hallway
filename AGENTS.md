@@ -66,11 +66,15 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   security.ts      loopback-only Host/Origin/Content-Type middleware
   config.ts        package root, data home ($HALLWAY_HOME, ~/.hallway) and its layout, ports, dev overrides
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
-  platform/        macOS (launchd, lsof) / Linux (systemd user units, ss) behind one interface
+  live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events
+  platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) behind one interface; the
+                   listener/process parsers are pure functions tested against test/fixtures/platform/
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
-  scanner/         observed listeners: list, filter, identify, record      (v0, not built yet)
-  prober/          health probes, states, uptime samples                   (v0, not built yet)
+  scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
+                   (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
+  prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
+  health/          uptime.ts (samples + hourly rollups in state/health.sqlite, node:sqlite), index.ts (startHealth)
 shared/            types used by both server/ and src/ (no imports, no Node or DOM APIs): api.ts is the API contract
 AGENT-GUIDE.md     the guide for coding agents (shipped; its file reference is generated: npm run sync:guide)
 src/               the dashboard (React, built by Vite into dist/web)

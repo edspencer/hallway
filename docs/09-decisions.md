@@ -417,8 +417,13 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   the hour in progress computed from samples. A bar's colour is its worst state (down > unhealthy > healthy >
   stopped); no samples is `null` (no data). Uptime = healthy / (samples − stopped). Latency percentiles over 7 d and
   90 d are sample-weighted percentiles of the hourly ones (rollups don't keep raw latencies), so approximate.
-- **ignore.yaml** is read by a small reader in `server/scanner/ignore.ts` that understands just the documented shape,
-  until the scanner is handed the store's parsed copy.
+- **Wiring (`server/live.ts`):** one `StateProvider` named `live` fills `appHealth`, `appHistory`, `appIdentity`,
+  `observed`, `observation` and `scan` (D35). `observed()` re-applies the store's current `ignore.yaml` and declared
+  ports to the latest scan, so a claim or an ignore takes effect at once rather than at the next scan; an `observed`
+  event is emitted only when a scan changes the list. App and config events re-read the probe targets. "A dashboard is
+  connected" is the bus having a subscriber besides `live` itself. The CLI's `serve` starts it after binding, and the
+  first scan doesn't hold up start-up. The core's claim (`server/api.ts`) writes `host: ::1` for a listener bound to
+  IPv6 loopback only, which would otherwise be probed on 127.0.0.1 and show as down.
 
 ## Alternatives considered for the whole product
 

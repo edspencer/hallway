@@ -215,6 +215,12 @@ export class UptimeStore {
     return rows;
   }
 
+  /** Uptime and median latency over the last `ms` (default 24 h), straight from the samples: for app cards. */
+  summary(slug: string, now = Date.now(), ms = 24 * HOUR): { uptime: number | null; latencyP50: number | null } {
+    const c = this.aggregate(slug, now - ms, now + 1);
+    return { uptime: uptimeOf(c), latencyP50: percentile(c.latencies, 50) };
+  }
+
   /** The bars and summary for one app's uptime chart (`GET /api/apps/:slug/history`). */
   history(slug: string, window: Window, now = Date.now()): UptimeHistory {
     const w = WINDOWS[window];
