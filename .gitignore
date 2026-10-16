@@ -12,3 +12,4 @@ coverage/
 .playwright-mcp/
 # Personal agent rules for this checkout (Claude Code reads it next to CLAUDE.md); never committed.
 CLAUDE.local.md
+.qa/
