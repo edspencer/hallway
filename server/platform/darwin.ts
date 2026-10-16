@@ -61,10 +61,51 @@ export function parsePs(text: string): Map<number, { ppid: number; startTime: nu
   return out;
 }
 
+/**
+ * `launchctl list`: `PID\tStatus\tLabel` under a header, `-` for a job that isn't running → PID → label. Run as the
+ * user, it lists the jobs loaded in the user's own domain (the LaunchAgents, `brew services` ones included), which is
+ * where any process this user's lsof can see would come from. Root's LaunchDaemons aren't listed, and needn't be:
+ * their processes belong to another user, so lsof doesn't show their sockets anyway.
+ */
+export function parseLaunchctlList(text: string): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const line of text.split('\n')) {
+    const m = /^(\d+)\s+\S+\s+(\S.*?)\s*$/.exec(line);
+    if (m && Number(m[1]) > 0) out.set(Number(m[1]), m[2]);
+  }
+  return out;
+}
+
 /** `sysctl -n kern.boottime` → `{ sec = 1760000000, usec = 123456 } Thu Oct  9 10:00:00 2026` → epoch ms. */
 export function parseSysctlBoottime(text: string): number | null {
   const m = /sec\s*=\s*(\d+)(?:,\s*usec\s*=\s*(\d+))?/.exec(text);
   return m ? Number(m[1]) * 1000 + Math.floor(Number(m[2] ?? 0) / 1000) : null;
+}
+
+/** `ps`, `lsof -d cwd` and `launchctl list` output → ProcessInfo by PID (pure, so it's tested on every OS). */
+export function darwinProcesses(pids: number[], psText: string, cwdText: string, launchctlText: string): Map<number, ProcessInfo> {
+  const out = new Map<number, ProcessInfo>();
+  const procs = parsePs(psText);
+  const cwds = parseLsofCwd(cwdText);
+  const jobs = parseLaunchctlList(launchctlText);
+  for (const pid of pids) {
+    const p = procs.get(pid);
+    if (!p && !cwds.has(pid)) continue;
+    const job = jobs.get(pid);
+    out.set(pid, {
+      pid,
+      ppid: p?.ppid ?? null,
+      command: p?.command ?? null,
+      // ps joins argv with spaces, so this split is lossy for arguments that contain one
+      argv: p?.command ? p.command.split(/\s+/) : null,
+      cwd: cwds.get(pid) ?? null,
+      startTime: p?.startTime ?? null,
+      // reparented to launchd and not one of its jobs (a LaunchAgent is PPID 1 too): the session that started it is gone
+      orphan: p?.ppid === 1 && !job,
+      supervisor: job ? { manager: 'launchd', label: job } : null,
+    });
+  }
+  return out;
 }
 
 export const darwin: Platform = {
@@ -87,31 +128,16 @@ export const darwin: Platform = {
   },
 
   async processInfo(pids) {
-    const out = new Map<number, ProcessInfo>();
-    if (!pids.length) return out;
+    if (!pids.length) return new Map();
     const list = pids.join(',');
     const [ps, cwd] = await Promise.all([
       run('ps', ['-o', 'pid=,ppid=,lstart=,command=', '-p', list]),
       run('lsof', ['-a', '-p', list, '-d', 'cwd', '-Fn']),
     ]);
-    const procs = parsePs(ps.stdout);
-    const cwds = parseLsofCwd(cwd.stdout);
-    for (const pid of pids) {
-      const p = procs.get(pid);
-      if (!p && !cwds.has(pid)) continue;
-      out.set(pid, {
-        pid,
-        ppid: p?.ppid ?? null,
-        command: p?.command ?? null,
-        // ps joins argv with spaces, so this split is lossy for arguments that contain one
-        argv: p?.command ? p.command.split(/\s+/) : null,
-        cwd: cwds.get(pid) ?? null,
-        startTime: p?.startTime ?? null,
-        // reparented to launchd: the session that started it is gone (a LaunchAgent is PPID 1 too, by design)
-        orphan: p?.ppid === 1,
-      });
-    }
-    return out;
+    // launchd is the parent of every job it runs as well as of every true orphan, and only a job's own process is in
+    // its list: ask once per scan, and only when something here has PPID 1
+    const launchctl = /^\s*\d+\s+1\s/m.test(ps.stdout) ? (await run('launchctl', ['list'])).stdout : '';
+    return darwinProcesses(pids, ps.stdout, cwd.stdout, launchctl);
   },
 
   async bootTime() {

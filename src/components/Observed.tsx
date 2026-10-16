@@ -4,8 +4,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Expected, IgnoreRequest, ObservedListener } from '../../shared/api';
 import { claim, ignore } from '../api';
-import { SLUG, duration, shorten, slugify, tildify } from '../lib/format';
+import { ORPHANED_HINT, SLUG, duration, exposedHint, shorten, slugify, supervisedBy, tildify } from '../lib/format';
 import { ChevronIcon, ExternalIcon } from './icons';
+import { TipBadge } from './Tip';
 
 export interface ObservedProps {
   observed: ObservedListener[];
@@ -16,7 +17,8 @@ export interface ObservedProps {
   notify(text: string, tone?: 'ok' | 'error'): void;
 }
 
-export const listenerName = (o: ObservedListener) => o.identity.name ?? o.title ?? o.identity.process ?? `Port ${o.port}`;
+/** The project's name; else, for a listener in `/`, ~ or a prefix, its supervisor or executable; else the page's title. */
+export const listenerName = (o: ObservedListener) => o.identity.name ?? o.identity.displayName ?? o.title ?? o.identity.process ?? `Port ${o.port}`;
 const openUrl = (o: ObservedListener) => `http://localhost:${o.port}`;
 
 export function ObservedTray({ observed, home, lead, takenSlugs, notify }: ObservedProps) {
@@ -95,8 +97,9 @@ function ObservedRow({ o, home, takenSlugs, notify }: { o: ObservedListener; hom
             {age && <span>up {age}</span>}
             {id.framework && <span>{id.framework}</span>}
             {o.title && o.title !== name && <span className="hw-observed-title">“{o.title}”</span>}
-            {id.orphaned && <span className="hw-badge">orphaned</span>}
-            {id.exposed && <span className="hw-badge hw-badge--warn">exposed</span>}
+            {id.supervisor && <span className="hw-supervisor" title="The service manager that keeps it running">{supervisedBy(id.supervisor)}</span>}
+            {id.orphaned && <TipBadge text="orphaned" tip={ORPHANED_HINT} />}
+            {id.exposed && <TipBadge text="exposed" tone="warn" tip={exposedHint(id.bindAddress, o.port)} />}
           </div>
         </div>
         <div className="hw-observed-actions">
@@ -216,6 +219,12 @@ function ClaimForm({ o, takenSlugs, onDone, notify }: { o: ObservedListener; tak
         </div>
         <small>{EXPECTED.find((x) => x.v === expected)!.hint}</small>
       </fieldset>
+      {o.identity.supervisor && (
+        <p className="hw-note hw-claim-note">
+          {o.identity.supervisor.manager} already keeps this running (<code>{o.identity.supervisor.label}</code>). Claiming it names it and
+          watches its health; leave the starting and stopping to {o.identity.supervisor.manager} rather than making it a Hallway service too.
+        </p>
+      )}
       <div className="hw-claim-actions">
         <button type="submit" className="hw-btn hw-btn--primary" disabled={busy}>
           {busy ? 'Claiming…' : `Claim port ${o.port}`}

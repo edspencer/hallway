@@ -17,7 +17,7 @@ import type { ProbeHealth, ProbeTarget } from './prober/index.js';
 import { type LostAppInput, type LostRecord, LostStore, computeLost } from './lost/index.js';
 import type { ProviderRegistry } from './providers.js';
 import { isListening } from './services/ports.js';
-import { type Observation, type Scanner, createScanner, noiseReason, suggestSlug } from './scanner/index.js';
+import { type Observation, type Scanner, createScanner, fallbackName, noiseReason, suggestSlug } from './scanner/index.js';
 import type { Store } from './store/index.js';
 
 export interface LiveOptions {
@@ -62,6 +62,8 @@ export function toIdentity(o: Observation): ListenerIdentity {
     bindAddress: bindAddress(o),
     exposed: o.bind === 'all',
     orphaned: o.orphan,
+    supervisor: o.supervisor ?? null,
+    displayName: o.project ? null : fallbackName(o),
     startedAt: o.startedAt,
     label: o.label.includes(' @ ') ? o.label : null,
   };
@@ -101,6 +103,8 @@ function appOnlyIdentity(r: LostRecord): ListenerIdentity {
     bindAddress: null,
     exposed: false,
     orphaned: false,
+    supervisor: null,
+    displayName: null,
     startedAt: null,
     label: null,
   };

@@ -47,7 +47,7 @@ export interface PortRange {
   to: number;
 }
 
-export type { Listener, ProcessInfo, RawListener } from './listeners.js';
+export type { Listener, ProcessInfo, RawListener, Supervisor } from './listeners.js';
 export { bindScope, connectAddress, mergeListeners } from './listeners.js';
 export type { Runner, RunResult, ServiceManager, ServiceSpec, ServiceStatus } from './services.js';
 export { ServiceManagerError, defaultRunner } from './services.js';

@@ -1,5 +1,6 @@
 // What the scanner records about a listener: the full identity it worked out, as kept in state/observed.json. The
 // HTTP API's shapes (shared/api.ts) are derived from this by the daemon's wiring.
+import type { Supervisor } from '../platform/listeners.js';
 
 /** How exposed a listener is: loopback only, every interface (reachable from the network), or specific addresses. */
 export type BindScope = 'loopback' | 'all' | 'address';
@@ -23,8 +24,10 @@ export interface Observation {
   cwd: string | null;
   /** ISO time the process started. */
   startedAt: string | null;
-  /** The session that launched it has gone: it was reparented to init/launchd or a subreaper. */
+  /** The session that launched it has gone (it was reparented to init/launchd or a subreaper) and nothing supervises it. */
   orphan: boolean;
+  /** The launchd job or systemd service keeping it running (absent in records from before 0.5.1, and on Windows). */
+  supervisor?: Supervisor | null;
   project: {
     root: string;
     name: string;
