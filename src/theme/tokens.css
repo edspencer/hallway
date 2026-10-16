@@ -5,69 +5,147 @@
  * palette and display face still await sign-off (Q-VISUAL-IDENTITY), so nothing outside this file should hard-code
  * a colour.
  *
- * State colours are always paired with a shape and a word (docs/05-ui.md, "App card"); only `down` is alarming (D12).
+ * The theme is `data-theme` on <html>: index.html sets it before the first paint from `dashboard.theme`
+ * (auto/dark/light, remembered from the last visit) and the system preference, and src/theme/theme.ts keeps it up to
+ * date. State colours are always paired with a shape and a word (docs/05-ui.md, "App card"); only `down` is alarming
+ * (D12). Every text colour here is at least 4.5:1 on the surfaces it's used on (test/dashboard.test.ts checks).
  */
-:root {
+:root,
+:root[data-theme='dark'] {
   color-scheme: dark;
 
   /* surfaces: warm near-black, never blue-black */
   --hw-bg: #15110e;
   --hw-bg-raised: #1e1915;
+  --hw-bg-hover: #262019;
   --hw-bg-sunken: #100d0b;
   --hw-line: #2f2822;
+  --hw-line-strong: #4c3e33;
   --hw-text: #ede4d8;
   --hw-text-muted: #a8998a;
+  /* small print */
+  --hw-text-subtle: #948879;
+  /* decoration only (rules, placeholders, the unknown state's outline): never body text */
   --hw-text-faint: #6f6358;
 
   /* the accent: lamplight amber (door-number plates, focus, the light behind an open door) */
   --hw-accent: #f0b35a;
-  --hw-accent-soft: rgba(240, 179, 90, 0.16);
+  /* the accent as text: on dark grounds the accent itself */
+  --hw-accent-text: #f0b35a;
+  --hw-accent-soft: rgba(240, 179, 90, 0.14);
   --hw-lamplight: #ffd08a;
+  --hw-glow: rgba(255, 196, 110, 0.3);
+  /* text on amber */
+  --hw-ink: #24180a;
+
+  /* door-number plates: brass on dark */
+  --hw-plate: linear-gradient(180deg, #f6c46e, #d99a45);
+  --hw-plate-text: #24180a;
+  --hw-plate-edge: rgba(36, 24, 10, 0.55);
 
   /* door paint and woodwork, toned down so state colours always stand out */
   --hw-door: #3a2f27;
   --hw-door-edge: #4c3e33;
   --hw-floor: #241d18;
+  --hw-board: #6b5a45;
+  /* what door paint darkens towards at its foot, and how far */
+  --hw-paint-shade: #0d0a07;
+  --hw-paint-shade-amount: 42%;
+  --hw-paint-tile: rgba(255, 250, 240, 0.94);
+  /* a favicon's colour is mixed this far into a warm neutral before it becomes door paint, so it never shouts */
+  --hw-paint-mute: #3a3029;
+  --hw-paint-strength: 58%;
+  /* what door paint lightens towards at its head, the raised panels' edges, and a monogram's ink */
+  --hw-paint-lift: #fff3e0;
+  --hw-panel-line: rgba(0, 0, 0, 0.22);
+  --hw-panel-light: rgba(255, 240, 220, 0.09);
+
+  /* door paints for doors without a favicon colour, picked by a hash of the slug (src/lib/colour.ts) */
+  --hw-paint-0: #4f6b8a;
+  --hw-paint-1: #7a5a8c;
+  --hw-paint-2: #3f7a6e;
+  --hw-paint-3: #8a5a3c;
+  --hw-paint-4: #6b7a3f;
+  --hw-paint-5: #8a4f5a;
+  --hw-paint-6: #4f7f8f;
+  --hw-paint-7: #8a7440;
+  --hw-paint-8: #5f5a8f;
+  --hw-paint-9: #8a6a7f;
 
   /* states (colour + shape + text, never colour alone) */
   --hw-healthy: #8fcf7e;
   --hw-unhealthy: #e8b44a;
   --hw-down: #ff6b5e;
-  --hw-stopped: #8f8478;
-  --hw-unknown: #6f6358;
+  --hw-stopped: #948879;
+  --hw-unknown: #948879;
+  --hw-starting: #f0b35a;
+  /* the uptime bar's stopped periods: a quiet hatching, neither up nor down */
+  --hw-hatch-a: #43382c;
+  --hw-hatch-b: #262019;
 
-  /* type */
-  --hw-font-display: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  --hw-font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --hw-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --hw-shadow: 0 1px 0 rgba(255, 240, 220, 0.035) inset, 0 12px 30px -18px rgba(0, 0, 0, 0.9);
+  --hw-shadow-lifted: 0 1px 0 rgba(255, 240, 220, 0.05) inset, 0 22px 44px -22px rgba(0, 0, 0, 0.95);
+  --hw-overlay: rgba(8, 6, 4, 0.62);
 
-  --hw-radius: 10px;
-  --hw-radius-small: 6px;
+  /* type: all OFL, bundled with the dashboard (D39) */
+  --hw-font-display: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --hw-font-ui: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --hw-font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --hw-radius: 12px;
+  --hw-radius-small: 7px;
+  --hw-radius-pill: 999px;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --hw-bg: #f6f1e9;
-    --hw-bg-raised: #fffbf4;
-    --hw-bg-sunken: #ece4d8;
-    --hw-line: #ddd1c0;
-    --hw-text: #2a211b;
-    --hw-text-muted: #6b5d50;
-    --hw-text-faint: #9a8b7c;
+:root[data-theme='light'] {
+  color-scheme: light;
+  --hw-bg: #f6f1e9;
+  --hw-bg-raised: #fffbf4;
+  --hw-bg-hover: #f3ebdf;
+  --hw-bg-sunken: #ece4d8;
+  --hw-line: #e2d7c6;
+  --hw-line-strong: #cdbda6;
+  --hw-text: #2a211b;
+  --hw-text-muted: #64564a;
+  --hw-text-subtle: #6f6255;
+  --hw-text-faint: #b3a593;
 
-    --hw-accent: #a8641b;
-    --hw-accent-soft: rgba(168, 100, 27, 0.12);
-    --hw-lamplight: #f6c46e;
+  --hw-accent: #a8641b;
+  /* #a8641b is only 4.15:1 on the light page: text uses this darker brass (5.6:1) */
+  --hw-accent-text: #8a5a14;
+  --hw-accent-soft: rgba(168, 100, 27, 0.11);
+  --hw-lamplight: #f6c46e;
+  --hw-glow: rgba(232, 160, 60, 0.32);
+  --hw-ink: #24180a;
 
-    --hw-door: #c9b49a;
-    --hw-door-edge: #b39b7f;
-    --hw-floor: #e3d6c3;
+  /* door-number plates: dark enamel on light */
+  --hw-plate: linear-gradient(180deg, #3d3026, #2a211b);
+  --hw-plate-text: #f6d9a8;
+  --hw-plate-edge: rgba(0, 0, 0, 0.35);
 
-    --hw-healthy: #2f7d32;
-    --hw-unhealthy: #9a6400;
-    --hw-down: #c62f22;
-    --hw-stopped: #7a6e62;
-    --hw-unknown: #9a8b7c;
-  }
+  --hw-door: #c9b49a;
+  --hw-door-edge: #b39b7f;
+  --hw-floor: #e3d6c3;
+  --hw-board: #a08a6e;
+  --hw-paint-shade: #1e1611;
+  --hw-paint-shade-amount: 28%;
+  --hw-paint-tile: rgba(255, 252, 246, 0.96);
+  --hw-paint-mute: #8c7b69;
+  --hw-paint-strength: 62%;
+  --hw-paint-lift: #fff8ee;
+  --hw-panel-line: rgba(40, 24, 10, 0.2);
+  --hw-panel-light: rgba(255, 250, 240, 0.16);
+
+  --hw-healthy: #28702c;
+  --hw-unhealthy: #855600;
+  --hw-down: #b82a1e;
+  --hw-stopped: #6f6255;
+  --hw-unknown: #6f6255;
+  --hw-starting: #8a5a14;
+  --hw-hatch-a: #d6c9b6;
+  --hw-hatch-b: #f1e9dd;
+
+  --hw-shadow: 0 1px 2px rgba(60, 40, 20, 0.06), 0 10px 24px -16px rgba(60, 40, 20, 0.3);
+  --hw-shadow-lifted: 0 2px 4px rgba(60, 40, 20, 0.07), 0 20px 36px -18px rgba(60, 40, 20, 0.4);
+  --hw-overlay: rgba(42, 33, 27, 0.3);
 }

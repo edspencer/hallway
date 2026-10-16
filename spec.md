@@ -3,7 +3,7 @@
 > The front door for everything you vibe-coded on a random port.
 
 **Status:** pre-release. The implementation has started (package, CI, release machinery, a daemon skeleton and a
-placeholder dashboard: see `AGENTS.md`); the domain logic is still to be built. This document set is written to be
+dashboard: see `AGENTS.md`); the domain logic is still to be built. This document set is written to be
 handed to an implementing agent (or person) who was not present for any of the design discussion. Anything not written down here is lost, so
 the spec errs heavily on the side of detail, rationale, and recording what was considered and rejected.
 
@@ -101,6 +101,7 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D36 | Daemon port: `--port`, `$PORT`, `config.yaml`, 4255. A new data home's `config.yaml` has every setting commented out at its default. |
 | D37 | Uptime history in **`node:sqlite`** (`state/health.sqlite`); `engines.node` raised to **≥ 22.13**, the first 22.x that loads it without a flag. |
 | D38 | Scanner and prober details: `/proc` fallback on Linux, cwd-as-project, `repo @ branch` rules, observation ids, damping of any move off `healthy`, uptime bar sizes. |
+| D39 | The v0 dashboard: one `/api/state` paints it, SSE refetches what each event names; tier-1 favicons from `server/thumbs/` (colour picked in the browser); "not checked" when no prober runs; bundled OFL fonts; contrast-checked tokens. |
 
 ## 5. Glossary
 

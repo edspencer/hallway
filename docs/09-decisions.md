@@ -425,6 +425,55 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   first scan doesn't hold up start-up. The core's claim (`server/api.ts`) writes `host: ::1` for a listener bound to
   IPv6 loopback only, which would otherwise be probed on 127.0.0.1 and show as down.
 
+### D39 — The v0 dashboard: how it gets its data, draws its doors and finds its pictures (2026-10-16)
+
+- **Data:** one `GET /api/state` paints the page (index.html preloads it, so it starts alongside the scripts); then
+  each SSE event refetches only what it names (`app`/`state`/`thumb` → `/api/apps/:slug`, `bookmarks` with a group →
+  `/api/bookmarks`, `observed` → `/api/observed`). Events that touch page-wide data (`apps`, `config`, a stray file,
+  `ignore.yaml`) refetch `/api/state`. Events arriving together are coalesced into one round. The stream reconnects
+  with backoff (0.5 s → 30 s) and refetches everything on reconnect; the page also refreshes quietly every 5 minutes
+  (the uptime bars move with no event) and when a tab hidden for over a minute comes back. Measured: fully painted in
+  44–76 ms warm (`performance.mark('hallway:painted')`; `11-research-notes.md`).
+- **No prober is not "unknown".** With `daemon.providers.health` false, doors are drawn closed in their own paint and
+  say `◌ not checked`, the header says "Health checks off", and the tab title counts nothing. `◌ unknown` (a door in
+  shadow, an outline) is kept for a prober that hasn't reached an app yet, as `05-ui.md` describes. Likewise the
+  observed tray is hidden without a scanner, and the first-run page only offers "start a server and Hallway will find
+  it" when a scanner is running.
+- **Tier-1 thumbnails** (D13) are a provider (`server/thumbs/`, D35): `thumb(slug)` and a new slot,
+  `bookmarkIcon(link)`. Lookups never block a request: what's known is answered at once, a missing or stale icon is
+  fetched in the background (apps at start and when their file changes, bookmarks at start and when their group
+  changes), cached in `cache/favicons/`, and announced with a `thumb` or `bookmarks` event. Fresh for 6 h (local
+  apps) or 7 days (remote bookmarks); "nothing found" is retried after 10 min or a day. `icon:` picks the source:
+  `auto` looks the site up, an `http(s)` URL is the image, a path is read from inside the data home only, and
+  anything else (an emoji) is drawn as text by the dashboard.
+  - Icons are served as inert images: `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline';
+    sandbox` and `nosniff`, because some are SVGs from other sites and the daemon's origin can write files.
+  - `GET /api/bookmarks/:group/icon?url=` answers only for a URL in that group (never a general fetcher), with 204
+    rather than 404 while there's no icon, so a chip asking isn't an error in the console.
+  - **The dominant colour is picked in the browser**, from the icon drawn into a 24 px canvas (`src/lib/colour.ts`):
+    the browser already decodes ICO, PNG and SVG, and the daemon then needs no image decoder (D13's "zero extra
+    dependencies"). It is mixed 58–62 % into a warm neutral (`--hw-paint-mute`, `--hw-paint-strength`) so a bright
+    brand colour never competes with the state colours. No icon: one of ten door paints, by a hash of the slug.
+- **Additive API fields** (`shared/api.ts`): `AppView.thumb` (the thumbnail's ETag, or null, so the page doesn't ask
+  for pictures that don't exist) and `DaemonInfo.hostname` (the header's name when `dashboard.title` isn't set).
+- **Typefaces bundled:** Fraunces (nameplates, headings), Inter (text), JetBrains Mono (door numbers, figures), all
+  SIL OFL 1.1 (licences checked in the `@fontsource-variable` packages), as devDependencies that Vite copies into
+  `dist/web`, so the dashboard never asks the network for a font. Updates D28's "no display font is bundled yet";
+  the choice of display face is still open with the rest of Q-VISUAL-IDENTITY.
+- **Contrast:** the light theme's accent (`#a8641b`, 4.15:1) is never text: `--hw-accent-text` (`#8a5a14`, 5.6:1, as
+  the website uses) is. The light state colours were darkened a little for margin. A test checks every text and
+  state token at 4.5:1 or better on the page and on cards in both themes, that text never uses `--hw-accent`, and
+  that `styles.css` contains no colour literal (D28).
+- **Theme:** `data-theme` on `<html>`, set before the first paint by a small inline script from the last-seen
+  `dashboard.theme` (kept in `localStorage`) and the system preference; `src/theme/theme.ts` follows the config and
+  the system after that. tokens.css therefore has one dark and one light block, not a duplicated media query.
+- **Copy stays plain** (`05-ui.md`): the door imagery is in the visuals only; tooltips and the drawer describe states
+  in words ("Not answering, and it should be running").
+- **Rejected:** server-side colour extraction (an image decoder in the daemon for a cosmetic); fetching favicons in
+  the browser straight from each site (no cache, a request per page view to every bookmarked site, and remote origins
+  in the page); a general `/api/favicon?url=` (a fetch-anything endpoint on a local daemon); a spinner while
+  `/api/state` loads (the header is drawn at once and the page fills in well under 200 ms).
+
 ### D40 — systemd user units for Linux, and how launchd's keys map onto them (2026-10-16)
 
 - Linux's managed services are systemd **user** units (D26) named `hallway-daemon.service` and

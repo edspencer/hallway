@@ -123,9 +123,12 @@ describe('the watcher', () => {
     const w = startWatcher(s.store, s.bus, debounceMs);
     cleanups.push(s.cleanup, () => w.close());
     await w.ready;
+    // macOS's FSEvents can drop a write made the instant the watch reports ready; CI runners are slow to settle
+    await sleep(100);
     const got: { e: ServerEvent; at: number }[] = [];
     s.bus.subscribe((e) => got.push({ e, at: Date.now() }));
-    const until = async (pred: (e: ServerEvent) => boolean, ms = 1000) => {
+    // "it arrives at all" on a loaded CI runner; the 1 s product requirement is checked by the timing test below
+    const until = async (pred: (e: ServerEvent) => boolean, ms = 3000) => {
       const start = Date.now();
       while (Date.now() - start < ms) {
         const hit = got.find((g) => pred(g.e));

@@ -12,6 +12,7 @@ import { startLogRotation } from './services/rotate.js';
 import { startSnapshots } from './store/backups.js';
 import type { Services } from './services/index.js';
 import { Store } from './store/index.js';
+import { startThumbs } from './thumbs/index.js';
 import { startWatcher } from './watcher.js';
 
 export interface AppOptions {
@@ -72,6 +73,8 @@ export interface ServerOptions extends Omit<AppOptions, 'store'> {
   store?: Store;
   /** Watch the data home, take hourly snapshots and rotate service logs (default true). */
   watch?: boolean;
+  /** Find and cache favicons for app and bookmark thumbnails (default true). */
+  thumbs?: boolean;
 }
 
 /**
@@ -79,9 +82,10 @@ export interface ServerOptions extends Omit<AppOptions, 'store'> {
  * the bound port (useful with port 0), the store, and a function that stops it all; rejects if it can't bind
  * (EADDRINUSE, EACCES), for the CLI to explain.
  */
-export async function startServer(port: number, { hostname = '127.0.0.1', home, watch = true, store: given, ...opts }: ServerOptions) {
+export async function startServer(port: number, { hostname = '127.0.0.1', home, watch = true, thumbs = true, store: given, ...opts }: ServerOptions) {
   const store = given ?? new Store(home, { bus: opts.bus ?? defaultBus }).init();
   const app = createApp({ ...opts, store });
+  const thumbnailer = thumbs ? startThumbs({ store, bus: opts.bus ?? store.bus ?? defaultBus, providers: opts.providers ?? defaultProviders }) : null;
   const { port: bound, close: closeHttp } = await new Promise<{ port: number; close: () => Promise<void> }>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
       server.off('error', reject);
@@ -103,6 +107,7 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
     port: bound,
     store,
     close: async () => {
+      thumbnailer?.stop();
       stopSnapshots();
       stopRotation();
       await watcher?.close();

@@ -61,6 +61,7 @@ export function declaredView({ store, providers }: ViewContext, slug: string, wi
     health: providers.first('appHealth', slug) ?? UNKNOWN_HEALTH,
     history: withHistory ? providers.first('appHistory', slug, '24h') : null,
     identity: c ? providers.first('appIdentity', { slug, port: c.port, host: c.host }) : null,
+    thumb: providers.first('thumb', slug)?.etag ?? null,
   };
 }
 
@@ -80,6 +81,7 @@ export function discoveredView({ store, providers }: ViewContext, d: DiscoveredA
     health: providers.first('appHealth', d.slug) ?? UNKNOWN_HEALTH,
     history: withHistory ? providers.first('appHistory', d.slug, '24h') : null,
     identity: providers.first('appIdentity', { slug: d.slug, port: d.port, host: d.host }),
+    thumb: providers.first('thumb', d.slug)?.etag ?? null,
   };
 }
 
@@ -127,6 +129,7 @@ export function daemonInfo(ctx: ViewContext, url: string, startedAt: Date): Daem
   return {
     version: VERSION,
     url,
+    hostname: os.hostname().replace(/\.local$/, ''),
     dataHome: ctx.store.home,
     dataHomeDisplay: tildify(ctx.store.home),
     startedAt: startedAt.toISOString(),
