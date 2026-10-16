@@ -2,11 +2,14 @@
 // globally into a temp prefix, then runs the installed `hallway` from a temp directory with a throwaway HOME and
 // HALLWAY_HOME: --version, --help, a usage error, `guide`, and the daemon (on a free port: the startup line, the data
 // home it creates, /api/health, /api/state, /llms.txt, the dashboard's index.html and one of its assets, the favicon,
-// the Host check). Cleans up after itself. Linux and macOS.
+// the Host check). On Linux it also installs the daemon as a service and starts an app with `hallway run`, against a
+// stand-in `systemctl` that really runs the units (test/fixtures/fake-systemctl; there is no systemd user instance
+// to rely on in CI or a container). Cleans up after itself. Linux and macOS.
 import { execFileSync, spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +24,14 @@ const work = path.join(tmp, 'work'); // run from somewhere unrelated, so nothing
 for (const d of [prefix, home, data, work]) fs.mkdirSync(d);
 
 const step = (s) => console.log(`smoke:pack: ${s}`);
+const fake = path.join(root, 'test', 'fixtures', 'fake-systemctl');
+const freePort = () =>
+  new Promise((resolve) => {
+    const s = net.createServer().listen(0, '127.0.0.1', () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+  });
 let server;
 
 // the installed bin, run as a user would: a fresh HOME and data home, none of this checkout's environment
@@ -73,7 +84,7 @@ try {
 
   step('--version, --help, usage errors');
   assert.equal(run('--version').trim(), pkg.version);
-  assert.match(run('--help'), /^Usage: hallway \[serve\]/);
+  assert.match(run('--help'), /^Usage: hallway \[command\]/);
   fails(['frobnicate'], 2, /unknown command 'frobnicate'/);
   fails(['--port', 'nope'], 2, /--port must be a port number/);
 
@@ -120,8 +131,41 @@ try {
   await get(base, '/some/client/route', /html/);
   assert.equal(await statusWithHost(`${base}/api/health`, 'evil.example'), 403, 'a foreign Host is refused');
 
+  server.kill();
+
+  if (process.platform === 'linux') {
+    step('services: hallway service install, hallway run (stand-in systemctl)');
+    const svcEnv = { ...env, PATH: `${fake}:${env.PATH}`, FAKE_RESTART_SEC: '0.2' };
+    delete svcEnv.XDG_CONFIG_HOME;
+    const svc = (...args) => execFileSync(bin, args, { cwd: work, env: svcEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const port = await freePort();
+    fs.appendFileSync(path.join(data, 'config.yaml'), `port: ${port}\n`);
+    assert.match(svc('service', 'install'), new RegExp(`It's running: http://localhost:${port}`));
+    const unit = fs.readFileSync(path.join(home, '.config', 'systemd', 'user', 'hallway-daemon.service'), 'utf8');
+    assert.ok(unit.includes(`${path.join(installed, 'dist', 'server', 'cli.js')} serve --quiet`), `the unit runs the installed CLI:\n${unit}`);
+    assert.deepEqual(await (await get(`http://localhost:${port}`, '/api/health', /json/)).json(), { ok: true, version: pkg.version });
+    assert.match(svc('service', 'status'), /Running: +yes/);
+    fs.writeFileSync(path.join(work, 'server.js'), "require('http').createServer((q, s) => s.end('hi')).listen(Number(process.env.PORT), process.env.HOST)");
+    const up = svc('run', 'smoke-run', '--', 'node', 'server.js');
+    const url = up.match(/smoke-run is up: (http:\/\/localhost:\d+)/)?.[1];
+    assert.ok(url, up);
+    assert.equal(await (await fetch(url)).text(), 'hi');
+    svc('service', 'rm', 'smoke-run');
+    svc('service', 'uninstall');
+    await assert.rejects(fetch(`http://localhost:${port}/api/health`), 'the daemon is gone after uninstall');
+  }
+
   step('ok');
 } finally {
   server?.kill();
+  // anything the stand-in systemctl started and a failure left behind
+  const state = path.join(home, '.fake-systemd');
+  for (const f of fs.existsSync(state) ? fs.readdirSync(state) : [])
+    if (/\.(pid|supervisor)$/.test(f))
+      try {
+        process.kill(Number(fs.readFileSync(path.join(state, f), 'utf8')), 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
   fs.rmSync(tmp, { recursive: true, force: true });
 }

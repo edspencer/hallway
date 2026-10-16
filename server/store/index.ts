@@ -32,7 +32,7 @@ import {
   type Field,
   type Issue,
 } from './schema.js';
-import { appendToList, locate, mergePatch, newDocument, parse, replaceWith, stringify, type Parsed } from './yamldoc.js';
+import { appendMapping, appendToList, locate, mergePatch, newDocument, parse, removeFromList, replaceWith, stringify, type Parsed } from './yamldoc.js';
 
 export { SLUG } from './schema.js';
 
@@ -565,6 +565,38 @@ export class Store {
     this.track(this.groups, e);
     this.bus.emit({ type: 'bookmarks', group });
     return e;
+  }
+
+  /** Append a link to a group (`hallway bookmark add`), creating the group's file if it's missing. Comments stay. */
+  async addBookmark(group: string, link: { url: string; title?: string; description?: string }, opts: WriteOptions = {}): Promise<Entry<BookmarkGroupConfig>> {
+    this.requireName(group, 'group');
+    this.rejectUnknown((BOOKMARKS_SCHEMA as Extract<Field, { t: 'object' }>).fields.links, [link]);
+    const e = this.groupEntry(group);
+    await this.write(e, (doc) => appendMapping(doc, 'links', Object.fromEntries(Object.entries(link).filter(([, v]) => v !== undefined))), opts);
+    this.track(this.groups, e);
+    this.bus.emit({ type: 'bookmarks', group });
+    return e;
+  }
+
+  /** Remove a link from a group by its URL or its 0-based index (`hallway bookmark rm`). Returns the removed link. */
+  async removeBookmark(group: string, which: string | number, opts: WriteOptions = {}): Promise<{ title?: string; url: string }> {
+    this.requireName(group, 'group');
+    const e = this.groupEntry(group);
+    let removed: { title?: string; url: string } | null = null;
+    await this.write(
+      e,
+      (doc) => {
+        const links = ((doc.toJS() as { links?: unknown } | null)?.links ?? []) as { title?: string; url: string }[];
+        const i = typeof which === 'number' ? which : Array.isArray(links) ? links.findIndex((l) => l && l.url === which) : -1;
+        if (!Array.isArray(links) || i < 0 || i >= links.length || !removeFromList(doc, 'links', i))
+          throw new NotFoundError(typeof which === 'number' ? `${e.file} has no link number ${which}` : `${e.file} has no link to ${which}`);
+        removed = links[i];
+      },
+      { ...opts, mustExist: true, destructive: true },
+    );
+    this.track(this.groups, e);
+    this.bus.emit({ type: 'bookmarks', group });
+    return removed!;
   }
 
   async deleteGroup(group: string, opts: WriteOptions = {}): Promise<string> {

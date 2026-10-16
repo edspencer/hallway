@@ -8,7 +8,9 @@ import { WEB_DIST } from './config.js';
 import { bus as defaultBus, type EventBus } from './events.js';
 import { providers as defaultProviders, type ProviderRegistry } from './providers.js';
 import { localOnly } from './security.js';
+import { startLogRotation } from './services/rotate.js';
 import { startSnapshots } from './store/backups.js';
+import type { Services } from './services/index.js';
 import { Store } from './store/index.js';
 import { startThumbs } from './thumbs/index.js';
 import { startWatcher } from './watcher.js';
@@ -24,6 +26,8 @@ export interface AppOptions {
   /** Hostnames accepted besides loopback (security.ts): the development-only HALLWAY_DEV_ALLOWED_HOSTS. */
   extraHosts?: readonly string[];
   startedAt?: Date;
+  /** Managed services for the start/stop/restart routes (default: created on first use). */
+  services?: () => Services;
 }
 
 /**
@@ -39,11 +43,11 @@ export function allowedHosts(store: Store, extra: readonly string[] = []): strin
  * The daemon's HTTP app: the JSON API under /api, the agent documents, and the dashboard (a single-page app) for
  * everything else.
  */
-export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date() }: AppOptions) {
+export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date(), services }: AppOptions) {
   const app = new Hono();
   app.use('*', localOnly(() => allowedHosts(store, extraHosts)));
 
-  app.route('/api', apiRoutes({ store, bus, providers, startedAt }));
+  app.route('/api', apiRoutes({ store, bus, providers, startedAt, services }));
   app.route('/', agentRoutes({ store, providers }));
 
   if (webDist) {
@@ -67,7 +71,7 @@ export interface ServerOptions extends Omit<AppOptions, 'store'> {
   home: string;
   /** An already-loaded store for `home` (the CLI reads config.yaml's port first). */
   store?: Store;
-  /** Watch the data home and take hourly snapshots (default true). */
+  /** Watch the data home, take hourly snapshots and rotate service logs (default true). */
   watch?: boolean;
   /** Find and cache favicons for app and bookmark thumbnails (default true). */
   thumbs?: boolean;
@@ -97,6 +101,7 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
   });
   const watcher = watch ? startWatcher(store) : null;
   const stopSnapshots = watch ? startSnapshots(home) : () => {};
+  const stopRotation = watch ? startLogRotation(store) : () => {};
   await watcher?.ready;
   return {
     port: bound,
@@ -104,6 +109,7 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
     close: async () => {
       thumbnailer?.stop();
       stopSnapshots();
+      stopRotation();
       await watcher?.close();
       await closeHttp();
     },

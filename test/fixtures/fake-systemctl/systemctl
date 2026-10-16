@@ -1,0 +1,202 @@
+#!/usr/bin/env node
+// A stand-in for `systemctl --user`, for the end-to-end tests of `hallway run` & co. on machines without a systemd
+// user instance (containers, CI): it reads the units Hallway writes and really runs them, detached, under a small
+// supervisor that records the exit status and honours Restart=always. It understands just what Hallway uses:
+//   systemctl --user daemon-reload | enable|disable [--quiet] U | start|stop|restart U | show U --property=… | reset-failed U
+// State lives in $FAKE_SYSTEMD_STATE (default $HOME/.fake-systemd). Never use it for anything but tests.
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const env = process.env;
+const STATE = env.FAKE_SYSTEMD_STATE || path.join(env.HOME, '.fake-systemd');
+const UNITS = path.join(env.XDG_CONFIG_HOME && path.isAbsolute(env.XDG_CONFIG_HOME) ? env.XDG_CONFIG_HOME : path.join(env.HOME, '.config'), 'systemd', 'user');
+fs.mkdirSync(STATE, { recursive: true });
+fs.appendFileSync(path.join(STATE, 'calls.log'), process.argv.slice(2).join(' ') + '\n');
+
+const st = (unit, ext) => path.join(STATE, `${unit}.${ext}`);
+const read = (f) => {
+  try {
+    return fs.readFileSync(f, 'utf8');
+  } catch {
+    return null;
+  }
+};
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const pidOf = (unit) => {
+  const p = Number(read(st(unit, 'pid')));
+  return p && alive(p) ? p : null;
+};
+
+/** Split an ExecStart line into words: "…" quoted with C escapes, then $$ → $ and %% → %. */
+function words(line, dollars = true) {
+  const out = [];
+  let i = 0;
+  while (i < line.length) {
+    while (line[i] === ' ') i++;
+    if (i >= line.length) break;
+    let w = '';
+    if (line[i] === '"') {
+      i++;
+      while (i < line.length && line[i] !== '"') {
+        if (line[i] === '\\') {
+          i++;
+          w += { n: '\n', t: '\t' }[line[i]] ?? line[i];
+        } else w += line[i];
+        i++;
+      }
+      i++;
+    } else while (i < line.length && line[i] !== ' ') w += line[i++];
+    out.push((dollars ? w.replace(/\$\$/g, '$') : w).replace(/%%/g, '%'));
+  }
+  return out;
+}
+
+function parseUnit(unit) {
+  const text = read(path.join(UNITS, unit));
+  if (text === null) return null;
+  const u = { env: {}, restart: 'no', restartSec: 10 };
+  for (const line of text.split('\n')) {
+    const i = line.indexOf('=');
+    if (i < 0 || line.startsWith('#')) continue;
+    const k = line.slice(0, i);
+    const v = line.slice(i + 1);
+    if (k === 'ExecStart') u.argv = words(v);
+    else if (k === 'WorkingDirectory') u.cwd = v.replace(/%%/g, '%');
+    else if (k === 'Environment') {
+      const [kv] = words(v, false); // $ isn't special in Environment=
+      const j = kv.indexOf('=');
+      u.env[kv.slice(0, j)] = kv.slice(j + 1);
+    } else if (k === 'StandardOutput') u.out = v.replace(/^append:/, '').replace(/%%/g, '%');
+    else if (k === 'StandardError') u.err = v.replace(/^append:/, '').replace(/%%/g, '%');
+    else if (k === 'Restart') u.restart = v;
+    else if (k === 'RestartSec') u.restartSec = Number(v);
+  }
+  return u;
+}
+
+/** The supervisor: runs the unit's command, records its pid and exit status, restarts it for Restart=always. */
+async function supervise(unit) {
+  const u = parseUnit(unit);
+  for (;;) {
+    fs.mkdirSync(path.dirname(u.out), { recursive: true });
+    const out = fs.openSync(u.out, 'a');
+    const err = fs.openSync(u.err, 'a');
+    // the unit's environment only, as systemd gives it (env -i)
+    const child = spawn(u.argv[0], u.argv.slice(1), { cwd: u.cwd, env: u.env, stdio: ['ignore', out, err], detached: true });
+    const started = await new Promise((res) => {
+      child.once('spawn', () => res(true));
+      child.once('error', (e) => {
+        fs.writeSync(err, `fake-systemctl: ${e.message}\n`);
+        res(false);
+      });
+    });
+    if (started) {
+      fs.writeFileSync(st(unit, 'pid'), String(child.pid));
+      fs.writeFileSync(st(unit, 'mainpid'), String(child.pid));
+    }
+    const code = started ? await new Promise((res) => child.once('exit', (c, sig) => res(c ?? (sig ? 128 + 15 : 1)))) : 203;
+    fs.rmSync(st(unit, 'pid'), { force: true });
+    fs.writeFileSync(st(unit, 'exit'), String(code));
+    if (u.restart !== 'always' || fs.existsSync(st(unit, 'stopping'))) return;
+    await new Promise((r) => setTimeout(r, Math.min(u.restartSec, Number(env.FAKE_RESTART_SEC ?? 1)) * 1000));
+    if (fs.existsSync(st(unit, 'stopping'))) return;
+  }
+}
+
+async function start(unit) {
+  if (!parseUnit(unit)) return fail(5, `Failed to start ${unit}: Unit ${unit} not found.`);
+  if (pidOf(unit)) return 0;
+  fs.rmSync(st(unit, 'stopping'), { force: true });
+  fs.rmSync(st(unit, 'exit'), { force: true });
+  const sup = spawn(process.execPath, [new URL(import.meta.url).pathname, '--supervise', unit], { detached: true, stdio: 'ignore', env });
+  sup.unref();
+  fs.writeFileSync(st(unit, 'supervisor'), String(sup.pid));
+  // like systemd's Type=simple: return once the process exists
+  for (let i = 0; i < 100 && !read(st(unit, 'pid')) && !read(st(unit, 'exit')); i++) await new Promise((r) => setTimeout(r, 20));
+  return 0;
+}
+
+async function stop(unit) {
+  fs.writeFileSync(st(unit, 'stopping'), '');
+  const sup = Number(read(st(unit, 'supervisor')));
+  const pid = pidOf(unit);
+  if (pid) {
+    try {
+      process.kill(-pid, 'SIGTERM'); // the whole group, as KillMode=control-group would
+    } catch {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {}
+    }
+    for (let i = 0; i < 250 && alive(pid); i++) await new Promise((r) => setTimeout(r, 20));
+    if (alive(pid)) process.kill(-pid, 'SIGKILL');
+  }
+  for (let i = 0; i < 100 && sup && alive(sup); i++) await new Promise((r) => setTimeout(r, 20));
+  fs.rmSync(st(unit, 'pid'), { force: true });
+  return 0;
+}
+
+function show(unit) {
+  const loaded = parseUnit(unit) !== null;
+  const pid = pidOf(unit);
+  const exit = read(st(unit, 'exit'));
+  const active = pid ? 'active' : exit !== null && exit !== '0' && !fs.existsSync(st(unit, 'stopping')) ? 'failed' : 'inactive';
+  process.stdout.write(
+    [
+      `LoadState=${loaded ? 'loaded' : 'not-found'}`,
+      `ActiveState=${active}`,
+      `SubState=${pid ? 'running' : active === 'failed' ? 'failed' : 'dead'}`,
+      `MainPID=${pid ?? 0}`,
+      `ExecMainPID=${read(st(unit, 'mainpid')) ?? 0}`,
+      `ExecMainStatus=${exit ?? 0}`,
+      `UnitFileState=${!loaded ? '' : fs.existsSync(st(unit, 'enabled')) ? 'enabled' : 'disabled'}`,
+      '',
+    ].join('\n'),
+  );
+  return 0;
+}
+
+function fail(code, msg) {
+  process.stderr.write(msg + '\n');
+  return code;
+}
+
+async function main(argv) {
+  if (argv[0] === '--supervise') return supervise(argv[1]).then(() => 0);
+  if (argv[0] !== '--user') return fail(1, 'fake systemctl: only --user is supported');
+  const args = argv.slice(1).filter((a) => a !== '--quiet' && !a.startsWith('--property'));
+  const [verb, unit] = args;
+  switch (verb) {
+    case 'daemon-reload':
+    case 'reset-failed':
+      return 0;
+    case 'enable':
+      if (!parseUnit(unit)) return fail(1, `Failed to enable unit: Unit file ${unit} does not exist.`);
+      fs.writeFileSync(st(unit, 'enabled'), '');
+      return 0;
+    case 'disable':
+      fs.rmSync(st(unit, 'enabled'), { force: true });
+      return 0;
+    case 'start':
+      return start(unit);
+    case 'stop':
+      return stop(unit);
+    case 'restart':
+      await stop(unit);
+      return start(unit);
+    case 'show':
+      return show(unit);
+    default:
+      return fail(1, `fake systemctl: unknown verb ${verb}`);
+  }
+}
+
+main(process.argv.slice(2)).then((c) => (process.exitCode = c));

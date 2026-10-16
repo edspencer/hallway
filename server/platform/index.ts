@@ -9,6 +9,7 @@
 import { darwin } from './darwin.js';
 import { linux } from './linux.js';
 import type { ProcessInfo, RawListener } from './listeners.js';
+import type { Runner, ServiceManager } from './services.js';
 
 export type PlatformId = 'darwin' | 'linux';
 
@@ -28,10 +29,16 @@ export interface Platform {
   processInfo(pids: number[]): Promise<Map<number, ProcessInfo>>;
   /** When the machine booted, epoch ms; null if it can't be read. */
   bootTime(): Promise<number | null>;
+  /** The service manager for the daemon and managed apps (launchd.ts, systemd.ts). `run` is mocked in tests. */
+  services(opts?: { run?: Runner; env?: NodeJS.ProcessEnv; home?: string }): ServiceManager;
+  /** The command that opens a URL in the default browser (`open` / `xdg-open`). */
+  openCommand(url: string): [string, string[]];
 }
 
 export type { Listener, ProcessInfo, RawListener } from './listeners.js';
 export { bindScope, connectAddress, mergeListeners } from './listeners.js';
+export type { Runner, RunResult, ServiceManager, ServiceSpec, ServiceStatus } from './services.js';
+export { ServiceManagerError, defaultRunner } from './services.js';
 
 export class UnsupportedPlatformError extends Error {
   constructor(public platform: string) {

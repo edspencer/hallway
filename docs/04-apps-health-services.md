@@ -217,15 +217,21 @@ Template, derived from the plist the author already uses to run Paddock as a ser
 </plist>
 ```
 
-Lifecycle (use the modern `launchctl` verbs, `gui/<uid>` domain):
+Lifecycle (use the modern `launchctl` verbs, `gui/<uid>` domain; implemented in `server/platform/launchd.ts`, and
+run against the real launchd in CI, D45):
 
 | Action | Command | YAML effect |
 |--------|---------|-------------|
-| install/start | `launchctl bootstrap gui/$UID <plist>` | `expected: running` |
-| stop | `launchctl bootout gui/$UID/<label>` (unload, so KeepAlive does not resurrect it) | `expected: stopped` |
-| restart | `launchctl kickstart -k gui/$UID/<label>` | — |
+| install/start | `launchctl enable gui/$UID/<label>`, then `launchctl bootstrap gui/$UID <plist>` (plus `kickstart` for a job that isn't RunAtLoad) | `expected: running` (`adhoc` for a job that neither starts at login nor restarts, D41) |
+| stop | `launchctl bootout gui/$UID/<label>` (unload, so KeepAlive does not resurrect it), then `launchctl disable gui/$UID/<label>` (so the next login doesn't load it either, D41) | `expected: stopped` |
+| restart | `launchctl kickstart -k gui/$UID/<label>` (bootout + bootstrap when the plist changed: launchd reads it only at bootstrap) | — |
 | status | `launchctl print gui/$UID/<label>` → parse `state`, `pid`, `last exit code` | — |
 | remove | bootout + delete plist | remove `service:` block |
+
+On Linux the same verbs are systemd user units (`server/platform/systemd.ts`, D40): `hallway-app-<slug>.service` in
+`~/.config/systemd/user`, `systemctl --user enable|disable` for RunAtLoad, `start`, `stop` (+ `disable`), `restart`,
+`show`, with `Restart=always` for KeepAlive and `StandardOutput=append:` on the same log files. A user unit starts with
+the user's systemd instance, i.e. at login; lingering (`loginctl enable-linger`) makes it start at boot.
 
 LaunchAgents start at **user login**, not at boot. That is the right behaviour for a laptop.
 
@@ -273,7 +279,9 @@ The generator must:
 
 - launchd does **not** rotate `StandardOutPath`/`StandardErrorPath`; files grow forever (the author's existing service
   logs do). The daemon must rotate them: because launchd keeps the file descriptor open, *rename* does not work —
-  copy then truncate in place when a file exceeds a size (default 10 MB), keeping N generations (Q-LOG-ROTATION).
+  copy then truncate in place when a file exceeds a size (default 10 MB), keeping N generations. Implemented
+  (`server/services/rotate.ts`, D43): every 15 s, every `*.log` in `logs/`; only the last `logMaxBytes` are copied, so
+  no rotated file exceeds the limit.
 - `hallway logs <slug> [--lines N] [--follow]` and `GET /api/apps/:slug/logs`.
 
 ## `hallway run` — the one command agents should use (v1)
@@ -296,5 +304,11 @@ hallway run <slug> [--cwd DIR] [--port N] [--persist] [--name "Display name"] --
 4. Re-running `hallway run <slug>` with no command reuses the recorded one (as `pm start` did).
 
 Companion commands: `hallway stop <slug>`, `hallway restart <slug>`, `hallway logs <slug>`.
+
+Implemented (`server/services/run.ts`; the details the steps above leave open are D45): `$PORT` and `$HOST` in the
+command are filled in by Hallway (D42), so quote them for the shell: `hallway run demo -- npx vite --port '$PORT'
+--strictPort`. Re-running with no command also keeps the recorded `--persist` choice. It refuses an existing app's
+port change (D17), a broken app file, and a port something else is already listening on; it stops waiting early when
+the job exits, reporting the exit status.
 
 Because it returns promptly and prints the URL, an agent can use it inside a tool call without hanging.
