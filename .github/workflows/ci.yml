@@ -26,7 +26,8 @@ jobs:
       fail-fast: false
       matrix:
         node: [22, 24]
-        # macOS is the primary platform and Linux is supported alongside it (D26), so both run everything.
+        # macOS is the primary platform and Linux is supported alongside it (D26), so both run everything. Windows is
+        # best effort (D58): the unit tests and smoke:pack, with what it genuinely lacks skipped (test/fixture.ts).
         os: [ubuntu-latest, macos-latest, windows-latest]
         # The oldest supported Node (engines.node): the first 22.x where node:sqlite needs no flag (D37). The `22`
         # above resolves to the newest 22.x, so without this the floor would go untested.

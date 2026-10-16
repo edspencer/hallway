@@ -19,6 +19,10 @@ dev servers directly. In **direct mode** (the default) every app's address is `h
 mode is on, and each app's `url` in `/api/state` is the address to give the user. Don't run `hallway setup` or `hallway teardown` yourself: they need sudo, so they're the
 user's to run.
 
+On Windows (best effort): the dashboard, the YAML files, health checks, bookmarks, this guide and MCP work; there is no
+fronted mode, and until a later version the scanner finds nothing and `hallway run` refuses, so start servers as you
+normally would and register them (below).
+
 ## The rule: don't leave servers running in your session
 
 A dev or preview server started inside your session (`npm run dev`, `vite`, `astro dev`, `next dev`,
