@@ -16,7 +16,7 @@ import { WELL_KNOWN_PORTS, assignPort } from '../server/services/ports.ts';
 import { nodeShebang, pathProblem, resolveCommand, resolveNode, servicePath, which } from '../server/services/resolve.ts';
 import { rotateFile, rotateLogs } from '../server/services/rotate.ts';
 import { appSpec, daemonSpec, substitute } from '../server/services/spec.ts';
-import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, tmpStore } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -344,7 +344,7 @@ function fakeMachine() {
   return { root, stable, shell, tools, PATH };
 }
 
-describe('the PATH trap', { skip: onWindows('POSIX executables (exec bits, #! lines, symlinked version managers); Windows has no managed services yet') }, () => {
+describe('the PATH trap', () => {
   test("node resolves through fnm's per-shell symlink to its stable install, with its version", () => {
     const m = fakeMachine();
     const node = resolveNode(m.PATH);
@@ -388,7 +388,7 @@ describe('the PATH trap', { skip: onWindows('POSIX executables (exec bits, #! li
   });
 });
 
-describe('specs from the YAML', { skip: onWindows('POSIX executables (exec bits, #! lines, symlinked version managers); Windows has no managed services yet') }, () => {
+describe('specs from the YAML', () => {
   test('an app: resolved program, cwd, PATH, injected PORT/HOST/HOSTNAME, user env, logs', async () => {
     const m = fakeMachine();
     const { home, store, cleanup } = await tmpStore();
@@ -425,7 +425,7 @@ describe('specs from the YAML', { skip: onWindows('POSIX executables (exec bits,
   });
 });
 
-describe('Services: the lifecycle and the YAML (runner mocked)', { skip: onWindows('POSIX executables (exec bits, #! lines, symlinked version managers); Windows has no managed services yet') }, () => {
+describe('Services: the lifecycle and the YAML (runner mocked)', () => {
   async function setup() {
     const m = fakeMachine();
     const t = await tmpStore();

@@ -66,17 +66,19 @@ jobs:
 
   # ---------------------------------------------------------------------------------------------------------------
   # Managed services against the REAL service manager: launchd's gui/<uid> domain on the macOS runner, systemd's
-  # user instance on the Ubuntu runner (lingering turned on so there is one). scripts/services-real.mjs installs the
-  # daemon and two apps, drives their lifecycle (including KeepAlive after a crash) and removes them. It writes into
-  # the runner's real LaunchAgents / systemd user directories, which is why it runs only here.
+  # user instance on the Ubuntu runner (lingering turned on so there is one), Task Scheduler on the Windows runner
+  # (D60). scripts/services-real.mjs installs the daemon and two apps, drives their lifecycle (including KeepAlive
+  # after a crash) and removes them. It writes into the runner's real LaunchAgents / systemd user directories / Task
+  # Scheduler, which is why it runs only here.
   # ---------------------------------------------------------------------------------------------------------------
   services:
-    name: Services (real ${{ matrix.os == 'macos-latest' && 'launchd' || 'systemd' }})
+    name: Services (real ${{ matrix.os == 'macos-latest' && 'launchd' || matrix.os == 'windows-latest' && 'Task Scheduler' || 'systemd' }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
