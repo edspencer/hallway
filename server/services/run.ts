@@ -53,6 +53,8 @@ export interface RunOptions {
 export async function runApp(services: Services, req: RunRequest, opts: RunOptions = {}): Promise<RunOutcome> {
   const { store } = services;
   const { slug } = req;
+  // before anything is written: an app file left behind with a service: block nothing can start would mislead
+  if (services.manager.unsupported) throw new ServiceError(services.manager.unsupported);
   if (!SLUG.test(slug)) throw new ServiceError(`"${slug}" is not a valid slug: lower-case letters, digits and hyphens, starting and ending with a letter or digit`);
   if (slug === RESERVED_SERVICE_SLUG) throw new ServiceError(DAEMON_SLUG_MESSAGE);
   const entry = store.apps.get(slug);

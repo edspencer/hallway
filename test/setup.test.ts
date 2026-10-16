@@ -10,7 +10,7 @@ import type { FrontingEnv } from '../server/platform/fronting.ts';
 import { linuxFronting, nftRules, resolvedDropin } from '../server/platform/fronting-linux.ts';
 import { darwinFronting, pfAnchor, resolverText } from '../server/platform/fronting-darwin.ts';
 import { dnsmasqConf } from '../server/platform/fronting.ts';
-import { type Facts, SetupError, cmdLine, formatPlan, planSetup, runPlan, versionAtLeast } from '../server/proxy/setup.ts';
+import { type Facts, type SetupDeps, SetupError, cmdLine, formatPlan, planSetup, runPlan, setup, teardown, versionAtLeast } from '../server/proxy/setup.ts';
 import { HSTS_PRELOADED_TLDS, parseTlds, tldVerdict, delegatedTlds } from '../server/proxy/tld.ts';
 import { onWindows, ROOT, tmpDir } from './fixture.ts';
 
@@ -253,5 +253,30 @@ describe('running a plan', () => {
     assert.ok(versionAtLeast('v2.7.0', [2, 7, 0]));
     assert.ok(!versionAtLeast('v2.6.4', [2, 7, 0]));
     assert.ok(!versionAtLeast(null, [2, 7, 0]));
+  });
+});
+
+describe('Windows (D58)', () => {
+  // setup refuses before it reads the store, looks for a tool or writes a file: deps it would use are traps
+  const trap = () => {
+    throw new Error('setup touched something on Windows');
+  };
+  const deps = (out: string[]) =>
+    ({ platform: platformFor('win32'), out: (s: string) => out.push(s), services: trap, query: trap, env: {}, userHome: 'C:\\Users\\me', isRoot: false, get store() { return trap(); } }) as unknown as SetupDeps;
+
+  test('setup refuses at once, with the reason, and --print too', async () => {
+    for (const print of [false, true])
+      await assert.rejects(setup(deps([]), { print }), (e) => e instanceof SetupError && /fronted mode isn't supported on Windows/.test(e.message));
+  });
+
+  test('teardown has nothing to undo', async () => {
+    const out: string[] = [];
+    assert.equal(await teardown(deps(out)), 0);
+    assert.match(out.join(''), /^Nothing to undo: fronted mode isn't supported on Windows/);
+  });
+
+  test('every recipe throws FrontingUnsupported', () => {
+    const f = platformFor('win32').fronting;
+    for (const r of [f.redirect, f.unredirect, f.trust, f.untrust, f.resolver, f.unresolver]) assert.throws(() => r({} as FrontingEnv), /not supported on Windows|isn't supported on Windows/);
   });
 });

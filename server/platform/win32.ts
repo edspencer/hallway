@@ -18,6 +18,7 @@ function unsupportedServices(dir: string): ServiceManager {
   };
   return {
     kind: 'schtasks',
+    unsupported: WINDOWS_SERVICES_UNSUPPORTED,
     file: (label) => path.join(dir, `${label}.xml`),
     render: () => {
       throw new ServiceManagerError(WINDOWS_SERVICES_UNSUPPORTED);
