@@ -24,6 +24,8 @@ export const NON_WEB_DAEMONS = [
   'postgres', 'postmaster', 'mysqld', 'mariadbd', 'redis-server', 'valkey-server', 'mongod', 'memcached',
   'sshd', 'rapportd', 'ControlCenter', 'sharingd', 'identityservicesd', 'cupsd', 'dnsmasq', 'systemd-resolve',
   'rpcbind', 'containerd', 'dockerd', 'com.docker.*', 'Docker Desktop', 'vpnkit*', 'Dropbox', 'Spotify',
+  // Windows (D59): the kernel's HTTP.sys listeners (WinRM on 5985, 47001) show as `System`, PID 4
+  'System', 'svchost', 'lsass', 'wininit', 'services', 'spoolsv', 'MsMpEng',
 ];
 
 /** Process names Hallway itself owns: its proxy (Caddy). Its own daemon is matched by PID and port. */

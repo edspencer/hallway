@@ -55,6 +55,11 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      # The raw output win32.ts parses, for its fixtures (D59): kept in the log, never a failure.
+      - name: Capture Windows command output
+        if: runner.os == 'Windows' && matrix.node == 24
+        continue-on-error: true
+        run: node scripts/capture-win32.mjs
       # Packs the package, installs the tarball into a temp prefix and runs it as a user would (scripts/smoke-pack.mjs).
       - name: Smoke-test the npm package
         run: npm run smoke:pack
