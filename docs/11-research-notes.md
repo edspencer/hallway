@@ -435,6 +435,37 @@ Node 22.13, 22 and 24. **Nothing has been run on a real Windows desktop**; each 
   browser on the runner); boot time from `os.uptime()` across sleep and Fast Startup (a "shutdown" with Fast Startup on
   is a hibernation, so the boot time doesn't move and nothing would be reported lost).
 
+**Stage B, the scanner (D59; PR "Windows: the scanner"):**
+
+- Captured on the runner (`scripts/capture-win32.mjs`, kept as `test/fixtures/platform/win32-*`): netstat lists 25
+  IPv4 and 21 IPv6 listening rows on a fresh runner. Among them are `System` (PID 4) on 80, 445, 5985, 5986 and 47001
+  (HTTP.sys: WinRM and friends), `sshd` on 22, `svchost` on 3389, MSMQ on 1801 and 2103–2107, and the usual service
+  hosts on 49664 and up. Everything below 1024, in the ephemeral range, or a known service host is filtered out, so
+  the tray on a fresh runner is empty apart from what a test starts. `netsh … dynamicport tcp` gives 49152 + 16384,
+  IANA's range.
+- Listing (two netstats and a tasklist, in parallel) takes about 0.35 s.
+- One PowerShell call (Win32_Process plus the PEB reader, compiled with `Add-Type`) took 13.5 s the first time on one
+  fresh runner and 4.1 s on another; after that it takes 0.55–0.6 s. The first call pays for .NET, CIM and the C#
+  compile, so the first scan after a daemon start on Windows is slow, and the rest aren't. (The call's timeout is 30 s.)
+- **The working directory without administrator rights, verified:** CI's "Scanner (real Windows, standard user)" job
+  creates a local account that is only in `Users`, grants it the batch-logon right, and runs
+  `scripts/scanner-real-win.mjs` as that account through a one-off scheduled task.
+  - Its own listener was found, named `node`, with the right working directory, command line and parent.
+  - Of the other 13 listeners (SYSTEM's, services' and the administrator's processes), all 13 were described, and
+    none had a working directory. That is the intended behaviour: it can't read them, and nothing failed.
+  - As the runner's administrator (elevated), 10 of those 13 had one.
+- Things that tripped the job up along the way, for whoever touches it next:
+  - `net user <name> <password> /add` stops to ask a question when the password is over 14 characters.
+  - `New-LocalUser` creates an account in no group at all.
+  - A task with a stored password is a batch logon, a right only administrators have by default (granted with
+    `secedit`).
+  - `schtasks /Run` returns while the task is still `Ready` (last result 0x41303, "has not run yet"), so the script
+    waits for the verdict line, not for the task's state.
+- Unverified on a real Windows desktop: an interactive user's dev servers, which is the same token situation as this
+  test, though not run as such; 32-bit (WOW64) processes, which are skipped and report no directory; and a
+  non-English Windows, where the parsers deliberately use columns and addresses rather than words. That last point is
+  tested only against a synthetic German sample.
+
 ## Prior art status (checked 2026-09-16 via GitHub API / npm)
 
 | Project | Last push | Stars | Notes |
