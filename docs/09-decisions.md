@@ -411,7 +411,7 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   non-healthy probes of any kind. Uptime samples record each probe's own (undamped) state.
 - **Probe schedule:** each app has its own timer (interval × 0.9–1.1); the first round is spread over up to 2 s; a
   shared semaphore caps `probe.concurrency`. Going live (a dashboard connects) pulls every app's next probe in to
-  within the live interval. A changed port or host resets an app to `unknown`; a changed `expected` keeps the state
+  within the live interval; live mode only ever speeds probing up (the shorter of the two intervals wins). A changed port or host resets an app to `unknown`; a changed `expected` keeps the state
   and re-probes at once.
 - **Uptime bars:** 24 h = 48 × 30 min from samples; 7 d = 56 × 3 h and 90 d = 90 × 1 day (UTC days) from rollups, with
   the hour in progress computed from samples. A bar's colour is its worst state (down > unhealthy > healthy >

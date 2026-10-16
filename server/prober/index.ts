@@ -83,7 +83,11 @@ export function createProber(opts: ProberOptions) {
   let active = 0;
   const waiting: (() => void)[] = [];
 
-  const interval = () => (live ? settings().liveIntervalSeconds : settings().intervalSeconds) * 1000;
+  // live mode only ever speeds probing up: a normal interval set below the live one wins
+  const interval = () => {
+    const s = settings();
+    return (live ? Math.min(s.liveIntervalSeconds, s.intervalSeconds) : s.intervalSeconds) * 1000;
+  };
 
   async function slot() {
     if (active < Math.max(1, settings().concurrency)) {

@@ -256,6 +256,23 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
+  test('live mode never slows probing down', async () => {
+    mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+    const p = fakeProbe();
+    const prober = createProber({
+      targets: () => [{ slug: 'a', port: 1, expected: 'running' }],
+      settings: () => ({ ...DEFAULT_PROBE, intervalSeconds: 5, liveIntervalSeconds: 15 }),
+      probe: p.fn,
+      random: () => 0.5,
+    });
+    prober.start();
+    prober.setLive(true);
+    await advance(1000);
+    await advance(10_000);
+    assert.equal(p.calls.length, 3, 'every 5 s, not 15');
+    prober.stop();
+  });
+
   test('a fresh start gets a grace period before not listening counts as down', async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
