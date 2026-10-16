@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_PORT, ROOT as PKG_ROOT, dataPaths, devOverrides, expandHome, packageRoot, parsePort, resolveHome, tildify } from '../server/config.ts';
-import { ROOT, tmpDir } from './fixture.ts';
+import { ROOT, tmpDir, rmTmp } from './fixture.ts';
 
 // native paths (D:\home\someone on Windows), so the expectations hold on every OS
 const HOME = path.resolve('/home/someone');
@@ -63,7 +63,7 @@ describe('packageRoot', () => {
       fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'not-hallway' }));
       assert.throws(() => packageRoot(dir), /can't find Hallway's package.json/);
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   });
 });

@@ -16,12 +16,12 @@ import { ObservedStore, labelListeners, normaliseCommand, observationId, recordB
 import { htmlFavicon, htmlTitle, sniff } from '../server/scanner/sniff.ts';
 import { createScanner } from '../server/scanner/index.ts';
 import { type Platform, type ProcessInfo, type RawListener, currentPlatform } from '../server/platform/index.ts';
-import { exitWatchdog, tmpDir } from './fixture.ts';
+import { exitWatchdog, tmpDir, rmTmp, stopChild } from './fixture.ts';
 
 await exitWatchdog();
 
 const TMP = tmpDir('hw-test-scan-');
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => rmTmp(TMP));
 
 const GIT_ENV = {
   ...process.env,
@@ -452,7 +452,8 @@ describe('a real scan on this machine', () => {
       assert.equal(found.kind, 'web');
       assert.equal(found.label, 'real-app');
     } finally {
-      child.kill();
+      // waited for: on Windows its working directory, in TMP, can't be deleted while it runs
+      await stopChild(child);
     }
   });
 });

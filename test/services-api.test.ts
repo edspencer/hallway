@@ -8,7 +8,7 @@ import { createApp } from '../server/index.ts';
 import { platformFor } from '../server/platform/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
 import { Services } from '../server/services/index.ts';
-import { onWindows, tmpDir, tmpStore } from './fixture.ts';
+import { onWindows, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));
@@ -17,7 +17,7 @@ async function setup() {
   const s = await tmpStore();
   cleanups.push(s.cleanup);
   const userHome = tmpDir('hw-test-api-user-');
-  cleanups.push(() => fs.rmSync(userHome, { recursive: true, force: true }));
+  cleanups.push(() => rmTmp(userHome));
   const calls: string[] = [];
   const services = new Services({
     store: s.store,

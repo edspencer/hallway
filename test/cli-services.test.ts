@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -65,7 +65,7 @@ describe('hallway run & co. (fake systemctl, real processes)', { skip: !linux &&
         const pid = Number(fs.readFileSync(path.join(state, f), 'utf8'));
         if (pid && alive(pid)) process.kill(pid, 'SIGKILL');
       }
-    fs.rmSync(ROOTDIR, { recursive: true, force: true });
+    rmTmp(ROOTDIR);
   });
 
   let port = 0;

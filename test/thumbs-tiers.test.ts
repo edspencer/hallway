@@ -18,7 +18,7 @@ import { CARD, FONT_DIR, FONT_FILES, cardFonts, PALETTE, ZOOM, cardEtag, cardSvg
 import { pickThumb, shortAddress, startThumbs } from '../server/thumbs/index.ts';
 import { SHOT, Shots, shotDue } from '../server/thumbs/shots.ts';
 import { paintIndex as dashboardPaintIndex } from '../src/lib/colour.ts';
-import { ROOT, exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
+import { ROOT, exitWatchdog, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -195,7 +195,7 @@ describe('screenshots', () => {
 
   test('Shots: 1280×800 at half scale, stored with its metadata, announced, one browser for the lot', async () => {
     const dir = tmpDir('hw-shots-');
-    cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(dir));
     const f = fakePlaywright();
     const changed: string[] = [];
     const shots = new Shots(dir, { load: async () => f.pw, onChange: (s) => changed.push(s) });
@@ -225,7 +225,7 @@ describe('screenshots', () => {
 
   test('an app that refuses the connection gets no picture and is not retried at once; no browser installed: nothing', async () => {
     const dir = tmpDir('hw-shots-');
-    cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(dir));
     const f = fakePlaywright({ fail: () => new Error('net::ERR_CONNECTION_REFUSED') });
     const shots = new Shots(dir, { load: async () => f.pw });
     cleanups.push(() => shots.stop());
@@ -244,7 +244,7 @@ describe('screenshots', () => {
 
   test('a page that never goes quiet is still shot, when the ten seconds are up', async () => {
     const dir = tmpDir('hw-shots-');
-    cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(dir));
     const timeout = Object.assign(new Error('Timeout 10000ms exceeded'), { name: 'TimeoutError' });
     const f = fakePlaywright({ fail: () => timeout });
     const shots = new Shots(dir, { load: async () => f.pw });
@@ -345,7 +345,7 @@ describe('the thumbnailer with every tier', () => {
 describe('hallway thumbs', () => {
   function ctx() {
     const home = tmpDir('hw-thumbs-cli-');
-    cleanups.push(() => fs.rmSync(home, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(home));
     let out = '';
     const c = makeCtx({ home, env: { PATH: process.env.PATH }, out: (s) => (out += s), err: (s) => (out += s) });
     // no daemon: never look for one on a real port
