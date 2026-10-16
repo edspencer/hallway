@@ -107,6 +107,7 @@ a Mac**. Move an item out of this list, with the date and how, once it has been.
 |------|-----------|--------|
 | `server/platform/darwin.ts`: LaunchAgents directory (`~/Library/LaunchAgents`) and `<label>.plist` naming | scaffold | Unit-tested on Linux and macOS CI; never installed on a Mac. |
 | The daemon binding 127.0.0.1 and serving the built dashboard on macOS | scaffold | CI (`macos-latest`) runs the tests and `smoke:pack`, which start the packed daemon and fetch from it. Not run interactively on a Mac. |
+| The file watcher (chokidar 5) on macOS | v0 | chokidar 4+ dropped its `fsevents` backend and uses `fs.watch` per directory. Verified on Linux 2026-10-16 (create, edit, delete and a broken file in `apps/` arrive over SSE in 150–260 ms, including an editor-style save by rename; `test/events.test.ts` and a curl run against the daemon). On macOS only CI's `macos-latest` run of the same tests; not tried with real editors (atomic-rename saves from vim, VS Code) on a Mac. |
 | `hallway service install` via `launchctl bootstrap gui/<uid>` | v0 | Not built yet. |
 | `lsof -nP -iTCP -sTCP:LISTEN -F pcLn` parsing on current macOS | v0 | Not built yet. |
 | Boot time from `sysctl -n kern.boottime` | v1 | Not built yet. |
