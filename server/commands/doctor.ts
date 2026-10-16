@@ -68,7 +68,7 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
     const kind = services.manager.kind;
     try {
       const st = await services.status(DAEMON_LABEL);
-      if (!st.installed) add({ id: 'daemon-service', status: 'warn', message: `the daemon isn't installed as a ${kind === 'launchd' ? 'LaunchAgent' : 'systemd user unit'}`, fix: '`hallway service install`' });
+      if (!st.installed) add({ id: 'daemon-service', status: 'warn', message: `the daemon isn't installed as a ${services.manager.noun}`, fix: '`hallway service install`' });
       else if (!st.running)
         add({ id: 'daemon-service', status: 'fail', message: `the daemon's service is installed (${show(st.label)}) but not running${st.lastExitCode !== null ? ` (last exit status ${st.lastExitCode})` : ''}`, fix: '`hallway service restart`; its logs are in logs/daemon.err.log' });
       else add({ id: 'daemon-service', status: 'pass', message: `the daemon's service is running (pid ${st.pid})` });

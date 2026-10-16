@@ -186,6 +186,8 @@ export function schtasksManager({ dir, run = defaultRunner, ctx: given = {}, isA
 
   return {
     kind: 'schtasks',
+    noun: 'scheduled task',
+    lifetime: 'It starts when you log on and is restarted if it exits. It stops when you log off (a task that runs without a logon would need your password stored, or administrator rights).',
     file,
     render: renderJob,
     readPath: jobPath,
