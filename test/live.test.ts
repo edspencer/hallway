@@ -53,10 +53,12 @@ describe('the live provider', () => {
     // a dashboard is "connected" (the prober goes live), and probes come every second
     const events: ServerEvent[] = [];
     bus.subscribe((e) => events.push(e));
-    await store.patchConfig({ probe: { liveIntervalSeconds: 1 } });
+    // the OS picks the servers' ports, which on macOS are in the ephemeral range
+    await store.patchConfig({ probe: { liveIntervalSeconds: 1 }, scan: { includeEphemeralPorts: true } });
 
     const [svc, deck, scratch] = await Promise.all([listen(), listen(), listen()]);
-    cleanups.push(() => scratch.close());
+    // closed here too, so a failing assertion can't leave a server holding the test process open
+    cleanups.push(() => scratch.close(), () => svc.close(), () => deck.close());
     await store.createApp('svc', { name: 'Service', port: svc.port, expected: 'running' });
     await store.createApp('deck', { name: 'Deck', port: deck.port, expected: 'adhoc' });
 
@@ -78,9 +80,7 @@ describe('the live provider', () => {
     const providers = new ProviderRegistry();
     const live = await startLive({ store, bus, providers, platform });
     cleanups.push(() => live.stop());
-    // the OS picked the servers' ports, which on macOS are in the ephemeral range
-    await store.patchConfig({ scan: { includeEphemeralPorts: true } });
-    await live.scanner!.scan();
+    await live.ready;
     const app = createApp({ store, bus, providers, webDist: null });
     const req = (p: string, init: RequestInit = {}) => app.request(p, { ...init, headers: { host: 'localhost:4255', 'content-type': 'application/json', ...init.headers } });
 
