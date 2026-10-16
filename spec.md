@@ -104,6 +104,7 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D39 | The v0 dashboard: one `/api/state` paints it, SSE refetches what each event names; tier-1 favicons from `server/thumbs/` (colour picked in the browser); "not checked" when no prober runs; bundled OFL fonts; contrast-checked tokens. |
 | D47 | Fronted mode: **Caddy runs as you** on loopback 4443/4480, its admin API a 0600 Unix socket; the only root parts are a fixed 443/80 redirect (pf on macOS, nftables on Linux), the trusted CA root and, for a custom domain, the resolver (to Hallway's user-level dnsmasq). No `--resume`: Caddy starts from `generated/caddy.json`. Dashboard at `hallway.localhost`. |
 | D48 | `hallway setup`/`teardown` are printed plans (`--print` runs nothing), idempotent by checking the real thing; refusals (`.local`, HSTS TLDs, a held 443) and warnings; doctor's networking checks; cards show `:port` beside the hostname. |
+| D54 | **Lost at last reboot:** what was seen in the last scans before the boot and isn't listening now, kept in `state/lost.json` until dismissed; Restart once / Make it a service are `hallway run` (never MCP). |
 
 ## 5. Glossary
 
@@ -133,7 +134,7 @@ Full scope and acceptance criteria: [docs/08-roadmap.md](docs/08-roadmap.md).
   Links use `http://localhost:<port>`. No sudo. macOS and Linux (D26). **Done: released as 0.1.0**, with v1's
   managed services (`hallway run`, `hallway service add`) brought forward into it.
 - **v1 — Fronting and services.** `hallway run` and `hallway service add` (launchd jobs for apps), Caddy integration, HTTPS on
-  `*.localhost`, `hallway setup` / `hallway doctor`, custom-domain mode (dnsmasq), "lost since reboot".
+  `*.localhost`, `hallway setup` / `hallway doctor`, custom-domain mode (dnsmasq), "lost since reboot" (**built**, D54).
 - **v2 — Agents and polish.** MCP server (HTTP + stdio), screenshot thumbnails, generated cards, 90-day uptime
   history with rollups and sparklines; everything verified on a real Mac.
 

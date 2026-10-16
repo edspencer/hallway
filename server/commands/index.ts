@@ -4,6 +4,7 @@ import { hook, mcp } from './agents.js';
 import { app, bookmark } from './apps.js';
 import type { Ctx } from './context.js';
 import { doctor } from './doctor.js';
+import { lost } from './lost.js';
 import { logs, restart, run, service, start, stop } from './services.js';
 import { setup, teardown } from './setup.js';
 import { claim, ignore, open, scan, status } from './status.js';
@@ -18,6 +19,7 @@ export const COMMANDS: Record<string, Command> = {
   scan,
   claim,
   ignore,
+  lost,
   app,
   bookmark,
   doctor: (ctx, args, flags, rest) => doctor(ctx, args, flags, rest),

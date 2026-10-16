@@ -101,7 +101,7 @@ pass a size limit (10 MB by default), keeping three generations.
 
 ## Lost at last reboot
 
-<span class="ms">v1</span> Upcoming. When Hallway starts, it compares the machine's boot time with the last one it saw. If the machine has rebooted, every
+<span class="ms ms--shipped">v1</span> When Hallway starts, it compares the machine's boot time with the last one it saw. If the machine has rebooted, every
 app or listener that was alive before the reboot and is not listening now goes into a notice at the top of the
 dashboard: **the doors that closed while you were away**.
 
@@ -109,8 +109,27 @@ dashboard: **the doors that closed while you were away**.
 ⚠ Lost at last reboot (Mon 28 Sep 20:05): 6 apps        [Review]  [Dismiss]
 ```
 
-Each entry says what it was, where it ran from and the command that started it, with three actions: **restart it
-once**, **make it a service**, or **dismiss**.
+**Review** lists each one: what it was, where it ran from (`~/Code/my-app @ main`) and the command that started it,
+with three actions:
+
+- **Restart once** starts it again the way [`hallway run`](/agents/hallway-run/) does: the operating system's service
+  manager owns it, on the port it had. It won't come back after another reboot.
+- **Make it a service** does the same, and also starts it at login and restarts it if it exits.
+- **Dismiss** takes it off the list (the banner's own Dismiss clears the whole notice).
+
+Something that wasn't an app yet becomes one when you start it (`apps/<slug>.yaml`, on its own port, with the command
+and directory Hallway recorded). Anything that comes back, by one of these actions or any other way, is marked
+**back** until you dismiss it. "Alive before the reboot" means seen in Hallway's last scans before it: a server you
+stopped a day earlier isn't listed. The notice survives Hallway restarting, until you dismiss it.
+
+From a terminal:
+
+```sh
+hallway lost                      # what was lost, with ids, directories and commands
+hallway lost restart <id|port>    # start one again, once
+hallway lost service <id|port>    # start it again, as a service
+hallway lost dismiss <id|port>    # or --all
+```
 
 This only works because Hallway [records what it observes](/concepts/apps/#observed-listeners-the-scanner) while the
 processes are alive. Once a process is gone, its working directory can't be recovered by any means, so a tool that

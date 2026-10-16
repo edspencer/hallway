@@ -12,6 +12,9 @@ import type {
   HealthResponse,
   HistoryWindow,
   IgnoreRequest,
+  LostActionRequest,
+  LostActionResponse,
+  LostNotice,
   ObservedResponse,
   StateResponse,
 } from '../shared/api';
@@ -87,6 +90,11 @@ export const patchGroup = (g: string, patch: Record<string, unknown>, etag: stri
 export const createGroup = (g: string, value: Record<string, unknown>) => write<BookmarkGroupView>('PUT', group(g), value, { createOnly: true });
 export const claim = (id: string, req: ClaimRequest) => write<AppView>('POST', `/api/observed/${encodeURIComponent(id)}/claim`, req);
 export const ignore = (id: string, by: IgnoreRequest['by']) => write<{ ok: true }>('POST', `/api/observed/${encodeURIComponent(id)}/ignore`, { by } satisfies IgnoreRequest);
+
+/** "Lost at last reboot": run one again once, or as a service (`hallway run`, without or with --persist). */
+export const reviveLost = (id: string, how: 'restart' | 'service', req: LostActionRequest = {}) => write<LostActionResponse>('POST', `/api/lost/${encodeURIComponent(id)}/${how}`, req);
+/** Dismiss one lost item, or (no id) the whole notice. */
+export const dismissLost = (id?: string) => write<{ dismissed: number; lost: LostNotice | null }>('POST', id ? `/api/lost/${encodeURIComponent(id)}/dismiss` : '/api/lost/dismiss', {});
 
 /** Where a card's thumbnail is: the etag in the query, so a new picture is a new URL. */
 export const thumbUrl = (slug: string, etag: string) => `${app(slug)}/thumb?v=${encodeURIComponent(etag.replace(/"/g, ''))}`;

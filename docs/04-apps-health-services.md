@@ -114,14 +114,33 @@ observed command as a *commented-out* `service:` block the user can enable.
 
 **Ignore:** adds the port, process name or directory to `ignore.yaml` (the user chooses which).
 
-### "Lost since reboot" (v1)
+### "Lost since reboot" (v1, **built**; D54)
 
-On daemon start, read the boot time (`sysctl -n kern.boottime` → `{ sec = …, usec = … } …`) and compare it with
-`state/boot.json`. If the machine has rebooted, every observation that was alive before the boot and is not
+On daemon start, read the boot time (`sysctl -n kern.boottime` on macOS, `btime` in `/proc/stat` on Linux) and compare
+it with `state/boot.json`. If the machine has rebooted, every observation that was alive before the boot and is not
 listening now goes into a **"Lost at last reboot"** notice: what it was, where it ran from, the command that started
-it, and one-click actions — *restart it once* (`hallway run`), *make it a service* (`hallway service add`), or *dismiss*. This is
-only possible because observations are recorded while the processes are alive; once a process is gone its cwd cannot
-be recovered.
+it, and one-click actions — *restart it once* (`hallway run`), *make it a service* (`hallway run --persist`, which is
+`service add`'s settings), or *dismiss*. This is only possible because observations are recorded while the processes
+are alive; once a process is gone its cwd cannot be recovered.
+
+The rules (`server/lost/`, wired in `server/live.ts`):
+
+- **Alive before the boot** means seen in the last scans of the previous boot: `lastSeen` before the new boot time,
+  after the previous one, and within two scan intervals plus a minute of the newest such `lastSeen`. Something stopped
+  by hand a day before the reboot isn't reported. One item per port. A declared app on the port names the item, and its
+  `service:` block (if any) is the command. Apps the scanner never recorded count when the prober's last sample before
+  the boot was `healthy` or `unhealthy`.
+- **Not listening now:** neither the same observation id nor (for an item with an app) anything on the app's port is
+  in the first scan. If a start-at-login service isn't listening yet, the daemon waits `services.startGraceSeconds`
+  and scans again first, so services still starting aren't reported.
+- **`state/lost.json`** keeps the notice across daemon restarts until every item is dismissed; the next reboot replaces
+  it. A `reboot` event announces it, and again whenever an item is dismissed or comes back.
+- **Back:** an item listening again is shown as `● back` (and its actions give way to Open) until dismissed.
+- **Restart once / Make it a service** go through `runApp` (`hallway run`'s code), so launchd or systemd owns the
+  process. An item with no app is registered first, on its own port, with its name, project directory and the recorded
+  command and directory (slug: the scanner's suggestion, or `slug` in the request). No recorded command, or a directory
+  that has gone, is refused with the reason. API: `POST /api/lost/:id/restart|service|dismiss`, `POST
+  /api/lost/dismiss`; CLI: `hallway lost` (`07`). Read-only in MCP's `get_status`, `llms.txt` and `/agent-guide.md`.
 
 ## Health states (D12)
 

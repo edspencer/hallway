@@ -8,6 +8,7 @@ import type { AppHealth } from '../shared/api.ts';
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, slugify, tildify } from '../src/lib/format.ts';
+import { bootLabel, lostCommand, lostCount, lostWhere } from '../src/lib/lost.ts';
 import { countStates, doorState, faviconMark, isScanning, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
 
@@ -187,5 +188,29 @@ describe('theme contrast', () => {
   test('no colour is hard-coded outside tokens.css (D28)', () => {
     const styles = fs.readFileSync(path.join(ROOT, 'src/styles.css'), 'utf8');
     assert.doesNotMatch(styles, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
+  });
+});
+
+describe('lost at last reboot', () => {
+  const item = (back: boolean, extra: object = {}) =>
+    ({ id: 'x', port: 1, label: 'x', slug: null, managed: false, title: null, firstSeen: null, lastSeen: null, back, suggestedSlug: null, command: null, cwd: null, identity: { projectDir: null, cwd: null, branch: null, command: null }, ...extra }) as never;
+  const notice = (...items: never[]) => ({ bootTime: '2026-09-28T20:05:00Z', previousBootTime: null, detectedAt: '', items });
+
+  test('the count: lost, some back, all back', () => {
+    assert.equal(lostCount(notice(item(false), item(false), item(false))).text, '3 apps');
+    assert.equal(lostCount(notice(item(false))).text, '1 app');
+    assert.equal(lostCount(notice(item(false), item(true), item(true))).text, '1 app · 2 back');
+    assert.equal(lostCount(notice(item(true), item(true))).text, 'all 2 are back');
+    assert.equal(lostCount(notice(item(true))).text, 'it’s back');
+  });
+
+  test('when, where and the command', () => {
+    assert.match(bootLabel('2026-09-28T20:05:00'), /^Mon 28 Sept? 20:05$/);
+    assert.equal(bootLabel('nope'), 'unknown');
+    const i = item(false, { identity: { projectDir: '/home/me/Code/viz', cwd: '/home/me/Code/viz/web', branch: 'feature/x', command: 'node x' }, command: ['node', '/home/me/Code/viz/dev.js'] });
+    assert.equal(lostWhere(i, '/home/me'), '~/Code/viz @ feature/x');
+    assert.equal(lostCommand(i, '/home/me'), 'node ~/Code/viz/dev.js');
+    assert.equal(lostWhere(item(false), '/home/me'), null);
+    assert.equal(lostCommand(item(false), null), null);
   });
 });

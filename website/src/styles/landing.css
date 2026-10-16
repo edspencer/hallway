@@ -188,7 +188,8 @@ a {
 	white-space: nowrap;
 }
 
-.ms--v0 {
+.ms--v0,
+.ms--shipped {
 	color: var(--accent-color);
 }
 
