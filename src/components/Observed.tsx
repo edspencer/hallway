@@ -165,7 +165,7 @@ const EXPECTED: { v: Expected; label: string; hint: string }[] = [
 ];
 
 function ClaimForm({ o, takenSlugs, onDone, notify }: { o: ObservedListener; takenSlugs: Set<string>; onDone(): void; notify: ObservedProps['notify'] }) {
-  const initialName = o.identity.name ?? o.title ?? '';
+  const initialName = o.identity.name ?? o.identity.displayName ?? o.title ?? '';
   const [slug, setSlug] = useState(o.suggestedSlug ?? (slugify(initialName) || `port-${o.port}`));
   const [name, setName] = useState(initialName);
   const [expected, setExpected] = useState<Expected>('adhoc');
