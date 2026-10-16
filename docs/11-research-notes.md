@@ -168,6 +168,39 @@ runs `doctor`, and removes everything. Observed:
 The development box these were built on has no systemd at all (PID 1 is `tini` in a container): there the end-to-end
 tests and `smoke:pack` use `test/fixtures/fake-systemctl`, which runs the generated units for real, detached.
 
+## The v0 acceptance run (2026-10-16)
+
+The twelve v0 criteria (docs/08-roadmap.md), checked by installing the package the way a user would: `npm pack` of
+`main`, `npm i -g` of the tarball into a temporary prefix with a throwaway `HOME`, and the daemon from that install
+(`hallway serve`) on a Linux container with no systemd, driven with curl, the CLI and Chromium (Playwright). Demo
+apps were `python3 -m http.server` processes in temp directories; bookmarks were `example.com` links.
+
+| # | Result | Evidence |
+|---|--------|----------|
+| 1 | Not testable here (no systemd in the container; no logout/reboot anywhere) | CI's "Services (real systemd)" (lingering on) and "Services (real launchd)" jobs run `hallway service install`, `restart`, `doctor` (daemon answering, service running) against the real service managers. Neither logs out or reboots. |
+| 2 | Pass | With the page open: `apps/foo.yaml` created → card in 216 ms; renamed → 191 ms; deleted → gone in 289 ms (MutationObserver timestamps against the write times). |
+| 3 | Pass | `port: 58 02` plus a bad nested mapping: that card shows `apps/foo.yaml:2` and the YAML message, the other card stays healthy, `/api/health` still answers, the file's md5 unchanged. A broken `config.yaml` shows in the problems banner with file:line:col. |
+| 4 | Pass | `python3 -m http.server 4567` in `/tmp/…/scratch-notes` appeared as `scratch-notes` with that directory; **Claim** wrote `apps/scratch-notes.yaml` with `port: 4567` and the card moved to Apps. |
+| 5 | Pass after a fix | A Node helper listening on port 0 got 40903 from Linux's `ip_local_port_range` (32768–60999) and **was shown**: the filter only knew IANA's 49152–65535. Fixed (`Platform.ephemeralPorts()`); re-run: hidden. |
+| 6 | Pass | With the dashboard open (15 s live interval): the `adhoc` app went `stopped` 18 s after its server was killed, the `running` one `down` at 24 s (two probe intervals). |
+| 7 | Pass | Two worktrees of one made-up repo on 5811 / 5812: `notes @ branch-a`, `notes @ branch-b` (tray, `hallway scan`, and the claimed cards). |
+| 8 | Pass | Two groups (one by `hallway bookmark add`, one hand-written) render as chips in order; appending a link by hand showed on the open page in 191 ms. `example.com` has no favicon, so the chips are monograms (the documented fallback). |
+| 9 | Pass | `/` focuses the filter; typing `scratch-notes` gave "1 match · Enter opens it"; Enter navigated to `http://localhost:4567/`. |
+| 10 | Pass | `Host: evil.example` → 403 on `/` and `/api/state`; cross-origin JSON `POST` → 403; `text/plain` `POST` → 415; cross-origin form `POST` → 403. |
+| 11 | Pass | `/llms.txt` lists the live URL, the data-home path, every app (slug, name, port, expected, URL) and the bookmark groups. |
+| 12 | Pass | `performance.getEntriesByName('hallway:painted')` over ten warm reloads of `http://localhost:<port>/` (5 apps, 13 observed, 2 groups): **37–61 ms**, median about 52 ms. A container, not a laptop. |
+
+Found along the way and fixed in the same PR: the observed tray kept the last scan forever after `scan.enabled: false`
+(and the first-run screen still promised that a started server would be found); with a broken `config.yaml` the CLI
+couldn't find the running daemon and said it wasn't running (D46: `state/daemon.json`); `hallway doctor | head`
+died with an EPIPE stack trace; a claimed worktree's card repeated `repo @ branch` under its name; the "Reconnecting…"
+pill, shown over stale states while the daemon is stopped, didn't say why. The page reconnects by itself when the
+daemon returns (within the 30 s backoff cap). Unhappy paths that already behaved: a fresh data home's first-run
+screen, every CLI command with no daemon (`status` probes once, `claim`/`ignore`/`scan` work from the files and one
+scan, `open` explains), usage errors exiting 2 with the usage, two apps on one port (a warning on both cards and in
+`doctor`), and a 100-character name and description (ellipsis on the card, wrapped in the drawer). *Verified on Linux
+(Chromium); unverified on macOS.*
+
 ## Caddy
 
 *From https://caddyserver.com/docs/automatic-https, fetched 2026-10-14.*

@@ -79,8 +79,9 @@ named it — what is it?"*
 2. **Filter out noise** (this step is what makes it usable — on the author's machine, IDE and agent-tool helper
    processes outnumbered real dev servers roughly ten to one):
    - ports below `scan.minPort` (default 1024)
-   - the ephemeral range **49152–65535**, unless `scan.includeEphemeralPorts` (language servers and tool helpers live
-     there)
+   - the ephemeral range **49152–65535**, and the OS's own range for port-0 listeners where that differs (Linux's
+     `net.ipv4.ip_local_port_range`, usually 32768–60999), unless `scan.includeEphemeralPorts` (language servers and
+     tool helpers live there)
    - entries in `ignore.yaml` (ports, process names, directories)
    - a built-in list of known non-web daemons: `postgres`, `mysqld`, `redis-server`, `mongod`, `sshd`, `rapportd`,
      `ControlCenter`, `com.docker.*`, etc.

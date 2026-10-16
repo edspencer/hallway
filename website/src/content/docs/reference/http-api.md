@@ -7,7 +7,7 @@ The daemon serves a JSON API on its own port (`http://localhost:4255` by default
 MCP server all use it, and so can you. Every route is behind the
 [localhost security rules](/guarantees/localhost-security/): writes must be `Content-Type: application/json`.
 
-All routes are planned for <span class="ms ms--v0">v0</span> unless marked.
+All routes are in <span class="ms ms--v0">v0</span>, available now, unless marked.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -18,10 +18,10 @@ All routes are planned for <span class="ms ms--v0">v0</span> unless marked.
 | `PUT` | `/api/apps/:slug` | Create or replace a declared app (ETag / `If-Match`). |
 | `PATCH` | `/api/apps/:slug` | Partial update. |
 | `DELETE` | `/api/apps/:slug` | Remove a declared app (its file moves to `backups/`; never hard-deleted). |
-| `GET` | `/api/apps/:slug/history?window=24h\|7d\|90d` | Uptime buckets and a latency series. (`7d` and `90d`: <span class="ms">v2</span>) |
+| `GET` | `/api/apps/:slug/history?window=24h\|7d\|90d` | Uptime buckets and latency figures. |
 | `GET` | `/api/apps/:slug/thumb` | The thumbnail image, with an ETag. |
-| `POST` | `/api/apps/:slug/service/:action` | `start`, `stop` or `restart` a managed service. <span class="ms">v1</span> |
-| `GET` | `/api/apps/:slug/logs?lines=200` | The tail of a managed service's logs. <span class="ms">v1</span> |
+| `POST` | `/api/apps/:slug/service/:action` | `start`, `stop` or `restart` a managed service. |
+| `GET` | `/api/apps/:slug/logs?lines=200` | The tail of a managed service's logs. |
 | `GET` | `/api/bookmarks` | All bookmark groups. |
 | `PUT` / `DELETE` | `/api/bookmarks/:group` | Create, replace or remove a group. |
 | `GET` | `/api/observed` | Observed listeners, with identity. |

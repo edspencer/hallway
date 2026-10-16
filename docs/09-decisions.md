@@ -582,6 +582,19 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   and systemd (Ubuntu runner, lingering on); it refuses to run anywhere else, because it uses the real labels and
   service directories.
 
+### D46 — The daemon records its port in `state/daemon.json` (2026-10-16)
+
+Found by the v0 acceptance run: with a syntactically broken `config.yaml` the daemon keeps running on its last good
+port, but the CLI, reading the same broken file, fell back to the default 4255 and reported "the daemon isn't
+running" (while `hallway doctor`, in the same run, said the daemon keeps the last good version). The same happened
+after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under a running daemon.
+
+- On start, the daemon writes `state/daemon.json` (`pid`, `port`, `startedAt`) and removes it on a clean stop.
+- The CLI still looks on config.yaml's port first (D44 unchanged), then on the recorded port if its process is alive.
+  Either way `/api/health` must answer as Hallway, so a stale record or a reused pid can't mislead it.
+- **Rejected:** parsing a broken `config.yaml` leniently for its `port:` line (doesn't help `--port`/`$PORT`, and
+  guesses at a file the store has declared invalid); scanning listeners for a Hallway (slow, and the scanner's job).
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |

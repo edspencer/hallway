@@ -70,6 +70,10 @@ describe('noise filtering', () => {
     assert.equal(noiseReason(L(52144), opts()), 'ephemeral');
     assert.equal(noiseReason(L(52144), opts({ includeEphemeralPorts: true })), null);
     assert.equal(noiseReason(L(49151), opts()), null);
+    // Linux hands out port 0 from its own range (32768–60999): a helper there is noise too
+    assert.equal(noiseReason(L(40903), opts({ osEphemeral: { from: 32768, to: 60999 } })), 'ephemeral');
+    assert.equal(noiseReason(L(40903), opts({ osEphemeral: { from: 32768, to: 60999 }, includeEphemeralPorts: true })), null);
+    assert.equal(noiseReason(L(32767), opts({ osEphemeral: { from: 32768, to: 60999 } })), null);
     assert.equal(noiseReason(L(5432, 'postgres'), opts()), 'daemon');
     assert.equal(noiseReason(L(6000, 'com.docker.backend'), opts()), 'daemon');
     assert.equal(noiseReason(L(7000, 'ControlCenter'), opts()), 'daemon');

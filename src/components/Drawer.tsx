@@ -7,7 +7,7 @@ import type { AppHistory, AppView, Expected, HistoryWindow, StateResponse } from
 import { getHistory, patchApp, thumbUrl } from '../api';
 import { paintFor } from '../lib/colour';
 import { ago, displayUrl, duration, millis, percent, tildify } from '../lib/format';
-import { STATE_META, doorState } from '../lib/status';
+import { STATE_META, doorState, isScanning } from '../lib/status';
 import { CloseIcon, CopyIcon, ExternalIcon } from './icons';
 import { LatencyChart } from './LatencyChart';
 import { ProblemNote } from './Problems';
@@ -95,7 +95,7 @@ export function Drawer({ app, state, home, onClose, onCopy, onSaved }: DrawerPro
           ))}
 
           <History app={app} available={state.daemon.providers.history} />
-          <Identity app={app} home={home} scanning={state.daemon.providers.scanner} />
+          <Identity app={app} home={home} scanning={isScanning(state)} />
           {app.config && app.config.links.length > 0 && <Links app={app} />}
           <Settings key={app.slug} app={app} onSaved={onSaved} />
           <FileInfo app={app} home={home} onCopy={onCopy} />
@@ -177,7 +177,7 @@ function Identity({ app, home, scanning }: { app: AppView; home: string | null; 
       <section className="hw-drawer-section" aria-labelledby="hw-d-id">
         <h3 id="hw-d-id">Process</h3>
         <p className="hw-quiet">
-          {!scanning ? 'The port scanner isn’t running in this daemon, so nothing is known about the process yet.' : port ? `Nothing is listening on port ${port} right now.` : 'No port: the file has never been valid.'}
+          {!scanning ? 'The port scanner is off, so nothing is known about the process.' : port ? `Nothing is listening on port ${port} right now.` : 'No port: the file has never been valid.'}
         </p>
       </section>
     );

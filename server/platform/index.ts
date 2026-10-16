@@ -33,6 +33,14 @@ export interface Platform {
   services(opts?: { run?: Runner; env?: NodeJS.ProcessEnv; home?: string }): ServiceManager;
   /** The command that opens a URL in the default browser (`open` / `xdg-open`). */
   openCommand(url: string): [string, string[]];
+  /** The range the OS picks from when a program listens on port 0, where tool helpers end up: macOS uses IANA's
+   * 49152–65535, Linux its own (`ip_local_port_range`, usually 32768–60999). */
+  ephemeralPorts(): PortRange;
+}
+
+export interface PortRange {
+  from: number;
+  to: number;
 }
 
 export type { Listener, ProcessInfo, RawListener } from './listeners.js';

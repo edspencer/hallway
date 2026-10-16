@@ -32,6 +32,8 @@ export const OWN_PROCESSES = ['caddy'];
 export interface FilterOptions {
   minPort: number;
   includeEphemeralPorts: boolean;
+  /** The OS's own ephemeral range (Platform.ephemeralPorts), hidden along with IANA's. */
+  osEphemeral?: { from: number; to: number };
   ignore: IgnoreRules;
   /** Hallway's own PID and ports (the daemon, and under `npm run dev`, Vite next to it). */
   selfPid: number;
@@ -39,6 +41,8 @@ export interface FilterOptions {
 }
 
 export type NoiseReason = 'invisible' | 'low-port' | 'ephemeral' | 'self' | 'daemon' | 'ignored';
+
+const inRange = (port: number, r: { from: number; to: number }) => port >= r.from && port <= r.to;
 
 export function matchesName(name: string | null, patterns: readonly string[]): boolean {
   if (!name) return false;
@@ -59,7 +63,7 @@ export function noiseReason(l: Listener, opts: FilterOptions, cwd?: string | nul
   if (l.pid === null) return 'invisible';
   if (l.pid === opts.selfPid || opts.selfPorts.includes(l.port)) return 'self';
   if (l.port < opts.minPort) return 'low-port';
-  if (!opts.includeEphemeralPorts && l.port >= EPHEMERAL.from && l.port <= EPHEMERAL.to) return 'ephemeral';
+  if (!opts.includeEphemeralPorts && (inRange(l.port, EPHEMERAL) || (opts.osEphemeral && inRange(l.port, opts.osEphemeral)))) return 'ephemeral';
   if (matchesName(l.process, OWN_PROCESSES)) return 'self';
   if (matchesName(l.process, NON_WEB_DAEMONS)) return 'daemon';
   const ig = opts.ignore;

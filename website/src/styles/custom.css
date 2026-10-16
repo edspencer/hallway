@@ -181,8 +181,8 @@ header.header button[data-open-modal] kbd {
 }
 
 /*
- * Milestone badges: <span class="ms ms--v1">v1</span>. Every feature on this site is planned, not shipped; the badge
- * says which milestone it belongs to (docs/08-roadmap.md).
+ * Milestone badges: <span class="ms ms--v1">v1</span>. The badge says which milestone a feature belongs to
+ * (docs/08-roadmap.md): v0 is released (lamplight), v1 and v2 are upcoming (quiet).
  */
 .sl-markdown-content .ms {
 	display: inline-block;

@@ -87,6 +87,7 @@ Mirror Local Review (D16). Keep dependencies minimal.
     health.sqlite             # probe samples + hourly rollups (node:sqlite, D37)
     observed.json             # last-known identity of every observed listener, with first/last seen
     boot.json                 # last seen boot time, to detect reboots
+    daemon.json               # the running daemon's pid and port, where the CLI also looks for it (D46)
   cache/                      # machine-written; regenerable
     thumbs/<slug>.<hash>.png
     favicons/<hash>.img, <hash>.json   # tier-1 icons for apps and bookmarks, and what was looked up (D39)
@@ -149,7 +150,7 @@ services:                       # v1
 scan:
   enabled: true
   intervalSeconds: 120
-  includeEphemeralPorts: false  # skip 49152–65535 by default (IDE/tool helpers live there)
+  includeEphemeralPorts: false  # skip 49152–65535 (and Linux's ip_local_port_range) by default (IDE/tool helpers)
   minPort: 1024
 
 thumbnails:
@@ -269,7 +270,7 @@ type ServerEvent =
   | { type: 'apps'; reason: string }                        // list changed
   | { type: 'state'; slug: string; state: AppState }        // health transition only, not every probe
   | { type: 'bookmarks'; group?: string }
-  | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' }
+  | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' | 'config' }
   | { type: 'thumb'; slug: string }
   | { type: 'config' }
   | { type: 'reboot'; lost: string[] };                     // v1

@@ -2,6 +2,7 @@
 // ways in; the daemon being unreachable gets its own page. The illustration is the one place the hallway is drawn
 // literally: a short, well-lit corridor with one door ajar.
 import type { StateResponse } from '../../shared/api';
+import { isScanning } from '../lib/status';
 
 export function Corridor({ className = '' }: { className?: string }) {
   return (
@@ -43,7 +44,7 @@ export function Corridor({ className = '' }: { className?: string }) {
 /** Nothing declared, nothing found: what to do first. */
 export function FirstRun({ state }: { state: StateResponse }) {
   const home = state.daemon.dataHomeDisplay;
-  const scanning = state.daemon.providers.scanner;
+  const scanning = isScanning(state);
   return (
     <section className="hw-firstrun" aria-labelledby="hw-firstrun-title">
       <Corridor />

@@ -38,7 +38,7 @@ proxy:                          # fronted mode only (v1)
   preserveHost: false           # default false: Host is rewritten to the upstream
   aliases: []                   # extra hostnames, e.g. [deck] → deck.<base>
 
-service:                        # optional (v1). Present = Hallway keeps it alive via launchd.
+service:                        # optional. Present = Hallway keeps it alive (launchd / systemd).
   command: ["npx", "astro", "dev", "--port", "4321"]   # an argv array, resolved to absolute paths
   cwd: ~/Code/slides
   env: {}                       # PORT and HOST are set automatically
@@ -69,7 +69,7 @@ icon: auto                      # auto (favicon) | an emoji | a path to an image
 | `health.expectStatus` | | The status that means healthy; default any 2xx. |
 | `proxy.preserveHost` | | Pass the browser's `Host` through instead of rewriting it. See [Host-header rewriting](/networking/fronted-mode/#host-header-rewriting). <span class="ms">v1</span> |
 | `proxy.aliases` | | Extra hostnames for the app. <span class="ms">v1</span> |
-| `service` | | Makes the app a [managed service](/concepts/services/#managed-services). <span class="ms">v1</span> |
+| `service` | | Makes the app a [managed service](/concepts/services/#managed-services). <span class="ms ms--v0">v0</span> |
 | `service.command` | With `service` | The command as an argv array, not a shell string. |
 | `service.cwd` | | Working directory. |
 | `service.env` | | Extra environment variables. `PORT`, `HOST` and `HOSTNAME` are set for you. |

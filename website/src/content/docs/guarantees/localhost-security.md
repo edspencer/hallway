@@ -6,8 +6,7 @@ description: How the daemon defends against other web pages, DNS rebinding and c
 Hallway is local-only: the daemon listens on `127.0.0.1` and nothing is exposed to your network. But "only on
 localhost" isn't the same as "only reachable by you". Any web page you visit can try to talk to a local server, either
 through **DNS rebinding** (a hostile domain that resolves to 127.0.0.1) or by sending a cross-site "simple" request.
-Since the daemon can edit your config, start and stop services <span class="ms">v1</span> and speak MCP
-<span class="ms">v2</span>, it defends against both, the same way Local Review does.
+Since the daemon can edit your config, start and stop services and (in v2) speak MCP, it defends against both, the same way Local Review does.
 
 ## The rules
 

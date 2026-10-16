@@ -5,6 +5,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { agentRoutes, apiRoutes } from './api.js';
 import { WEB_DIST } from './config.js';
+import { removeDaemonRecord, writeDaemonRecord } from './daemonfile.js';
 import { bus as defaultBus, type EventBus } from './events.js';
 import { providers as defaultProviders, type ProviderRegistry } from './providers.js';
 import { localOnly } from './security.js';
@@ -71,7 +72,8 @@ export interface ServerOptions extends Omit<AppOptions, 'store'> {
   home: string;
   /** An already-loaded store for `home` (the CLI reads config.yaml's port first). */
   store?: Store;
-  /** Watch the data home, take hourly snapshots and rotate service logs (default true). */
+  /** Watch the data home, take hourly snapshots, rotate service logs and record the port in state/daemon.json
+   * (default true). */
   watch?: boolean;
   /** Find and cache favicons for app and bookmark thumbnails (default true). */
   thumbs?: boolean;
@@ -103,10 +105,13 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
   const stopSnapshots = watch ? startSnapshots(home) : () => {};
   const stopRotation = watch ? startLogRotation(store) : () => {};
   await watcher?.ready;
+  // where the CLI finds this daemon when config.yaml's port doesn't say (D46)
+  if (watch) writeDaemonRecord(home, bound);
   return {
     port: bound,
     store,
     close: async () => {
+      if (watch) removeDaemonRecord(home);
       thumbnailer?.stop();
       stopSnapshots();
       stopRotation();

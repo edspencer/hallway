@@ -52,6 +52,16 @@ describe('parseArgs', () => {
 });
 
 describe('hallway CLI', () => {
+  test('a reader that goes away (`hallway guide | head -1`) ends it quietly, not with a stack trace', async () => {
+    const child = spawn(process.execPath, [...CLI, 'guide'], { env: cliEnv({}), cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.destroy();
+    let stderr = '';
+    child.stderr.on('data', (d) => (stderr += d));
+    const code = await new Promise<number | null>((r) => child.on('close', (c) => r(c)));
+    assert.equal(stderr, '');
+    assert.equal(code, 0);
+  });
+
   test('--version and --help', async () => {
     const v = await hallway(['--version']);
     assert.equal(v.code, 0, v.stderr);

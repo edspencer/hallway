@@ -1,18 +1,16 @@
 ---
 title: Quickstart
-description: The first five minutes with Hallway, as designed for v0.
+description: The first five minutes with Hallway v0.
 ---
 
-:::note[A walkthrough of the design]
-This is how the first five minutes are **designed** to go in <span class="ms ms--v0">v0</span>. None of it runs
-yet; see [Installation](/getting-started/installation/).
-:::
+<span class="ms ms--v0">v0</span> Everything on this page works in the current release, on macOS and Linux. For
+the details of installing (Node version, lingering on Linux), see [Installation](/getting-started/installation/).
 
 ## 1. Start it
 
 ```sh
-npm i -g hallway             # coming soon
-hallway service install
+npm i -g hallway
+hallway service install      # run the daemon at every login
 hallway open
 ```
 
@@ -94,7 +92,7 @@ They appear as favicon chips under **Bookmarks**. See [Bookmarks](/concepts/book
 
 ## 6. Tell your agents
 
-Add two sentences to your `AGENTS.md` or `CLAUDE.md` so agents stop leaving orphans behind:
+Add a short paragraph to your `AGENTS.md` or `CLAUDE.md` so agents stop leaving orphans behind:
 
 ```sh
 hallway guide --snippet
@@ -104,6 +102,9 @@ See [Working with agents](/agents/overview/).
 
 ## Next
 
-- <span class="ms">v1</span> [Fronted mode](/networking/fronted-mode/): `https://slides.localhost` instead of a port.
-- <span class="ms">v1</span> [Services and reboots](/concepts/services/): keep apps running across restarts.
+- <span class="ms ms--v0">v0</span> [hallway run](/agents/hallway-run/): start a dev server that outlives the session,
+  on a stable port.
+- <span class="ms ms--v0">v0</span> [Services and reboots](/concepts/services/): keep apps running across restarts.
+- <span class="ms">v1</span> Upcoming: [fronted mode](/networking/fronted-mode/), `https://slides.localhost` instead
+  of a port.
 - The [CLI reference](/reference/cli/) and the [file formats](/reference/app-yaml/).

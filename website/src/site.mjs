@@ -14,8 +14,8 @@ export const TAGLINE = 'The front door for everything you vibe-coded on a random
 /**
  * The port Hallway's daemon serves its dashboard on by default.
  *
- * 4255 spells "HALL" on a phone keypad (D20 in docs/09-decisions.md). Once the
- * app exists this is a copy of DEFAULT_PORT in its server/port.ts, as on Local
+ * 4255 spells "HALL" on a phone keypad (D20 in docs/09-decisions.md). This is a
+ * copy of DEFAULT_PORT in the app's server/port.ts, as on Local
  * Review's site: Cloudflare builds with website/ as its root, so it can't be
  * imported from there. MDX prose can import it; code blocks can't interpolate,
  * so Markdown pages write the number out.
@@ -24,10 +24,9 @@ export const DEFAULT_PORT = 4255;
 export const LOCAL_URL = `http://localhost:${DEFAULT_PORT}`;
 
 /**
- * Pre-release: nothing is on npm yet, so every page that shows the install
- * command marks it "coming soon". When the first real release ships, reword
- * getting-started/installation.md and the landing copy (copy.ts), and search the
- * pages for "coming soon".
+ * The published install command (Hallway 0.1.0, milestone v0, is on npm).
+ * Shown by the landing page (copy.ts); getting-started/installation.md and
+ * quickstart.md write it out in code blocks, so change those too if it changes.
  */
 export const INSTALL_COMMAND = 'npm i -g hallway';
 

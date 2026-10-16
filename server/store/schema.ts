@@ -113,7 +113,7 @@ export const APP_SCHEMA: Field = {
     service: {
       t: 'object',
       optional: true,
-      doc: 'Present: Hallway keeps it running as a native service (v1). Write it with the CLI (`hallway run`, `hallway service add`), not by hand.',
+      doc: 'Present: Hallway keeps it running as a native service (launchd / systemd). Write it with the CLI (`hallway run`, `hallway service add`), not by hand.',
       fields: {
         command: { t: 'list', of: str('an argument'), minItems: 1, required: true, doc: 'The command, as an argv array: `["npm", "run", "dev"]`.' },
         cwd: str('The working directory (`~` allowed).', { nullable: true, default: null }),
@@ -233,7 +233,7 @@ export const CONFIG_SCHEMA: Field = {
     },
     services: {
       t: 'object',
-      doc: 'Managed services (v1).',
+      doc: 'Managed services (`hallway run`, `hallway service add`).',
       fields: {
         startGraceSeconds: posInt('A service just started is `starting`, not `down`, for this long.', 30, 0),
         logMaxBytes: posInt('Rotate a service\'s log above this size.', 10485760, 1024),
@@ -246,7 +246,7 @@ export const CONFIG_SCHEMA: Field = {
       fields: {
         enabled: { t: 'bool', default: true, doc: 'Look for unnamed listeners.' },
         intervalSeconds: posInt('Seconds between scans.', 120, 10),
-        includeEphemeralPorts: { t: 'bool', default: false, doc: 'Include 49152–65535, where IDE and tool helpers listen.' },
+        includeEphemeralPorts: { t: 'bool', default: false, doc: 'Include ephemeral ports (49152–65535, and Linux\'s own range), where IDE and tool helpers listen.' },
         minPort: port('Ignore ports below this.', { default: 1024 }),
       },
     },

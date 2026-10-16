@@ -30,7 +30,7 @@ probe:
 ports:
   assignRange: [5100, 5999]     # for new apps with no port yet; existing ports are never changed
 
-services:                       # v1
+services:
   startGraceSeconds: 30         # "starting" before "not listening" counts as down
   logMaxBytes: 10485760         # rotate managed-service logs above this size
   logGenerations: 3
@@ -64,7 +64,7 @@ dashboard:
 | `probe.concurrency` | `8` | Probes in flight at once. |
 | `probe.failuresBeforeUnhealthy` | `2` | Consecutive failures needed to leave `healthy`. |
 | `ports.assignRange` | `[5100, 5999]` | Where new apps' ports come from. |
-| `services.*` | | Grace period and log rotation for managed services. <span class="ms">v1</span> |
+| `services.*` | | Grace period and log rotation for managed services. <span class="ms ms--v0">v0</span> |
 | `scan.enabled` | `true` | Turn the port scanner off entirely. |
 | `scan.intervalSeconds` | `120` | Seconds between scans. |
 | `scan.includeEphemeralPorts` | `false` | Also show listeners on 49152–65535. |

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppView, DashboardSection, ObservedListener, StateResponse } from '../shared/api';
 import { useAmbientStatus } from './ambient';
 import { Bookmarks, NewGroup } from './components/Bookmarks';
-import { Door, subtitle } from './components/Door';
+import { Door } from './components/Door';
 import { Drawer } from './components/Drawer';
 import { FirstRun, Unreachable } from './components/Empty';
 import { Header } from './components/Header';
@@ -16,7 +16,7 @@ import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
 import { matchScore } from './lib/filter';
 import { displayUrl, homeDir, hostOf } from './lib/format';
-import { countStates } from './lib/status';
+import { countStates, isScanning, subtitle } from './lib/status';
 import { useLive } from './live';
 import { useTheme } from './theme/theme';
 
@@ -192,7 +192,7 @@ export function App() {
         </section>
       ) : null,
     observed: () =>
-      state.daemon.providers.scanner && observed.length > 0 ? (
+      isScanning(state) && observed.length > 0 ? (
         <ObservedTray key="observed" observed={observed} home={home} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
       ) : null,
     bookmarks: () =>

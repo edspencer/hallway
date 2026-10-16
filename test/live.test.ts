@@ -128,6 +128,37 @@ describe('the live provider', () => {
     assert.equal(after.health.detail, 'connection refused');
   });
 
+  test('turning the scanner off empties the tray; turning it on scans at once', { timeout: 30_000 }, async () => {
+    const { store, bus, cleanup } = await tmpStore();
+    cleanups.push(cleanup);
+    await store.patchConfig({ scan: { includeEphemeralPorts: true } });
+    const srv = await listen();
+    cleanups.push(() => srv.close());
+    let scans = 0;
+    const platform = {
+      ...currentPlatform(),
+      listListeners: async () => (scans++, [{ pid: 31, process: 'python3', port: srv.port, address: '127.0.0.1' }]),
+      processInfo: async (pids: number[]) =>
+        new Map(pids.map((pid): [number, ProcessInfo] => [pid, { pid, ppid: 1, command: 'python3 -m http.server', argv: ['python3', '-m', 'http.server'], cwd: store.home, startTime: 1, orphan: false }])),
+      bootTime: async () => Date.parse('2026-10-01T08:00:00Z'),
+    } satisfies Platform;
+    const live = await startLive({ store, bus, providers: new ProviderRegistry(), platform });
+    cleanups.push(() => live.stop());
+    await live.ready;
+    assert.deepEqual(live.observed().map((o) => o.port), [srv.port]);
+
+    const events: ServerEvent[] = [];
+    bus.subscribe((e) => events.push(e));
+    await store.patchConfig({ scan: { enabled: false } });
+    assert.deepEqual(live.observed(), [], 'the last scan is not shown while scanning is off');
+    assert.ok(events.some((e) => e.type === 'observed' && e.reason === 'config'));
+
+    const before = scans;
+    await store.patchConfig({ scan: { enabled: true } });
+    await until('a scan straight away', () => scans > before, 5000);
+    await until('the listener is back', () => live.observed().length === 1, 5000);
+  });
+
   test('probe details for people', { timeout: 30_000 }, () => {
     const h = (lastProbe: object | null, starting = false) =>
       ({ slug: 'a', state: 'unknown', starting, failures: 0, since: 0, lastProbe }) as Parameters<typeof probeDetail>[0];

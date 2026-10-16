@@ -2,6 +2,7 @@
 import os from 'node:os';
 import { type Daemon, findDaemon } from '../client.js';
 import { HOME, tildify } from '../config.js';
+import { readDaemonRecord } from '../daemonfile.js';
 import { EventBus } from '../events.js';
 import { type Platform, type Runner, currentPlatform } from '../platform/index.js';
 import { Services } from '../services/index.js';
@@ -52,11 +53,19 @@ export function makeCtx(o: CtxOptions = {}): Ctx {
       return store;
     },
     services: () => (services ??= new Services({ store: ctx.store(), platform: ctx.platform(), run: o.run, env, userHome: os.homedir() })),
-    daemon: () => (daemon ??= findDaemon(ctx.store().currentConfig().port)),
+    daemon: () => (daemon ??= locateDaemon(home, ctx.store().currentConfig().port)),
     platform: () => o.platform ?? currentPlatform(),
     readOnly: false,
   };
   return ctx;
+}
+
+/** The daemon on config.yaml's port (D44), else on the port it recorded in state/daemon.json (D46). */
+export async function locateDaemon(home: string, configPort: number): Promise<Daemon | null> {
+  const found = await findDaemon(configPort);
+  if (found) return found;
+  const rec = readDaemonRecord(home);
+  return rec && rec.port !== configPort ? findDaemon(rec.port) : null;
 }
 
 /** Fixed-width columns, two spaces apart, the last column unpadded. */

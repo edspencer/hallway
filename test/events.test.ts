@@ -29,17 +29,22 @@ describe('the bus', () => {
     assert.equal(bus.size, 1);
   });
 
-  test('emitSoon debounces per key: a burst becomes one event, other keys are separate', async () => {
+  test('emitSoon debounces per key: a burst becomes one event, other keys are separate', (t) => {
+    // mocked timers: with real ones, a loaded machine can stretch a 10 ms sleep past the 40 ms window
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const bus = new EventBus();
     const got: ServerEvent[] = [];
     bus.subscribe((e) => got.push(e));
+    // five calls 39 ms apart: each one restarts the 40 ms window
     for (let i = 0; i < 5; i++) {
+      if (i) t.mock.timers.tick(39);
       bus.emitSoon('a', { type: 'app', slug: 'a', reason: 'config' }, 40);
-      await sleep(10);
     }
     bus.emitSoon('b', { type: 'bookmarks', group: 'b' }, 40);
     assert.deepEqual(got, [], 'nothing before the quiet period');
-    await sleep(80);
+    t.mock.timers.tick(39);
+    assert.deepEqual(got, [], 'still nothing 39 ms after the last call');
+    t.mock.timers.tick(1);
     assert.deepEqual(got, [
       { type: 'app', slug: 'a', reason: 'config' },
       { type: 'bookmarks', group: 'b' },
@@ -159,27 +164,49 @@ describe('the watcher', () => {
     assert.ok(!store.apps.has('foo'));
   });
 
-  test('a burst of writes to one file is one event', { timeout: 10_000 }, async () => {
-    // The debounce is trailing: writes closer together than the window are one event. A wide window keeps the burst
-    // (five writes ~5 ms apart) well inside it even on a loaded CI runner, where the 60 ms used elsewhere can be
-    // outlasted by a single stalled tick and legitimately split the burst in two.
+  test('a burst of writes to one file is one event', { timeout: 30_000 }, async () => {
+    // What makes a burst one event is the bus's per-key trailing debounce (its own test above, on mocked timers). What
+    // the watcher must get right, and what this checks with the real file system, is the rest: every change to a file
+    // goes through that one debounce key (chokidar's add and its changes alike), a re-read that finds nothing new says
+    // nothing, and whenever the debounce fires the store re-reads the file, so the last write wins.
+    //
+    // It deliberately doesn't assert "one event" from wall-clock timing. On a stalled machine chokidar's deliveries lag
+    // their writes unevenly (each goes through an async stat), and Node computes a new timer's deadline from the event
+    // loop's cached time, so a timer set just after a stall can fire almost at once: the debounce can then legitimately
+    // fire twice in one burst, giving two correct events. So it counts the debounce's firings: one firing must mean one
+    // event, and a split burst (rare, a stall) is retried.
     const WINDOW = 400;
-    const { home, store, until, got } = await watched(WINDOW);
+    const { home, store, bus, until, got } = await watched(WINDOW);
     const f = path.join(home, 'bookmarks', 'g.yaml');
-    const at: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      fs.writeFileSync(f, `title: G${i}\nlinks: []\n`);
-      at.push(Date.now());
-      await sleep(5);
+    const keys = new Set<string>();
+    let fires = 0;
+    const emitSoon = bus.emitSoon.bind(bus);
+    bus.emitSoon = (k, e, ms) => {
+      keys.add(k);
+      emitSoon(k, typeof e === 'function' ? () => (fires++, e()) : e, ms);
+    };
+    const quiet = async () => {
+      // nothing more for two whole windows, rather than a fixed sleep
+      for (let n = got.length + fires, since = Date.now(); Date.now() - since < 2 * WINDOW; await sleep(20))
+        if (got.length + fires !== n) [n, since] = [got.length + fires, Date.now()];
+    };
+    let events = 0;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      [fires, got.length] = [0, 0];
+      keys.clear();
+      for (let i = 0; i < 5; i++) {
+        fs.writeFileSync(f, `title: G${attempt}-${i}\nlinks: []\n`);
+        await sleep(5);
+      }
+      await until((e) => e.type === 'bookmarks', 5000);
+      await quiet();
+      events = got.filter((g) => g.e.type === 'bookmarks').length;
+      assert.deepEqual([...keys], ['file:bookmarks/g.yaml'], 'every change went through the one key');
+      assert.ok(events >= 1 && events <= fires, `${events} events from ${fires} firings: ${JSON.stringify(got.map((g) => g.e))}`);
+      assert.equal(store.groups.get('g')!.value!.title, `G${attempt}-4`, 'the last write wins');
+      if (fires === 1) break;
     }
-    const gaps = at.slice(1).map((t, i) => t - at[i]);
-    assert.ok(Math.max(...gaps) < WINDOW, `the writes weren't a burst (gaps ${gaps.join(', ')} ms): the runner stalled`);
-    await until((e) => e.type === 'bookmarks', 5000);
-    // quiescence: nothing more for two whole windows, rather than a fixed sleep
-    for (let n = got.length, quietSince = Date.now(); Date.now() - quietSince < 2 * WINDOW; await sleep(20))
-      if (got.length !== n) [n, quietSince] = [got.length, Date.now()];
-    assert.equal(got.filter((g) => g.e.type === 'bookmarks').length, 1, JSON.stringify(got.map((g) => g.e)));
-    assert.equal(store.groups.get('g')!.value!.title, 'G4', 'and the one event carries the last write');
+    if (fires === 1) assert.equal(events, 1, 'one firing of the debounce is one event');
   });
 
   test('a broken file arrives as an error event; temp files and machine dirs are ignored', async () => {

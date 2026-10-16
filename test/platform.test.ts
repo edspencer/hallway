@@ -3,6 +3,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { UnsupportedPlatformError, currentPlatform, platformFor } from '../server/platform/index.ts';
+import { parseLocalPortRange } from '../server/platform/linux.ts';
 
 describe('platform', () => {
   test('macOS uses launchd LaunchAgents and lsof', () => {
@@ -23,6 +24,17 @@ describe('platform', () => {
     assert.equal(p.userServiceDir({ XDG_CONFIG_HOME: 'rel' }, '/home/someone'), '/home/someone/.config/systemd/user');
     assert.equal(p.serviceFileName('hallway.app.my-app'), 'hallway-app-my-app.service');
     assert.equal(p.serviceFileName('hallway.daemon'), 'hallway-daemon.service');
+  });
+
+  test("each platform's ephemeral range: IANA's on macOS, ip_local_port_range on Linux", () => {
+    assert.deepEqual(platformFor('darwin').ephemeralPorts(), { from: 49152, to: 65535 });
+    assert.deepEqual(parseLocalPortRange('32768\t60999\n'), { from: 32768, to: 60999 });
+    assert.deepEqual(parseLocalPortRange('1024 65535'), { from: 1024, to: 65535 });
+    assert.equal(parseLocalPortRange(''), null);
+    assert.equal(parseLocalPortRange('60999 32768'), null);
+    assert.equal(parseLocalPortRange('0 70000'), null);
+    const r = platformFor('linux').ephemeralPorts();
+    assert.ok(r.from >= 1 && r.from <= r.to && r.to <= 65535);
   });
 
   test('anything else is unsupported, with a clear message', () => {
