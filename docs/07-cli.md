@@ -2,9 +2,10 @@
 
 Binary: `hallway`. A short alias (`hw`) is proposed but not decided (Q-BINARY); this reference uses `hallway`
 throughout. Exit codes: `0` success, `1` error, `2` usage error (usage printed). Every listing command supports
-`--json` for agents and scripts (`status`, `scan`, `app ls`, `bookmark ls`, `doctor`, `service status`,
-`service regenerate`; `run`, `claim`, `app add` and `bookmark add` take it too). Milestone in brackets; **built**
-marks what exists (the rest is still to come). The code is `server/cli.ts` (parsing in `server/args.ts`) and
+`--json` for agents and scripts (`status`, `scan`, `lost`, `app ls`, `bookmark ls`, `doctor`, `service status`,
+`service regenerate`; `run`, `claim`, `lost restart|service`, `app add` and `bookmark add` take it too). The milestone
+each belongs to is in brackets; as of 0.3.0 every command listed here is **built**, and `hallway --help` prints the
+same list. The code is `server/cli.ts` (parsing in `server/args.ts`) and
 `server/commands/`; the services behind them are `server/services/` and `server/platform/`.
 
 Commands that are richer with live data look for the daemon on `127.0.0.1:<config.yaml port>` (default 4255; not
@@ -69,7 +70,7 @@ Commands that are richer with live data look for the daemon on `127.0.0.1:<confi
 |---------|-------------|
 | `hallway setup [--domain BASE] [--print]` | Fronted mode: runs Caddy as you (a user-level job), redirects loopback 443/80 to it, trusts its CA and switches `config.yaml` to `mode: fronted`; with `--domain`, also Hallway's dnsmasq and the resolver for that domain. Prints every step first, the privileged ones exactly as run through `sudo`; idempotent (skips what's in place). `--print` prints the plan and runs nothing. Refuses `.local`, HSTS-preloaded TLDs, and anything holding 80/443 (named). Exits 1 if it refuses or a step fails. See `03`, D47, D48. [v1, **built**] |
 | `hallway teardown [--uninstall-packages] [--print]` | Reverse `hallway setup`: removes only what it finds and sets `mode: direct`. `--uninstall-packages` also uninstalls Homebrew's `caddy` and `dnsmasq`. [v1, **built**] |
-| `hallway doctor [--json]` | Read-only diagnostics with suggested fixes (it never creates the data home). Built: the data home, every file's errors and warnings (including two apps on one port), the daemon answering (or what else holds its port), the daemon's service, lingering on Linux, every generated job's PATH (per-shell or missing entries) and program (a vanished Node), jobs without an app and apps without a job, apps exposed on the network (from the daemon). In fronted mode, also the networking checks in `03` (Caddy, its socket and config, who holds 80/443, the redirect, the trusted root, name resolution, dnsmasq). Exits 1 if any check fails. See `03`. [v0 for daemon/data checks, **built**; v1 for networking] |
+| `hallway doctor [--json]` | Read-only diagnostics with suggested fixes (it never creates the data home). Built: the data home, every file's errors and warnings (including two apps on one port), the daemon answering (or what else holds its port), the daemon's service, lingering on Linux, every generated job's PATH (per-shell or missing entries) and program (a vanished Node), jobs without an app and apps without a job, apps exposed on the network (from the daemon). In fronted mode, also the networking checks in `03` (Caddy, its socket and config, who holds 80/443, the redirect, the trusted root, name resolution, dnsmasq). Exits 1 if any check fails. See `03`. [v0 for daemon/data checks, v1 for networking; **built**] |
 
 ## Agents
 

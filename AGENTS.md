@@ -2,13 +2,17 @@
 
 ## Where things stand
 
-Milestone **v0 is done** (released as 0.1.0; its acceptance run is in `docs/11-research-notes.md`). The repository
-holds a complete **specification** and the implementation so far: the package, build, CI and release machinery, the daemon core (`hallway serve` and `guide`, the data
-home and its store, the watcher, event bus and SSE, the HTTP API, the agent guide and `llms.txt`, the security
-middleware, the platform abstraction, tier-1 thumbnails), the scanner, prober and uptime history (plugged into the
-core as a provider, `server/live.ts`, D35), the CLI commands and managed services (`hallway run`, launchd / systemd
-user units, log rotation, `doctor`), the v0 dashboard, and v1's fronted mode (`server/proxy/`: Caddy as a user-level
-job, `hallway setup` / `teardown`, doctor's networking checks; D47, D48).
+Hallway is **released** (0.3.1 on npm at the time of writing; the history is in `CHANGELOG.md`). Milestones **v0 and v1 are built**, and
+**v2 is built except its last criterion**, running everything on a real Mac (`docs/08-roadmap.md` has each
+criterion's status and evidence; the acceptance runs are in `docs/11-research-notes.md`). The repository holds a
+complete **specification** and the implementation: the package, build, CI and release machinery, the daemon core
+(`hallway serve` and `guide`, the data home and its store, the watcher, event bus and SSE, the HTTP API, the agent
+guide and `llms.txt`, the security middleware, the platform abstraction), the scanner, prober and uptime history with
+hourly rollups (plugged into the core as a provider, `server/live.ts`, D35, D57), the CLI commands and managed
+services (`hallway run`, launchd / systemd user units, log rotation, `doctor`), the dashboard, v1's fronted mode
+(`server/proxy/`: Caddy as a user-level job, `hallway setup` / `teardown`, doctor's networking checks; D47, D48) and
+"Lost at last reboot" (`server/lost/`, D54), and v2's MCP server (`server/mcp/`, D50–D53), the dev-server hook
+(`server/hook.ts`, D51) and thumbnails: favicons, generated cards and opt-in screenshots (`server/thumbs/`, D55–D57).
 
 Nobody who took part in the design discussion will be available to answer questions, so the spec is deliberately
 exhaustive: it records decisions, their rationale, the alternatives that were rejected, verified facts, and open
@@ -60,8 +64,10 @@ The human-facing version of the development conventions, with setup, CI and pull
 ```
 server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   cli.ts           `hallway` entry point (the package's bin); args.ts parses its arguments
-  commands/        every other command: services.ts (run, stop, start, restart, logs, service …), apps.ts (app,
-                   bookmark), status.ts (status, scan, claim, ignore, open), doctor.ts; context.ts is what they share
+  commands/        every other command, by name in index.ts: services.ts (run, stop, start, restart, logs, service …),
+                   apps.ts (app, bookmark), status.ts (status, scan, claim, ignore, open), offline.ts (the scan with no
+                   daemon), lost.ts, setup.ts (setup, teardown), thumbs.ts, agents.ts (mcp, hook), doctor.ts;
+                   context.ts is what they share
   client.ts        the CLI's side of the HTTP API (finds the daemon on config.yaml's port, D44)
   services/        managed services: spec.ts (YAML → resolved job), resolve.ts (the PATH trap), index.ts (the
                    lifecycle and the YAML side of it), run.ts (`hallway run`), ports.ts, logs.ts, rotate.ts, probe.ts
@@ -76,6 +82,8 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   config.ts        package root, data home ($HALLWAY_HOME, ~/.hallway) and its layout, ports, dev overrides
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
   live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events (D35, D38)
+  daemonfile.ts    state/daemon.json: where the running daemon listens, the CLI's second place to look (D46)
+  hook.ts          `hallway hook check-command`: the optional PreToolUse hook that blocks bare dev-server starts (D51)
   platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) / Windows (win32.ts, D58) behind one interface; the
                    listener/process parsers are pure functions tested against test/fixtures/platform/; launchd.ts and
                    systemd.ts render the job definitions (pure) and run the lifecycle verbs through a mockable runner
@@ -88,6 +96,10 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
                    (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
   health/          uptime.ts (samples + hourly rollups in state/health.sqlite, node:sqlite), index.ts (startHealth)
+  lost/            "Lost at last reboot" (D54): index.ts (what was running before the reboot and isn't now, state/lost.json),
+                   actions.ts (restart once, make it a service, dismiss)
+  mcp/             the MCP server (D50–D53): index.ts (`/mcp`, Streamable HTTP), tools.ts (the tools and resources; none
+                   starts a process), bridge.ts (`hallway mcp`: stdio forwarded to the daemon's `/mcp`)
   proxy/           fronted mode (D47): caddy.ts (apps + config → Caddy JSON), fallback.ts (generated/fallback.html),
                    index.ts (the daemon pushes on every change), admin.ts (the admin socket), setup.ts (setup and
                    teardown: facts → plan → run), doctor.ts (networking checks), tld.ts, probe.ts, names.ts
@@ -100,7 +112,8 @@ src/               the dashboard (React, built by Vite into dist/web)
   live.ts          GET /api/state, then SSE: refetch what each event names, reconnect with backoff
   api.ts           the client for the HTTP API (writes return conflict/invalid results for the forms)
   keyboard.ts      `/`, arrows (spatial), `c`, `i`, Esc, `?`;  ambient.ts: tab title + canvas favicon (D22)
-  components/      Door (app card), UptimeBar, Drawer, Observed tray, Bookmarks, Header, Problems, Empty, …
+  components/      Door (app card), UptimeBar, LatencyChart, Drawer, Lost (the banner), Observed tray, Bookmarks,
+                   Header, Problems, Empty, …
   lib/             pure logic, tested under node: status counts, formatting, filter, door paint
   theme/tokens.css every colour, typeface and radius (theme.ts applies `dashboard.theme`)
   brand/           the provisional mark
@@ -154,5 +167,5 @@ Run `npm test` and `npm run typecheck` before committing, and `npm run smoke:pac
   built dashboard (`dist/web`). Only what the daemon needs at run time is a `dependency`; React and anything else the
   dashboard bundles are `devDependencies`.
 - **Changesets** for user-facing changes ([CONTRIBUTING.md](CONTRIBUTING.md#changesets)). A merged changeset leads to
-  a real npm release once its version PR is merged ([RELEASING.md](RELEASING.md)); until v0 works, don't add one
-  unless you've been asked to cut a release.
+  a real npm release once its version PR is merged ([RELEASING.md](RELEASING.md)). Docs-only and internal changes
+  need none.

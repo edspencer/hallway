@@ -9,11 +9,13 @@
  * scroll-jacking. Below the breakpoint each block carries its own copy of the
  * media inline.
  *
- * The one difference: the media are drawn mock-ups of the design (Mock.astro),
- * not captures: no real captures of the dashboard have been made yet. Each is
- * tagged "Mock-up" and each step carries its milestone.
+ * The media are real captures of the dashboard on staged demo data (Shot.astro)
+ * where a step has one (`shot` in copy.ts), and drawn mock-ups (Mock.astro) for
+ * the two that a dashboard capture can't show: a terminal and an address bar.
+ * Each is tagged as which it is, and each step carries its milestone.
  */
 import Mock from './Mock.astro';
+import Shot from './Shot.astro';
 import { FEATURES } from './copy';
 ---
 
@@ -34,13 +36,13 @@ import { FEATURES } from './copy';
 							aria-current={i === 0 ? 'true' : undefined}
 						>
 							<h3>
-								{f.title} <span class={`ms ms--${f.ms}`}>{f.ms}</span>
+								{f.title} <span class="ms ms--shipped" title={`Available now (${f.ms})`}>{f.ms}</span>
 							</h3>
 							<p>{f.body}</p>
 
 							{/* Shown only below the breakpoint, where there is no sticky column. */}
 							<div class="feat-inline">
-								<Mock name={f.mock} alt={f.alt} />
+								{'shot' in f ? <Shot name={f.shot} alt={f.alt} /> : <Mock name={f.mock} alt={f.alt} />}
 							</div>
 						</article>
 					))
@@ -53,7 +55,7 @@ import { FEATURES } from './copy';
 						{
 							FEATURES.map((f, i) => (
 								<div class:list={['feat-shot', { 'is-current': i === 0 }]} data-feature-shot>
-									<Mock name={f.mock} alt={f.alt} />
+									{'shot' in f ? <Shot name={f.shot} alt={f.alt} /> : <Mock name={f.mock} alt={f.alt} />}
 								</div>
 							))
 						}

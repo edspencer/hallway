@@ -35,6 +35,9 @@ in fronted mode. See [Host-header rewriting](/networking/fronted-mode/#host-head
 - Managed services are started with `HOST=127.0.0.1`, so they stay off the network.
 - The dashboard flags apps listening on all interfaces as **exposed**, and `hallway doctor` lists them.
 - The dnsmasq configuration for custom domains binds to loopback only, so it can't become an open resolver.
-- Screenshots (an opt-in v2 feature) never leave your machine.
+- In fronted mode, Caddy listens on loopback only, runs as you, and its admin API is a private Unix socket, not a
+  port. See [The security model](/networking/setup-and-doctor/#the-security-model).
+- [Screenshots](/concepts/thumbnails/) (opt-in) are taken by a browser in your data home and never leave your
+  machine.
 
 Found a problem? See the repository's security policy on [GitHub](https://github.com/edspencer/hallway).

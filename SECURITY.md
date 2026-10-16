@@ -19,19 +19,20 @@ Hallway runs on your machine as your user, keeps a directory of the web servers 
 configuration in `~/.hallway`. What it's built to guarantee, and so what counts as a vulnerability if broken:
 
 - **Only you can reach the daemon.** It binds 127.0.0.1 only, never a public interface. It answers only requests
-  whose `Host` is `localhost`, `127.0.0.1` or `[::1]` (and, once fronted mode exists, the dashboard hostname you
-  configured), which stops DNS-rebinding attacks from a web page you visit. It accepts writes only as JSON and, when
+  whose `Host` is `localhost`, `127.0.0.1` or `[::1]` (and, in fronted mode, the dashboard's hostname, such as
+  `hallway.localhost`), which stops DNS-rebinding attacks from a web page you visit. It accepts writes only as JSON and, when
   the browser sends an `Origin`, only from those same hosts, which stops cross-site request forgery. It never sends
   CORS headers. (`server/security.ts`.)
-- **The daemon never runs as root.** Privileged steps (trusting a local certificate authority, binding port 443,
-  DNS resolver files) belong only to explicit setup commands that print each step before running it.
-- **Nothing reachable over the network launches processes.** Starting a server is a CLI action you (or an agent in
-  your own shell) run explicitly; the HTTP API and MCP tools describe apps, they don't execute commands.
+- **The daemon never runs as root, and neither does Caddy.** The privileged steps (redirecting ports 443 and 80 to
+  Caddy's loopback ports, trusting Hallway's local certificate authority, a resolver entry for a custom domain)
+  belong only to `hallway setup` and `hallway teardown`, which print each step before running it through `sudo`.
+  Caddy's admin API is a Unix socket only you can open (mode 0600, in the data home).
+- **MCP never launches processes.** No MCP tool starts, stops or installs anything, and none can add a `service`
+  block or change a port (D10, D53). The dashboard's HTTP API is different: it can write an app's
+  `service` block and start, stop and restart managed apps (and servers lost at the last reboot), so it is as
+  powerful as your shell. That is why it answers only requests that pass the checks above.
 - **Your configuration isn't destroyed.** Writes are atomic, and removing an app or bookmark group moves its file to
   `backups/` rather than deleting it.
-
-Some of these describe behaviour still being built (see `docs/08-roadmap.md`); the guarantees apply as each piece
-lands.
 
 Out of scope: anything that needs an attacker who can already run code as you, or write to your `~/.hallway`.
 Hallway trusts its own config and data files the way your shell trusts your dotfiles. The development-only

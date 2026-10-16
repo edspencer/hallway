@@ -23,9 +23,11 @@ What it covers:
    framework flags.
 3. How to register an existing server: the minimal `apps/<slug>.yaml`, or `hallway app add`.
 4. How to add bookmarks.
-5. How to check status: `hallway status --json` or `GET /api/state`.
-6. The file formats, generated from the same schema the validator uses, so the guide can't drift from the code.
-7. [Etiquette](/agents/overview/#etiquette-for-agents): never change a port, never delete outside `apps/` and
+5. How to check status: `hallway status --json` or `GET /api/state`, including what was lost at the last reboot.
+6. The HTTP API, the MCP server and the optional hook, and that `hallway setup` and `teardown` are the user's to run
+   (they need sudo).
+7. The file formats, generated from the same schema the validator uses, so the guide can't drift from the code.
+8. [Etiquette](/agents/overview/#etiquette-for-agents): never change a port, never delete outside `apps/` and
    `bookmarks/`, prefer `adhoc` for throwaway servers, leave machine-written directories alone.
 
 ## The snippet for your instruction files
@@ -39,7 +41,7 @@ What it covers:
 
 ## The optional hook
 
-<span class="ms ms--v0">v0</span> For Claude Code, `hallway hook check-command` is a `PreToolUse` hook on its Bash tool. It
+<span class="ms ms--shipped">v2</span> For Claude Code, `hallway hook check-command` is a `PreToolUse` hook on its Bash tool. It
 reads the hook's payload from stdin and, if the command starts a dev server directly, denies it with a message giving
 the equivalent `hallway run` invocation. It is documented, never installed automatically: see
 [The dev-server hook](/agents/hook/) for what it catches and how to add it.

@@ -16,21 +16,30 @@ just works.
     <group-slug>.yaml         # one bookmark group per file              (yours to edit)
   ignore.yaml                 # observed listeners you chose to hide     (yours to edit)
 
-  state/                      # machine-written; never hand-edit; safe to delete
-    health.sqlite             # probe samples and rollups
+  state/                      # machine-written; never hand-edit
+    daemon.json               # the running daemon's port, so the CLI can find it
+    health.sqlite             # probe samples and hourly rollups
     observed.json             # last-known identity of every observed listener, first and last seen
     boot.json                 # the last boot time seen, to detect reboots
     lost.json                 # what the last reboot took down, until dismissed
+    caddy/                    # fronted mode: Caddy's admin socket (admin.sock, mode 0600),
+                              #   its local certificate authority and certificates (data/)
   cache/                      # machine-written; regenerable
-    thumbs/<slug>.<hash>.png
-    favicons/<slug>.<hash>.<ext>
+    favicons/                 # apps' and bookmarks' favicons
+    thumbs/<slug>.png, .json  # screenshots (after `hallway thumbs enable`)
+    browser/                  # the headless browser screenshots use (about 300 MB)
+    iana-tlds.txt             # IANA's TLD list, for custom-domain checks (a week)
   generated/                  # machine-written; regenerable
-    caddy.json                # the last config pushed to Caddy (v1)
+    caddy.json                # the configuration Caddy runs from (fronted mode)
+    fallback.html             # the page Caddy serves when the daemon is down
+    dnsmasq.conf              # custom domains only
+    setup/                    # files `hallway setup` stages before installing them with sudo
   logs/
     daemon.out.log, daemon.err.log
     <slug>.out.log, <slug>.err.log   # managed services
   backups/
     <ISO-timestamp>/          # snapshots of the editable files
+    removed/                  # files removed through Hallway
 ```
 
 ## Yours, and Hallway's
@@ -56,8 +65,13 @@ same reasons.)
   refused and the caller re-reads.
 - **Live**: a change from anywhere (your editor, an agent, the CLI, the API) reaches every open dashboard within about
   a second.
-- **Never destructive**: removing an app or a bookmark group moves its file into `backups/`. Hallway also snapshots
-  the editable files into `backups/` on a schedule and before anything destructive.
+- **Never destructive**: removing an app or a bookmark group moves its file into `backups/removed/`. Hallway also
+  snapshots the editable files into `backups/` when the daemon starts, hourly while it runs (if anything changed), and
+  before anything destructive.
+
+Deleting `state/` loses history (uptime, what was observed, the lost-at-reboot notice) but nothing you wrote. In
+fronted mode, though, `state/caddy/` holds the certificate authority your system trusts: delete it and you need
+`hallway setup` again.
 
 ## Keeping it in git
 
@@ -71,7 +85,11 @@ Hallway writes nowhere else, except:
 
 - <span class="ms ms--v0">v0</span> the daemon's service definition, when you run `hallway service install`:
   `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux;
-- <span class="ms ms--v0">v0</span> one per managed service: `~/Library/LaunchAgents/hallway.app.<slug>.plist` on
-  macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on Linux;
-- <span class="ms">v1</span> during `hallway setup` only: `/Library/LaunchDaemons/hallway.*.plist`, the dnsmasq
-  drop-in, and `/etc/resolver/<base>`. See [Setup](/networking/setup-and-doctor/).
+- <span class="ms ms--shipped">v1</span> one per managed service: `~/Library/LaunchAgents/hallway.app.<slug>.plist`
+  on macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on Linux;
+- <span class="ms ms--shipped">v1</span> during `hallway setup` only: the user-level Caddy (and dnsmasq) jobs, and the
+  privileged pieces it prints and runs through `sudo`: the 443/80 redirect, the trusted root certificate and, for a
+  custom domain, the resolver entry. The full list is in
+  [Setup](/networking/setup-and-doctor/#what-it-changes-outside-the-data-home); `hallway teardown` removes them.
+- <span class="ms ms--shipped">v2</span> npm's own download cache (usually `~/.npm`), which the `npm install` behind
+  `hallway thumbs enable` passes through. The browser itself goes into `cache/browser/`.

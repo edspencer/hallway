@@ -3,7 +3,7 @@ title: MCP server
 description: Typed tools for apps and bookmarks, served on the dashboard's own port - and why none of them launch anything.
 ---
 
-<span class="ms ms--v0">v0</span> Available now (shipped early from v2). Hallway's MCP server gives agents typed tools
+<span class="ms ms--shipped">v2</span> Available since 0.2.0. Hallway's MCP server gives agents sixteen typed tools
 for reading what's running, describing apps and managing bookmarks. It is a convenience layer over the same store the
 CLI, the HTTP API and your own hand edits go through: never a separate code path, and never the only way to do
 something. An agent that can edit files or run `hallway` already has everything MCP offers, and more.
@@ -53,7 +53,7 @@ Reading:
 
 | Tool | Input | Returns |
 | --- | --- | --- |
-| `get_status` | `{ filter? }` | Apps with state, URL and uptime; counts by state; how many listeners are observed |
+| `get_status` | `{ filter? }` | Apps with state, URL and uptime; counts by state; how many listeners are observed; what was [lost at the last reboot](/concepts/services/#lost-at-last-reboot), read-only |
 | `list_apps` | `{ source?, state?, tag? }` | Apps with their config and live state |
 | `get_app` | `{ slug }` | One app in full, with identity and recent history |
 | `get_history` | `{ slug, window: '24h' \| '7d' \| '90d' }` | Uptime buckets and a latency summary |
@@ -110,7 +110,9 @@ So:
 - `update_app` refuses to change `port`: apps hardcode their ports, so a changed port breaks things elsewhere (see
   [Your ports stay put](/guarantees/ports/)). Change it yourself if you really mean to.
 - `remove_app` refuses an app Hallway runs as a service, because removing it would stop a process.
-- `run`, `start`, `stop`, `restart`, `service`, `setup` and `teardown` are **CLI-only**, where you, or an agent in
+- `get_status` reports what was lost at the last reboot, but restarting any of it is `hallway lost restart` or the
+  dashboard, never MCP.
+- `run`, `start`, `stop`, `restart`, `service`, `lost`, `thumbs`, `setup` and `teardown` are **CLI-only**, where you, or an agent in
   your shell under its own permission prompts, run them explicitly. An agent with a shell starts servers with
   [`hallway run`](/agents/hallway-run/).
 
