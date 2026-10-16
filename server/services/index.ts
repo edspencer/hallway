@@ -34,6 +34,10 @@ export interface ServiceManifest {
 
 export class ServiceError extends Error {}
 
+/** An app can be called `daemon`, but it can't be a managed service: its logs would be the daemon's (logs/daemon.*). */
+export const RESERVED_SERVICE_SLUG = 'daemon';
+export const DAEMON_SLUG_MESSAGE = "an app called 'daemon' can't be a managed service: its logs would be Hallway's own daemon's (logs/daemon.out.log); pick another slug";
+
 export interface ServicesOptions {
   store: Store;
   platform?: Platform;
@@ -86,6 +90,7 @@ export class Services {
 
   /** A managed app's config; throws if it has no `service:` block. */
   managed(slug: string): AppConfig {
+    if (slug === RESERVED_SERVICE_SLUG) throw new ServiceError(DAEMON_SLUG_MESSAGE);
     const c = this.app(slug);
     if (!c.service) throw new ServiceError(`${slug} isn't a managed service (apps/${slug}.yaml has no service: block). Make it one with \`hallway service add ${slug} -- <command>\`.`);
     return c;

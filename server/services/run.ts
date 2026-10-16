@@ -10,7 +10,7 @@ import path from 'node:path';
 import { expandHome, tildify } from '../config.js';
 import { SLUG } from '../store/index.js';
 import { appUrl } from '../views.js';
-import { ServiceError, Services, appLabel, logFiles } from './index.js';
+import { DAEMON_SLUG_MESSAGE, RESERVED_SERVICE_SLUG, ServiceError, Services, appLabel, logFiles } from './index.js';
 import { appLogs, formatLogs } from './logs.js';
 import { assignPort, isListening, waitForPort } from './ports.js';
 
@@ -54,6 +54,7 @@ export async function runApp(services: Services, req: RunRequest, opts: RunOptio
   const { store } = services;
   const { slug } = req;
   if (!SLUG.test(slug)) throw new ServiceError(`"${slug}" is not a valid slug: lower-case letters, digits and hyphens, starting and ending with a letter or digit`);
+  if (slug === RESERVED_SERVICE_SLUG) throw new ServiceError(DAEMON_SLUG_MESSAGE);
   const entry = store.apps.get(slug);
   const existing = entry ? services.app(slug) : null; // throws for a broken file: never write over it
   const given = req.command?.length ? req.command : null;

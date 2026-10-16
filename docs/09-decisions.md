@@ -458,7 +458,8 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   (`runAtLoad`/`keepAlive`), and restarts the job. With a command, `--persist` (or its absence) decides afresh. An
   existing app keeps its port; `--port` with a different number is refused (D17), and `--cwd` defaults to the current
   directory when a command is given, else the recorded one.
-- **Refusals before anything starts:** a broken app file (never written over); a port that something Hallway didn't
+- **Refusals before anything starts:** the slug `daemon` (its logs would be the daemon's `logs/daemon.*.log`; the slug
+  is still fine for an unmanaged app); a broken app file (never written over); a port that something Hallway didn't
   start is already listening on (it would fail to bind, or look as if it had come up); no command recorded or given.
 - **Waiting.** Up to 30 s for a TCP connect to the app's host and port. If the job has exited (two status checks a
   second apart, so a job still being spawned isn't taken for dead) it stops early and reports the exit status. On

@@ -483,6 +483,8 @@ describe('Services: the lifecycle and the YAML (runner mocked)', () => {
     await store.createApp('plain', { port: 5200 });
     assert.throws(() => services.appSpec('plain'), /isn't a managed service.*hallway service add plain/);
     assert.throws(() => services.appSpec('nope'), /no app 'nope'/);
+    await store.createApp('daemon', { port: 5300, service: { command: ['native'] } });
+    assert.throws(() => services.appSpec('daemon'), /can't be a managed service: its logs would be Hallway's own daemon's/);
     fs.writeFileSync(path.join(home, 'apps', 'broken.yaml'), 'port: [\n');
     store.loadAll();
     assert.throws(() => services.appSpec('broken'), /has errors; fix it first/);
