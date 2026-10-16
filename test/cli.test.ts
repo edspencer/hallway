@@ -7,7 +7,9 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { UsageError, check, parseArgs } from '../server/args.ts';
-import { ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+
+await exitWatchdog();
 
 const HOME = tmpDir('hw-test-cli-');
 after(() => fs.rmSync(HOME, { recursive: true, force: true }));

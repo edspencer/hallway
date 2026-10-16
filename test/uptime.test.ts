@@ -10,7 +10,9 @@ import path from 'node:path';
 import { UptimeStore, percentile } from '../server/health/uptime.ts';
 import { startHealth } from '../server/health/index.ts';
 import type { Sample } from '../server/prober/index.ts';
-import { tmpDir } from './fixture.ts';
+import { exitWatchdog, tmpDir } from './fixture.ts';
+
+await exitWatchdog();
 
 const TMP = tmpDir('hw-test-uptime-');
 after(() => fs.rmSync(TMP, { recursive: true, force: true }));
@@ -28,7 +30,7 @@ function fill(store: UptimeStore, slug: string, from: number, minutes: number, s
 }
 
 describe('percentiles', () => {
-  test('nearest rank', () => {
+  test('nearest rank', { timeout: 10_000 }, () => {
     assert.equal(percentile([], 50), null);
     assert.equal(percentile([5], 95), 5);
     assert.equal(percentile([1, 2, 3, 4], 50), 2);
@@ -37,7 +39,7 @@ describe('percentiles', () => {
 });
 
 describe('the 24 h window', () => {
-  test('48 half-hour bars ending with the current one; empty bars are no data', async () => {
+  test('48 half-hour bars ending with the current one; empty bars are no data', { timeout: 10_000 }, async () => {
     const store = await UptimeStore.open(':memory:');
     const h = store.history('a', '24h', NOW);
     assert.equal(h.buckets.length, 48);
@@ -48,7 +50,7 @@ describe('the 24 h window', () => {
     store.close();
   });
 
-  test('uptime excludes stopped time; the worst state colours a bar; a daemon outage is a gap', async () => {
+  test('uptime excludes stopped time; the worst state colours a bar; a daemon outage is a gap', { timeout: 10_000 }, async () => {
     const store = await UptimeStore.open(':memory:');
     const start = NOW - 10 * MIN - 4 * HOUR; // 08:00
     fill(store, 'a', start, 60, 'healthy', 20); // 08:00–09:00 healthy
@@ -74,7 +76,7 @@ describe('the 24 h window', () => {
 });
 
 describe('rollups', () => {
-  test('complete hours are rolled up once; the hour in progress is not', async () => {
+  test('complete hours are rolled up once; the hour in progress is not', { timeout: 10_000 }, async () => {
     const store = await UptimeStore.open(':memory:');
     fill(store, 'a', NOW - 10 * MIN - 2 * HOUR, 130, 'healthy');
     assert.equal(store.rollup(NOW), 2);
@@ -82,7 +84,7 @@ describe('rollups', () => {
     store.close();
   });
 
-  test('samples go after 48 h, rollups after 90 days; the 7 d and 90 d bars come from rollups', async () => {
+  test('samples go after 48 h, rollups after 90 days; the 7 d and 90 d bars come from rollups', { timeout: 10_000 }, async () => {
     const file = path.join(TMP, 'state', 'health.sqlite');
     const store = await UptimeStore.open(file);
     const old = NOW - 5 * DAY; // five days ago

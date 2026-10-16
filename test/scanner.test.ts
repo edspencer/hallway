@@ -16,7 +16,9 @@ import { ObservedStore, labelListeners, normaliseCommand, observationId, recordB
 import { htmlFavicon, htmlTitle, sniff } from '../server/scanner/sniff.ts';
 import { createScanner } from '../server/scanner/index.ts';
 import { type Platform, type ProcessInfo, type RawListener, currentPlatform } from '../server/platform/index.ts';
-import { tmpDir } from './fixture.ts';
+import { exitWatchdog, tmpDir } from './fixture.ts';
+
+await exitWatchdog();
 
 const TMP = tmpDir('hw-test-scan-');
 after(() => fs.rmSync(TMP, { recursive: true, force: true }));
@@ -62,7 +64,7 @@ const opts = (o: Partial<FilterOptions> = {}): FilterOptions => ({
 const L = (port: number, process: string | null = 'node', pid: number | null = 100) => ({ pid, process, port, addresses: ['127.0.0.1'] });
 
 describe('noise filtering', () => {
-  test('low ports, the ephemeral range, invisible owners, known daemons, Hallway itself and Caddy', () => {
+  test('low ports, the ephemeral range, invisible owners, known daemons, Hallway itself and Caddy', { timeout: 10_000 }, () => {
     assert.equal(noiseReason(L(4567), opts()), null);
     assert.equal(noiseReason(L(631), opts()), 'low-port');
     assert.equal(noiseReason(L(52144), opts()), 'ephemeral');
@@ -77,7 +79,7 @@ describe('noise filtering', () => {
     assert.equal(noiseReason(L(8080, null, null), opts()), 'invisible');
   });
 
-  test('ignore.yaml: ports, process names (with a trailing *) and directories', () => {
+  test('ignore.yaml: ports, process names (with a trailing *) and directories', { timeout: 10_000 }, () => {
     const ignore = { ports: [4567], processes: ['ruby*'], dirs: ['/home/someone/scratch'] };
     assert.equal(noiseReason(L(4567), opts({ ignore })), 'ignored');
     assert.equal(noiseReason(L(4600, 'ruby3.3'), opts({ ignore })), 'ignored');
@@ -88,14 +90,14 @@ describe('noise filtering', () => {
 });
 
 describe('identification', () => {
-  test('the project root is the nearest marker above the cwd, never ~ or /', () => {
+  test('the project root is the nearest marker above the cwd, never ~ or /', { timeout: 10_000 }, () => {
     assert.equal(projectRoot(path.join(REPO, 'src'), '/nowhere'), REPO);
     assert.equal(projectRoot(REPO, REPO), null, 'the home directory itself is not a project');
     fs.mkdirSync(path.join(TMP, 'bare'), { recursive: true });
     assert.equal(projectRoot(path.join(TMP, 'bare'), TMP), null);
   });
 
-  test('names from package.json, pyproject, go.mod, a README heading, else the directory', () => {
+  test('names from package.json, pyproject, go.mod, a README heading, else the directory', { timeout: 10_000 }, () => {
     assert.deepEqual(projectName(REPO), { name: '@acme/my-dashboard', description: 'A dashboard' });
     const py = path.join(TMP, 'py');
     fs.mkdirSync(py);
@@ -115,7 +117,7 @@ describe('identification', () => {
     assert.equal(readmeTitle('no heading'), null);
   });
 
-  test('framework: the command first, then dependencies', () => {
+  test('framework: the command first, then dependencies', { timeout: 10_000 }, () => {
     assert.equal(guessFramework(['/usr/bin/python3', '-m', 'http.server', '4567'], null), 'python-http');
     assert.equal(guessFramework(['node', '/x/node_modules/.bin/vite', '--port', '5173'], null), 'vite');
     assert.equal(guessFramework(['python', 'manage.py', 'runserver'], null), 'django');
@@ -123,7 +125,7 @@ describe('identification', () => {
     assert.equal(guessFramework(['node', 'dist/index.js'], path.join(TMP, 'plain')), null);
   });
 
-  test('git: toplevel, branch, last commit, remote; a linked worktree is detected', async () => {
+  test('git: toplevel, branch, last commit, remote; a linked worktree is detected', { timeout: 10_000 }, async () => {
     const main = (await gitInfo(REPO))!;
     assert.equal(main.toplevel, REPO);
     assert.equal(main.branch, 'main');
@@ -140,19 +142,19 @@ describe('identification', () => {
     assert.equal(await gitInfo(path.join(TMP, 'plain')), null);
   });
 
-  test('a detached HEAD falls back to the short commit', async () => {
+  test('a detached HEAD falls back to the short commit', { timeout: 10_000 }, async () => {
     const wt = path.join(TMP, 'Code', 'my-dashboard-detached');
     git(REPO, 'worktree', 'add', '-q', '--detach', wt);
     const g = (await gitInfo(wt))!;
     assert.match(g.branch!, /^[0-9a-f]{7,}$/);
   });
 
-  test('repository names from the common git dir', () => {
+  test('repository names from the common git dir', { timeout: 10_000 }, () => {
     assert.equal(repoName('/x/my-app/.git'), 'my-app');
     assert.equal(repoName('/x/my-app.git'), 'my-app');
   });
 
-  test('a directory with no project markers is the project itself (unless it is ~ or /)', async () => {
+  test('a directory with no project markers is the project itself (unless it is ~ or /)', { timeout: 10_000 }, async () => {
     const id = await identify(path.join(TMP, 'plain'), ['python3', '-m', 'http.server'], '/nowhere');
     assert.equal(id.project?.root, path.join(TMP, 'plain'));
     assert.equal(id.project?.name, 'plain');
@@ -189,7 +191,7 @@ function obs(o: Partial<Observation> = {}): Observation {
 }
 
 describe('observations', () => {
-  test('ids survive a restart (new PID, a different path to the same executable) but not a new port or project', () => {
+  test('ids survive a restart (new PID, a different path to the same executable) but not a new port or project', { timeout: 10_000 }, () => {
     const a = observationId('/p', 4666, normaliseCommand(['/usr/local/bin/node', 'dist/index.js'], null));
     const b = observationId('/p', 4666, normaliseCommand(['node', 'dist/index.js'], null));
     const c = observationId('/p', 4670, normaliseCommand(['node', 'dist/index.js'], null));
@@ -201,7 +203,7 @@ describe('observations', () => {
     assert.equal(normaliseCommand(null, '  /opt/bin/astro   dev  --port 4666 '), 'astro dev --port 4666');
   });
 
-  test('worktree siblings are labelled repo @ branch; everything else by project name', () => {
+  test('worktree siblings are labelled repo @ branch; everything else by project name', { timeout: 10_000 }, () => {
     const g = (toplevel: string, branch: string, worktree: boolean) => ({
       toplevel, repo: 'my-dashboard', branch, lastCommitAt: null, worktree, commonDir: '/c/my-dashboard/.git', remote: null,
     });
@@ -223,7 +225,7 @@ describe('observations', () => {
     assert.deepEqual(alone.map((l) => l.label), ['my-app', 'my-app']);
   });
 
-  test('observed.json keeps first-seen across scans and updates last-seen', () => {
+  test('observed.json keeps first-seen across scans and updates last-seen', { timeout: 10_000 }, () => {
     const file = path.join(TMP, 'state-obs', 'observed.json');
     const s1 = new ObservedStore(file);
     s1.record([obs({ id: 'a' })], Date.parse('2026-10-01T00:00:00Z'));
@@ -240,7 +242,7 @@ describe('observations', () => {
     assert.deepEqual(new ObservedStore(file).all(), []);
   });
 
-  test('boot.json: records the boot time and notices a reboot', () => {
+  test('boot.json: records the boot time and notices a reboot', { timeout: 10_000 }, () => {
     const file = path.join(TMP, 'state-boot', 'boot.json');
     const boot1 = Date.parse('2026-10-01T08:00:00Z');
     assert.equal(recordBoot(file, boot1).rebooted, false, 'first run');
@@ -253,7 +255,7 @@ describe('observations', () => {
 });
 
 describe('claim slugs', () => {
-  test('slugs from the package name; reserved and taken ones get a suffix', () => {
+  test('slugs from the package name; reserved and taken ones get a suffix', { timeout: 10_000 }, () => {
     assert.equal(slugify('@acme/My_Dashboard'), 'my-dashboard');
     assert.equal(suggestSlug(obs()), 'my-app');
     assert.equal(suggestSlug(obs(), new Set(['my-app'])), 'my-app-2');
@@ -277,7 +279,7 @@ function listen(server: net.Server): Promise<{ port: number; close: () => Promis
 }
 
 describe('HTTP sniff', () => {
-  test('title and favicon from the page head', () => {
+  test('title and favicon from the page head', { timeout: 10_000 }, () => {
     assert.equal(htmlTitle('<head><title>\n  Dash &amp; co &#x2014; home </title>'), 'Dash & co — home');
     assert.equal(htmlTitle('<p>no title</p>'), null);
     assert.equal(htmlFavicon('<link rel="stylesheet" href="/a.css"><link rel="shortcut icon" href="/favicon.ico">'), '/favicon.ico');
@@ -286,7 +288,7 @@ describe('HTTP sniff', () => {
     assert.equal(htmlFavicon(''), null);
   });
 
-  test('a web server: status, title and favicon; a redirect is not followed', async () => {
+  test('a web server: status, title and favicon; a redirect is not followed', { timeout: 10_000 }, async () => {
     let host = '';
     const s = await listen(
       http.createServer((req, res) => {
@@ -306,7 +308,7 @@ describe('HTTP sniff', () => {
     }
   });
 
-  test('a listener that never speaks HTTP is not a web app', async () => {
+  test('a listener that never speaks HTTP is not a web app', { timeout: 10_000 }, async () => {
     const silent = await listen(net.createServer((sock) => sock.resume()));
     const garbage = await listen(net.createServer((sock) => sock.resume().end('SSH-2.0-OpenSSH_9.9\r\n')));
     try {
@@ -320,7 +322,7 @@ describe('HTTP sniff', () => {
 });
 
 describe('a whole scan over a fake platform', () => {
-  test('filters, identifies, labels worktree siblings, separates known and non-HTTP ports, and records', async () => {
+  test('filters, identifies, labels worktree siblings, separates known and non-HTTP ports, and records', { timeout: 10_000 }, async () => {
     const page = (title: string) =>
       http.createServer((_q, res) => {
         res.setHeader('content-type', 'text/html');

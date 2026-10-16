@@ -8,6 +8,9 @@ import net from 'node:net';
 import { type ProbeResult, type ProbeTarget, probe, statusIsHealthy } from '../server/prober/probe.ts';
 import { classify, initialHealth, step } from '../server/prober/state.ts';
 import { DEFAULT_PROBE, createProber } from '../server/prober/index.ts';
+import { exitWatchdog } from './fixture.ts';
+
+await exitWatchdog();
 
 function listen(server: net.Server): Promise<{ port: number; close: () => Promise<void> }> {
   return new Promise((resolve) =>
@@ -32,7 +35,7 @@ async function freePort() {
 }
 
 describe('the probe ladder', () => {
-  test('status rules: 3xx, 401 and 403 are healthy on /; a health path wants 2xx or expectStatus', () => {
+  test('status rules: 3xx, 401 and 403 are healthy on /; a health path wants 2xx or expectStatus', { timeout: 10_000 }, () => {
     for (const s of [200, 204, 301, 302, 401, 403, 404]) assert.equal(statusIsHealthy(s), true, String(s));
     for (const s of [500, 502, 503]) assert.equal(statusIsHealthy(s), false, String(s));
     assert.equal(statusIsHealthy(204, { path: '/health' }), true);
@@ -42,7 +45,7 @@ describe('the probe ladder', () => {
     assert.equal(statusIsHealthy(418, { path: '/health', expectStatus: [200, 418] }), true);
   });
 
-  test('against a real server: GET, Host = the upstream, our User-Agent, no redirects followed', async () => {
+  test('against a real server: GET, Host = the upstream, our User-Agent, no redirects followed', { timeout: 10_000 }, async () => {
     const seen: { method?: string; url?: string; host?: string; ua?: string }[] = [];
     const routes: Record<string, number> = { '/': 302, '/health': 200, '/broken': 503, '/login': 200 };
     const s = await listen(
@@ -70,7 +73,7 @@ describe('the probe ladder', () => {
     }
   });
 
-  test('not listening; and listening but no HTTP answer within the timeout is unhealthy', async () => {
+  test('not listening; and listening but no HTTP answer within the timeout is unhealthy', { timeout: 10_000 }, async () => {
     const port = await freePort();
     const down = await probe({ slug: 'a', port, expected: 'running' });
     assert.deepEqual([down.outcome, down.httpStatus, down.latencyMs], ['not-listening', null, null]);
@@ -87,7 +90,7 @@ describe('the probe ladder', () => {
 });
 
 describe('the state machine', () => {
-  test('not listening is down only when it should be running (after any grace period); otherwise stopped', () => {
+  test('not listening is down only when it should be running (after any grace period); otherwise stopped', { timeout: 10_000 }, () => {
     assert.equal(classify('not-listening', 'running', false), 'down');
     assert.equal(classify('not-listening', 'running', true), 'starting');
     assert.equal(classify('not-listening', 'adhoc', false), 'stopped');
@@ -96,7 +99,7 @@ describe('the state machine', () => {
     assert.equal(classify('unhealthy', 'adhoc', false), 'unhealthy');
   });
 
-  test('two failures to leave healthy, one success to return, every other move immediate', () => {
+  test('two failures to leave healthy, one success to return, every other move immediate', { timeout: 10_000 }, () => {
     let h = initialHealth(0);
     const go = (c: Parameters<typeof step>[1]) => {
       const r = step(h, c, 1);
@@ -119,7 +122,7 @@ describe('the state machine', () => {
     assert.deepEqual(go('healthy'), ['healthy', true]);
   });
 
-  test('failuresBeforeUnhealthy is configurable', () => {
+  test('failuresBeforeUnhealthy is configurable', { timeout: 10_000 }, () => {
     const healthy = step(initialHealth(0), 'healthy', 0).next;
     assert.equal(step(healthy, 'down', 0, 1).next.state, 'down');
   });
@@ -164,7 +167,7 @@ describe('the scheduler', () => {
     }
   }
 
-  test('a running app that stops goes down after two probes; an adhoc one goes stopped; events only on transitions', async () => {
+  test('a running app that stops goes down after two probes; an adhoc one goes stopped; events only on transitions', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
     const transitions: string[] = [];
@@ -198,7 +201,7 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
-  test('jitter keeps intervals within ±10 %', async () => {
+  test('jitter keeps intervals within ±10 %', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
     const times: number[] = [];
@@ -216,7 +219,7 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
-  test('at most probe.concurrency probes in flight', async () => {
+  test('at most probe.concurrency probes in flight', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
     let release!: () => void;
@@ -238,7 +241,7 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
-  test('live mode: a connected dashboard pulls probes in to the live interval', async () => {
+  test('live mode: a connected dashboard pulls probes in to the live interval', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
     const prober = createProber({ targets: () => [{ slug: 'a', port: 1, expected: 'running' }], probe: p.fn, random: () => 0.5 });
@@ -256,7 +259,7 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
-  test('live mode never slows probing down', async () => {
+  test('live mode never slows probing down', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
     const prober = createProber({
@@ -273,7 +276,7 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
-  test('a fresh start gets a grace period before not listening counts as down', async () => {
+  test('a fresh start gets a grace period before not listening counts as down', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
     p.answers.set('svc', 'not-listening');
@@ -287,7 +290,7 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
-  test('refresh: new apps are probed, removed ones dropped, a changed expected re-judged at once', async () => {
+  test('refresh: new apps are probed, removed ones dropped, a changed expected re-judged at once', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const p = fakeProbe();
     p.answers.set('a', 'not-listening');
@@ -308,7 +311,7 @@ describe('the scheduler', () => {
     prober.stop();
   });
 
-  test('a probe that throws counts as unhealthy rather than stopping the prober', async () => {
+  test('a probe that throws counts as unhealthy rather than stopping the prober', { timeout: 10_000 }, async () => {
     mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
     const prober = createProber({
       targets: () => [{ slug: 'a', port: 1, expected: 'running' }],

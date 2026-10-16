@@ -12,7 +12,9 @@ import { createApp } from '../server/index.ts';
 import { probeDetail, startLive } from '../server/live.ts';
 import { type Platform, type ProcessInfo, type RawListener, currentPlatform } from '../server/platform/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
-import { tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
+
+await exitWatchdog();
 
 const cleanups: (() => void | Promise<void>)[] = [];
 after(async () => {
@@ -126,7 +128,7 @@ describe('the live provider', () => {
     assert.equal(after.health.detail, 'connection refused');
   });
 
-  test('probe details for people', () => {
+  test('probe details for people', { timeout: 30_000 }, () => {
     const h = (lastProbe: object | null, starting = false) =>
       ({ slug: 'a', state: 'unknown', starting, failures: 0, since: 0, lastProbe }) as Parameters<typeof probeDetail>[0];
     assert.equal(probeDetail(h(null)), null);

@@ -20,6 +20,8 @@ jobs:
   test:
     name: Test (Node ${{ matrix.node }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # A green run takes a minute or two; a hung test should fail fast, not hold a runner for six hours.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
