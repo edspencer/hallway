@@ -55,7 +55,8 @@ and custom-domain DNS via a `systemd-resolved` drop-in pointing at Hallway's use
 
 > **Status: built.** Fronted mode was released in 0.2.0 (D47, D48), "Lost at last reboot" in 0.3.0 (D54); managed
 > services and log rotation shipped early, in 0.1.0. What is not yet checked: browsers on a real Mac, and anything
-> across a real logout or reboot. Criterion by criterion (sections are in `11-research-notes.md`):
+> across a real logout or reboot. One piece of v1's UI isn't built: the drawer's Start / Stop / Restart and log tail
+> for managed services (`05-ui.md`; the API behind them is). Criterion by criterion (sections are in `11-research-notes.md`):
 >
 > | # | Result | Evidence |
 > |---|--------|----------|
