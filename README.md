@@ -18,8 +18,9 @@ Hallway gives them all a front door:
   Linux).
 - **Your jumping-off page** — groups of bookmarks to the remote things you can never remember the URL of.
 - **Agent-friendly** — plain YAML files an agent can edit with the UI updating live, an agent guide and `/llms.txt`,
-  and one command (`hallway run`) for an agent to start a server that won't become an orphan. An MCP server is coming
-  in v2.
+  and one command (`hallway run`) for an agent to start a server that won't become an orphan. An MCP server
+  (`/mcp`, or `hallway mcp` on stdio) offers the same operations as typed tools, and an optional Claude Code hook
+  (`hallway hook check-command`) stops agents starting dev servers directly.
 
 ![The Hallway dashboard: five apps as doors (healthy, down and stopped), two servers it found running, and two groups of bookmarks](https://raw.githubusercontent.com/edspencer/hallway/main/docs/media/dashboard.png)
 
@@ -61,7 +62,8 @@ An agent can also read `http://localhost:4255/llms.txt`: what this Hallway has, 
 claim and ignore, bookmarks, the agent guide, `hallway service install` and `hallway doctor`, plus managed servers
 (`hallway run`, `stop`, `start`, `restart`, `logs`, `service add`). Apps are linked as `http://localhost:<port>`
 (direct mode). Next: **v1**, fronting (`https://<slug>.localhost` via Caddy, `hallway setup`, custom domains), then
-**v2**, MCP and screenshot thumbnails ([docs/08-roadmap.md](docs/08-roadmap.md)). Everything has been run end to end
+**v2**'s screenshot thumbnails ([docs/08-roadmap.md](docs/08-roadmap.md)); v2's MCP server and agent hook have
+shipped early. Everything has been run end to end
 on Linux; on macOS it's tested on CI (including the real launchd jobs) but not yet run on a developer's Mac, so
 reports are welcome. The design is in [spec.md](spec.md) and [docs/](docs/).
 

@@ -237,6 +237,25 @@ scan, `open` explains), usage errors exiting 2 with the usage, two apps on one p
   *Reported from the docs*; the hook's own behaviour is tested with payloads of that shape. Other agents' hook formats
   (Codex, Gemini CLI, Cursor) are unverified.
 
+## The v2 MCP acceptance run (2026-10-16, Linux)
+
+Run against the packed tarball installed into a throwaway prefix, with a throwaway `HOME` and `HALLWAY_HOME`, the
+daemon under a process manager (`hallway serve`, D31's development bind so a browser on the LAN could watch it):
+
+1. **Criterion 1: met.** An SDK client (`@modelcontextprotocol/client` 2.3.1) over Streamable HTTP called
+   `add_bookmark` on a group file holding four comments (a file header, a trailing comment on `title:`, one above a
+   link). The dashboard, open in a browser beforehand, showed the new link without reloading (a marker set on
+   `window` survived), and the file kept all four comments. The same through the installed `hallway mcp` over stdio,
+   in the 2026-07-28 era, and over HTTP in both eras.
+2. **Criterion 2: met.** `declare_app` with a `service` block was refused and wrote nothing; `update_app` with a new
+   `port` was refused. The tool list (16 tools) has nothing that runs, starts, stops or installs a process.
+3. **Security:** a POST to `/mcp` with `Host: evil.example.com` or `Origin: http://evil.example.com` got 403; with
+   `Content-Type: text/plain`, 415; a GET, 405; the same request with a loopback Host, 200.
+4. **Notifications:** a `subscriptions/listen` stream for `hallway://apps/my-app`, opened through `hallway mcp`,
+   heard `notifications/resources/updated` within 1.5 s of the file being edited by hand.
+5. Not run: a real Claude Code session with the server registered (this machine's Claude configuration is not to be
+   touched); the hook inside a real Claude Code session (tested with payloads of the documented shape). Both on macOS:
+   unverified, though nothing in either is platform-specific.
 ## Caddy
 
 *From https://caddyserver.com/docs/automatic-https, fetched 2026-10-14.*
