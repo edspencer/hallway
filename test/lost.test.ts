@@ -273,6 +273,14 @@ describe('after a reboot', () => {
     assert.equal(r.events.filter((e) => e.type === 'reboot').length, 0);
     assert.equal((await r.lost())?.items.length, 3);
 
+    // the directory it ran in has gone: refused, plainly, with nothing written
+    fs.renameSync(r.projDir, `${r.projDir}-moved`);
+    const moved = await r.req('/api/lost/viz00000000000001/restart', { method: 'POST', body: '{}' });
+    assert.equal(moved.status, 409);
+    assert.match(((await moved.json()) as any).error, /scratch-pad ran in .*, which doesn't exist any more/);
+    assert.equal(r.store.apps.has('scratch-pad'), false);
+    fs.renameSync(`${r.projDir}-moved`, r.projDir);
+
     // dismiss one, then all
     let res = await r.req('/api/lost/gone0000000000001/dismiss', { method: 'POST', body: '{}' });
     assert.equal(res.status, 200);

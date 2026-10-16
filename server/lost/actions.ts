@@ -6,8 +6,9 @@
 // Something with no app yet is registered first, as a claim would (D17: on its own port), with the command and
 // directory that were recorded while it was alive.
 import fs from 'node:fs';
+import path from 'node:path';
 import type { LostActionRequest, LostActionResponse } from '../../shared/api.js';
-import { tildify } from '../config.js';
+import { expandHome, tildify } from '../config.js';
 import type { EventBus } from '../events.js';
 import type { ProviderRegistry } from '../providers.js';
 import { ServiceError, type Services } from '../services/index.js';
@@ -34,7 +35,9 @@ export async function reviveLost({ services, providers, run }: LostActionDeps, i
   const command = existing?.service ? null : rec.command;
   if (!existing?.service && !command) throw new ServiceError(`no command was recorded for ${item.label}, so Hallway can't start it. Start it yourself, or with \`hallway run <slug> -- <command…>\`.`);
   const cwd = existing?.service ? undefined : (rec.cwd ?? undefined);
-  if (cwd && !fs.existsSync(cwd)) throw new ServiceError(`${item.label} ran in ${tildify(cwd)}, which doesn't exist any more`);
+  // where it will run: the recorded directory, or the app's service: cwd (resolved as runApp resolves it)
+  const runsIn = cwd ?? (existing?.service?.cwd ? path.resolve(expandHome(existing.service.cwd)) : null);
+  if (runsIn && !fs.existsSync(runsIn)) throw new ServiceError(`${item.label} ran in ${tildify(runsIn)}, which doesn't exist any more. If it moved, start it from where it is now with \`hallway run ${slug ?? '<slug>'} --cwd <dir>\`.`);
 
   if (!slug) {
     slug = body?.slug ?? item.suggestedSlug;
