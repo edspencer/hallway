@@ -1,6 +1,6 @@
 {
   "name": "hallway",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "The front door for everything you vibe-coded on a random port: a local-only dashboard of every web server on your machine, with health, memorable hostnames and bookmarks.",
   "keywords": [
     "dashboard",
