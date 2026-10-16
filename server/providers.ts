@@ -15,7 +15,8 @@
 // /api/state must answer in milliseconds). Several providers can be registered; for each slot the first one that
 // returns a non-null answer wins, in registration order. A provider that throws is skipped for that call (and
 // logged), never taking the API down.
-import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, HistoryWindow, ListenerIdentity, ObservedListener, ThumbKind } from '../shared/api.js';
+import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, HistoryWindow, ListenerIdentity, LostNotice, ObservedListener, ThumbKind } from '../shared/api.js';
+import type { LostRecord } from './lost/index.js';
 
 /** What the API tells a provider about a declared app. */
 export interface AppRef {
@@ -44,6 +45,16 @@ export interface StateProvider {
   thumb?(slug: string): { body: Uint8Array; contentType: string; etag: string; kind?: ThumbKind } | null;
   /** Re-shoot screenshots now (`POST /api/thumbs/refresh`): one app, or every healthy one. Resolves with how many were taken. */
   refreshThumbs?(slug?: string): Promise<number>;
+  /** A managed service is being started by the daemon: give it the start grace period (`◐ starting`, not down). */
+  serviceStarting?(slug: string): boolean;
+  /** "Lost at last reboot": the notice, with each item's `back` worked out now (server/live.ts). Null: nothing lost. */
+  lost?(): LostNotice | null;
+  /** One lost item as recorded (with the observation it came from), for the actions. */
+  lostRecord?(id: string): LostRecord | null;
+  /** Dismiss one lost item, or all of them. Returns how many went (0 for an unknown id). */
+  dismissLost?(id?: string): number | null;
+  /** Something was done about a lost item (it was registered as `slug`): rescan, then tell the dashboards. */
+  lostChanged?(id: string, slug: string): Promise<void>;
   /** A bookmark's favicon (`GET /api/bookmarks/:group/icon?url=`), from its `url` and `icon:` (the thumbnailer). */
   bookmarkIcon?(link: { url: string; icon: string }, group?: string): { body: Uint8Array; contentType: string; etag: string } | null;
 }

@@ -1,4 +1,4 @@
-// The screenshot tier's browser (D13, D55): installed into the data home by `hallway thumbs enable`, never a dependency
+// The screenshot tier's browser (D13, D56): installed into the data home by `hallway thumbs enable`, never a dependency
 // of the package. `npm install` puts a pinned playwright-core into `cache/browser/`, and its own installer downloads
 // Chromium's headless shell next to it (PLAYWRIGHT_BROWSERS_PATH). The daemon loads playwright-core from there by
 // path, so a base install neither contains nor resolves it. `hallway thumbs disable` deletes the directory.

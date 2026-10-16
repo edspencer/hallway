@@ -29,6 +29,9 @@ All routes are in <span class="ms ms--v0">v0</span>, available now, unless marke
 | `POST` | `/api/observed/:id/claim` | Body `{ slug, name?, expected? }`: writes `apps/<slug>.yaml` from the observation. |
 | `POST` | `/api/observed/:id/ignore` | Add it to `ignore.yaml` (by port, process or directory). |
 | `POST` | `/api/scan` | Run a scan now. |
+| `GET` | `/api/lost` | [Lost at last reboot](/concepts/services/#lost-at-last-reboot): `{ lost }`, null when there's nothing. Also `lost` in `/api/state`. |
+| `POST` | `/api/lost/:id/restart`, `/api/lost/:id/service` | Body `{}` or `{ "slug": "..." }`. Start it again, once or as a service, as `hallway run` would. |
+| `POST` | `/api/lost/:id/dismiss`, `/api/lost/dismiss` | Dismiss one, or the whole notice. |
 | `GET` | `/api/events` | The live event stream (below). |
 | `GET` | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | The [agent guide](/agents/agent-guide/), with live data. |
 | `*` | `/mcp` | The [MCP server](/agents/mcp/), Streamable HTTP. |
@@ -53,7 +56,7 @@ type ServerEvent =
   | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' }
   | { type: 'thumb'; slug: string }
   | { type: 'config' }
-  | { type: 'reboot'; lost: string[] };                     // v1
+  | { type: 'reboot'; lost: string[] };                     // v1: the lost-at-reboot notice changed
 ```
 
 Treat an event as a hint to refetch the affected resource, not as data: that is what the dashboard does.

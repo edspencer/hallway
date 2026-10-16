@@ -162,5 +162,6 @@ export function stateView(ctx: ViewContext, url: string, startedAt: Date): State
     observed: ctx.providers.all('observed'),
     ignore: ctx.store.currentIgnore(),
     problems,
+    lost: ctx.providers.first('lost'),
   };
 }

@@ -100,7 +100,7 @@ export const VALUE_PROPS = [
 		icon: 'refresh',
 		ms: 'v0',
 		title: 'Survives the reboot',
-		body: 'hallway run --persist makes the apps you care about native services (launchd on macOS, systemd on Linux) that come back on their own. Coming in v1: everything else is remembered, so after a restart Hallway lists what was lost.',
+		body: 'hallway run --persist makes the apps you care about native services (launchd on macOS, systemd on Linux) that come back on their own. Everything else is remembered: after a restart Hallway lists what was lost, with one click to start each again.',
 	},
 ] as const;
 

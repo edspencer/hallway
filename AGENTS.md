@@ -80,8 +80,8 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
   thumbs/          thumbnails (D13): favicon lookup (favicon.ts) and the provider for apps and bookmarks (index.ts, which
-                   also picks the tier, D54); card.ts (the generated card: SVG → PNG with resvg); shots.ts and browser.ts
-                   (opt-in screenshots, and the browser `hallway thumbs enable` installs into the data home, D55)
+                   also picks the tier, D55); card.ts (the generated card: SVG → PNG with resvg); shots.ts and browser.ts
+                   (opt-in screenshots, and the browser `hallway thumbs enable` installs into the data home, D56)
   scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
                    (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)

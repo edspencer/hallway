@@ -263,6 +263,36 @@ daemon under a process manager (`hallway serve`, D31's development bind so a bro
    mcp` were accepted, and `claude mcp list` reported both "✔ Connected". Not run: the hook inside a real Claude Code
    session (it would need a model; tested with payloads of the documented shape). On macOS: unverified, though
    nothing in either is platform-specific.
+## "Lost at last reboot", simulated (2026-10-16, Linux)
+
+Run from a build under a process manager (D31's development bind, so a browser on the LAN could drive it), with a
+throwaway `HOME` and `HALLWAY_HOME` and `test/fixtures/fake-systemctl` first on `PATH`, so `hallway run`'s jobs really
+ran (detached, under the fake's supervisor) without touching a real systemd. `scan.minPort: 7400` kept the machine's
+other listeners out.
+
+1. Five demo servers (`python3 -m http.server`): two worktrees of one repository (`dashboard @ main`,
+   `dashboard @ feature/new-chart`), `docs-site`, `api`, and `notes` started with `hallway run`. The scanner recorded
+   all five in `state/observed.json`.
+2. The reboot: the daemon stopped, four servers killed (`api` left running as the control), `state/boot.json`'s boot
+   time moved two days before the machine's real one and every `lastSeen` five minutes before it, then the daemon
+   started again. The banner said "Lost at last reboot (Mon 17 Aug 12:08): 4 apps"; `api` was correctly absent (still
+   listening). Review listed each with `~/Code/… @ branch` and its command.
+3. **Restart once** on `docs-site` (no app yet) wrote `apps/docs-site.yaml` on port 7403 with the recorded command and
+   started it (`runAtLoad: false`): the row turned `● back` and the door appeared. **Make it a service** on the feature
+   worktree did the same with `runAtLoad`/`keepAlive: true` and `expected: running`. A daemon restart kept the notice
+   (`state/lost.json`). **Dismiss** removed one row; with the rest back, the banner turned calm ("all 3 are back");
+   the banner's Dismiss removed it and `state/lost.json`.
+4. A second simulated reboot with `docs-site`'s directory moved away: Restart once was refused under the row, "docs-site
+   ran in ~/Code/docs-site, which doesn't exist any more…", and nothing was written. `hallway lost` listed the three
+   items with their ids, directories and commands.
+5. A start-at-login service that isn't listening yet holds the decision back by `services.startGraceSeconds`, as
+   designed (D54): the notice appeared about 30 s after the daemon started, not at once.
+
+Found on the way: `prober.markStarting` was never called, so a freshly started service read `down` until its first
+good probe. The daemon now calls it for the starts it makes itself (the lost actions, `POST
+/api/apps/:slug/service/start|restart`); a `hallway run` from the CLI, in another process, still doesn't tell the
+daemon. **Unverified:** a real reboot, on either OS; anything on macOS.
+
 ## Caddy
 
 *From https://caddyserver.com/docs/automatic-https, fetched 2026-10-14.*
@@ -448,7 +478,7 @@ Read 2026-10-14. Relevant internals:
   dashboard read worse: each card repeated the name printed beneath its door, and the address plate shrank to about
   7 px at door size. Enlarging the plate's type made the card readable as an image on its own (the API's 640×400
   PNG), but not better than the monogram door in the grid. Outcome: cards are `thumbnails.mode: card`, never an
-  automatic fallback (D54). The card renders in ~10 ms; the same model gives the same PNG bytes every time.
+  automatic fallback (D55). The card renders in ~10 ms; the same model gives the same PNG bytes every time.
 - **`hallway thumbs enable` (criterion 3):** 26 s on this box. npm put playwright-core 1.64.1 (14 MB) in
   `cache/browser/node_modules/`, and its installer put `chromium_headless_shell-1248` and `ffmpeg-1013` (278 MB
   together; ffmpeg comes along even with `--only-shell`) in `cache/browser/ms-playwright/`; nothing appeared in the
@@ -464,7 +494,7 @@ Read 2026-10-14. Relevant internals:
   binary for the platform. The installed package served a card in card mode in 10 ms. `smoke:pack` now asserts the
   no-browser part.
 - **The 90-day view (criterion 4):** 30 apps and 90 days seeded through `UptimeStore.add` (four samples an hour back
-  to 48 h, then one a minute: 340 k samples), then `prune` (4.7 s, rolling up 64.8 k hours). Before D56: 90 days for
+  to 48 h, then one a minute: 340 k samples), then `prune` (4.7 s, rolling up 64.8 k hours). Before D57: 90 days for
   one app 45–54 ms (28 ms of it the rollup scan every `history()` starts with), all 30 in a row 1.25 s; 7 days 29 ms;
   24 h 31 ms. After: 90 days 6–7 ms, all 30 160–175 ms; 7 days 0.7 ms; 24 h 3.5 ms. Through the daemon,
   `GET /api/apps/app-7/history?window=90d` (21.5 kB) took 24 ms cold and 2.3 ms warm; `/api/state` with 30 apps

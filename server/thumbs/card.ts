@@ -1,4 +1,4 @@
-// Tier-3 thumbnails (D13, D54): a generated card, for an app with no screenshot. An SVG drawn as one of the dashboard's
+// Tier-3 thumbnails (D13, D55): a generated card, for an app with no screenshot. An SVG drawn as one of the dashboard's
 // doors (its paint, raised panels, knob and brass number plate) carrying the app's name, its framework, `repo @ branch`
 // and its address; rendered to PNG by resvg with the bundled fonts only (assets/fonts/, made by
 // scripts/card-fonts.py), so the same app gives the same bytes on every machine and nothing scans the system's fonts.

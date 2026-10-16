@@ -9,6 +9,7 @@ import { claimObserved, ignoreObserved } from '../api.js';
 import { VERSION, tildify } from '../config.js';
 import type { EventBus } from '../events.js';
 import type { ProviderRegistry } from '../providers.js';
+import { lostSummary } from '../lost/index.js';
 import { ConflictError, NotFoundError, ValidationError, type Entry, type Store } from '../store/index.js';
 import { appView, appViews, declaredView, groupView, groupViews, stateView } from '../views.js';
 
@@ -175,7 +176,7 @@ export function createMcpServer(ctx: McpContext, era: 'legacy' | 'modern' = 'mod
     'get_status',
     {
       title: 'Status of every app',
-      description: 'Every app with its state, URL and 24-hour uptime, counts by state, and how many observed listeners are waiting to be named.',
+      description: 'Every app with its state, URL and 24-hour uptime, counts by state, how many observed listeners are waiting to be named, and what was lost at the last reboot (null if nothing).',
       inputSchema: z.object({ filter: z.string().optional().describe('Only apps whose slug, name, URL, description, port or tags contain this.') }),
       annotations: { readOnlyHint: true },
     },
@@ -189,6 +190,8 @@ export function createMcpServer(ctx: McpContext, era: 'legacy' | 'modern' = 'mod
         observed: providers.all('observed').length,
         healthChecks: providers.has('appHealth'),
         problems: store.allProblems().filter((p) => p.severity === 'error').length,
+        // read-only: restarting one is `hallway run` or the dashboard, never MCP (D10, D53)
+        lostAtReboot: lostSummary(providers.first('lost')),
       };
     }),
   );

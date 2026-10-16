@@ -57,6 +57,12 @@ and custom-domain DNS via a `systemd-resolved` drop-in pointing at Hallway's use
 macOS by CI's "Fronted mode (real …)" jobs (`scripts/fronted-real.mjs`), and by hand on Linux without a redirect
 (`11-research-notes.md`); browsers on a real Mac (criterion 2's Safari and Firefox) are not yet checked.
 
+**"Lost at last reboot" is built** (D54): `server/lost/`, the banner (`src/components/Lost.tsx`), `/api/lost…` and
+`hallway lost`. Checked on Linux by a simulated reboot (`state/boot.json` and `state/observed.json` moved before the
+machine's boot time, demo servers killed, the daemon restarted under fake systemd): the banner, Review, Restart once,
+Make it a service, Dismiss and a moved project directory (`11-research-notes.md`, 2026-10-16). Not yet seen after a
+real reboot, on either OS; criterion 5's "listed under Lost at last reboot" is therefore checked in simulation only.
+
 Acceptance criteria:
 
 1. `hallway setup --print` prints every privileged command with an explanation and executes nothing. `hallway setup` runs
@@ -95,8 +101,8 @@ Acceptance criteria (1 and 2 met on 2026-10-16: `11-research-notes.md`, "The v2 
    file preserved.
 2. `declare_app` with a `service` block is rejected; no MCP tool can start a process.
 3. ✅ `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots; `hallway thumbs disable`
-   removes it; the base install never depends on it. (D55; `smoke:pack` checks the last part.)
-4. ✅ The 90-day view renders from rollups only and stays fast with 30 apps. (D56; `test/uptime-perf.test.ts`.)
+   removes it; the base install never depends on it. (D56; `smoke:pack` checks the last part.)
+4. ✅ The 90-day view renders from rollups only and stays fast with 30 apps. (D57; `test/uptime-perf.test.ts`.)
 5. Every v0 and v1 criterion has been run on a real Mac, and nothing is left marked "unverified on macOS" in
    `11-research-notes.md`.
 

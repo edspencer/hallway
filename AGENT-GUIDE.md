@@ -102,6 +102,10 @@ Bookmarks are inert: Hallway never fetches anything from them except, perhaps, a
 - `curl -s http://localhost:4255/api/apps/<slug>` for one app.
 - `hallway status --json` (or `hallway status <slug> --json`): the same, from the command line; it works without
   the daemon too, probing each app once.
+- **After a reboot**, `lost` in `/api/state` (and `hallway lost`, or MCP's `get_status`) lists what was running
+  before it and isn't now: each one's port, directory and branch, and the command that started it. If the user asks
+  you to bring one back, `hallway lost restart <id>` starts it once the way `hallway run` would (`hallway lost service
+  <id>` keeps it across reboots: ask first); `hallway lost dismiss <id>` clears it from the notice.
 
 ## The HTTP API
 
@@ -117,6 +121,9 @@ All JSON, on 127.0.0.1 only. Writes need `Content-Type: application/json`.
 | GET | `/api/apps/<slug>/history?window=24h` | Uptime and latency (`24h`, `7d`, `90d`) |
 | GET, PUT, PATCH, DELETE | `/api/bookmarks/<group>` | The same, for a bookmark group (`GET /api/bookmarks` lists them all) |
 | GET | `/api/observed` | Listeners nobody has named yet |
+| GET | `/api/lost` | What was lost at the last reboot (`null` if nothing) |
+| POST | `/api/lost/<id>/restart`, `/api/lost/<id>/service` | `{}` or `{"slug": "..."}`: start it again once, or as a service |
+| POST | `/api/lost/<id>/dismiss`, `/api/lost/dismiss` | Clear one, or the whole notice |
 | POST | `/api/observed/<id>/claim` | `{"slug": "...", "name": "...", "expected": "adhoc"}`: turn one into an app |
 | POST | `/api/observed/<id>/ignore` | `{"by": "port" \| "process" \| "dir"}`: hide it (adds to `ignore.yaml`) |
 | GET | `/api/config` | The settings in force |

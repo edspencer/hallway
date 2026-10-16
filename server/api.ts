@@ -9,6 +9,8 @@ import type {
   ErrorResponse,
   HistoryWindow,
   IgnoreRequest,
+  LostActionRequest,
+  LostResponse,
   ObservedListener,
   ObservedResponse,
 } from '../shared/api.js';
@@ -17,6 +19,8 @@ import { sseHandler, type EventBus } from './events.js';
 import { agentGuide, llmsFullTxt, llmsTxt, readGuide, type GuideInput } from './guide.js';
 import type { ProviderRegistry } from './providers.js';
 import { ServiceManagerError } from './platform/index.js';
+import { dismissLost, reviveLost } from './lost/actions.js';
+import { lostSummary } from './lost/index.js';
 import { ServiceError, Services } from './services/index.js';
 import { appLogs } from './services/logs.js';
 import { ResolveError } from './services/resolve.js';
@@ -241,6 +245,7 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
       const action = c.req.param('action');
       if (!store.apps.has(slug)) return fail(c, 404, { error: `no app '${slug}'` });
       const s = getServices();
+      if (action === 'start' || action === 'restart') providers.first('serviceStarting', slug);
       if (action === 'start') await s.startApp(slug);
       else if (action === 'stop') await s.stopApp(slug);
       else if (action === 'restart') await s.restartApp(slug);
@@ -336,6 +341,45 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
     }
   });
 
+  // ---------------- lost at last reboot (v1, D54) ----------------
+  api.get('/lost', (c) => c.json({ lost: providers.first('lost') } satisfies LostResponse));
+
+  // restart once / make it a service: `hallway run`'s code path (server/lost/actions.ts); 200 even when it didn't come
+  // up, with `ok: false`, the reason and the last log lines, as `hallway run --json` reports it
+  api.post('/lost/:id/:action{restart|service}', async (c) => {
+    try {
+      // the body is optional: {} or {"slug": "..."}
+      const text = await c.req.text();
+      let body: LostActionRequest | null = null;
+      try {
+        body = text.trim() ? JSON.parse(text) : null;
+      } catch {
+        throw new ValidationError('the body is not valid JSON');
+      }
+      return c.json(await reviveLost({ services: getServices(), providers, bus, run: { timeoutMs: 20_000 } }, c.req.param('id'), c.req.param('action') === 'service', body));
+    } catch (e) {
+      return handle(c, e);
+    }
+  });
+
+  api.post('/lost/:id/dismiss', (c) => {
+    try {
+      const dismissed = dismissLost(providers, c.req.param('id'));
+      return c.json({ dismissed, lost: providers.first('lost') });
+    } catch (e) {
+      return handle(c, e);
+    }
+  });
+
+  api.post('/lost/dismiss', (c) => {
+    try {
+      const dismissed = dismissLost(providers);
+      return c.json({ dismissed, lost: providers.first('lost') });
+    } catch (e) {
+      return handle(c, e);
+    }
+  });
+
   api.all('*', (c) => fail(c, 404, { error: 'not found' }));
   return api;
 }
@@ -363,6 +407,7 @@ export function agentRoutes({ store, providers }: Pick<ApiOptions, 'store' | 'pr
           error: a.problems.some((p) => p.severity === 'error'),
         })),
         groups: groupViews(store).map((g) => ({ group: g.group, title: g.config?.title ?? g.group, links: g.config?.links.length ?? 0 })),
+        lost: lostSummary(providers.first('lost')),
       },
     };
   };

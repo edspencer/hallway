@@ -1,4 +1,4 @@
-// `hallway thumbs enable | disable | refresh [slug] | status`: the opt-in screenshot thumbnails (D13, D55). Enable
+// `hallway thumbs enable | disable | refresh [slug] | status`: the opt-in screenshot thumbnails (D13, D56). Enable
 // installs a browser into the data home (never into the package) and switches `thumbnails.mode` to `screenshot`;
 // disable switches it back and deletes the browser and the screenshots.
 import fs from 'node:fs';

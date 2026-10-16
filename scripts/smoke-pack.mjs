@@ -81,7 +81,7 @@ try {
   const deps = fs.readdirSync(path.join(installed, 'node_modules'));
   for (const dev of ['react', 'react-dom', 'vite', 'tsx', 'typescript', '@changesets'])
     assert.ok(!deps.includes(dev), `${dev} is a build-time dependency; it shouldn't be installed`);
-  // v2 criterion 3: screenshots are opt-in (`hallway thumbs enable`, D55); a base install has no browser at all
+  // v2 criterion 3: screenshots are opt-in (`hallway thumbs enable`, D56); a base install has no browser at all
   for (const browser of ['playwright', 'playwright-core', 'puppeteer', 'puppeteer-core'])
     assert.ok(!fs.existsSync(path.join(installed, 'node_modules', browser)), `${browser} shouldn't be installed`);
   const browserDirs = (dir) => fs.readdirSync(dir, { recursive: true }).filter((f) => /(^|\/)(ms-playwright|chromium[^/]*|headless_shell)$/.test(String(f)));

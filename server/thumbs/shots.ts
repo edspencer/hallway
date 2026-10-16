@@ -1,4 +1,4 @@
-// Tier-2 thumbnails (D13, D55): real screenshots, opt-in. Headless Chromium (installed by `hallway thumbs enable`,
+// Tier-2 thumbnails (D13, D56): real screenshots, opt-in. Headless Chromium (installed by `hallway thumbs enable`,
 // server/thumbs/browser.ts) opens a healthy app at 1280×800 at half scale, so the PNG is 640×400 with no image library
 // in the daemon; it waits for the network to go quiet, ten seconds at most, and the picture goes in `cache/thumbs/`.
 // One page at a time; the browser closes when there's nothing left to shoot for a couple of minutes.

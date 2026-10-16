@@ -30,6 +30,9 @@ Commands that are richer with live data look for the daemon on `127.0.0.1:<confi
 | `hallway scan [--json]` | Run the scanner now and print observed listeners with identity (port, id, name, directory, command). [v0, **built**] |
 | `hallway claim <port\|observation-id> [--slug S] [--name N] [--expected E]` | Turn an observed listener into a declared app; the slug defaults to the scanner's suggestion. [v0, **built**] |
 | `hallway ignore <port\|observation-id> [--by port\|process\|dir]` | Hide an observed listener (default `--by port`; a port number needs no scan). [v0, **built**] |
+| `hallway lost [--json]` | What was running before the last reboot and isn't now (D54): id, port, what, where (`dir @ branch`), command, and (with the daemon) whether it's back. Without the daemon it reads `state/lost.json`. [v1, **built**] |
+| `hallway lost restart\|service <id\|port> [--slug S] [--json]` | Start one again through the daemon, as `hallway run` would: once, or as a service (at login, restarted if it exits). `--slug` names a new app. Needs the daemon (it holds what was recorded). [v1, **built**] |
+| `hallway lost dismiss <id\|port>` / `hallway lost dismiss --all` | Clear one item, or the whole notice. Ids may be shortened to a unique prefix of four or more characters. [v1, **built**] |
 
 ## Apps
 
@@ -80,7 +83,7 @@ Commands that are richer with live data look for the daemon on `127.0.0.1:<confi
 
 | Command | Description |
 |---------|-------------|
-| `hallway thumbs enable` | Install playwright-core and Chromium's headless shell into `cache/browser/` in the data home (about 300 MB; nothing outside the data home), then set `thumbnails.mode: screenshot`. Idempotent (D55). [v2, **built**] |
+| `hallway thumbs enable` | Install playwright-core and Chromium's headless shell into `cache/browser/` in the data home (about 300 MB; nothing outside the data home), then set `thumbnails.mode: screenshot`. Idempotent (D56). [v2, **built**] |
 | `hallway thumbs disable` | Set `thumbnails.mode` back to `favicon` and delete the browser and the screenshots. [v2, **built**] |
 | `hallway thumbs refresh [slug]` | Re-shoot now (one app, or every healthy one) through the running daemon: `POST /api/thumbs/refresh` with `{"slug"?}`, answering `{"taken": n}`, 409 when screenshots are off. [v2, **built**] |
 | `hallway thumbs status` | The mode, whether a browser is installed (and its size), and how many screenshots there are. [v2, **built**] |
@@ -96,6 +99,7 @@ Commands that are richer with live data look for the daemon on `127.0.0.1:<confi
 ## HTTP routes behind the service commands
 
 `GET /api/apps/:slug/logs?lines=200` (both logs' tails) and `POST /api/apps/:slug/service/start|stop|restart` (the
-same lifecycle as the CLI, for the dashboard). They are behind the same security middleware as every write; MCP has no
+same lifecycle as the CLI, for the dashboard), and "Lost at last reboot"'s `POST /api/lost/:id/restart|service|dismiss`
+and `POST /api/lost/dismiss` (D54). They are behind the same security middleware as every write; MCP has no
 equivalent (D10).
 

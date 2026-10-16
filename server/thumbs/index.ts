@@ -9,7 +9,7 @@
 // isn't an image at all, so there's no thumbnail and the dashboard draws the text.
 //
 // The other two tiers live beside it: screenshots (shots.ts, opt-in: `thumbnails.mode: screenshot` after `hallway thumbs
-// enable`) and generated cards (card.ts). `pickThumb` decides which one an app's thumbnail is (D54).
+// enable`) and generated cards (card.ts). `pickThumb` decides which one an app's thumbnail is (D55).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -177,9 +177,9 @@ export function iconSource(icon: string, pageUrl: string | null, home: string): 
 }
 
 /**
- * Which tier an app's thumbnail is (D54). `favicon` (the default): the favicon, else none (the dashboard draws a
+ * Which tier an app's thumbnail is (D55). `favicon` (the default): the favicon, else none (the dashboard draws a
  * monogram). `screenshot`: the screenshot, else the favicon, else none. `card`: always the generated card. A card is
- * never a silent fallback: on a door it repeats the name printed under it, and a monogram reads better (D54).
+ * never a silent fallback: on a door it repeats the name printed under it, and a monogram reads better (D55).
  */
 export function pickThumb(mode: ThumbKind, have: { screenshot: boolean; favicon: boolean; card: boolean }): ThumbKind | null {
   const order: ThumbKind[] = mode === 'screenshot' ? ['screenshot', 'favicon'] : mode === 'card' ? ['card'] : ['favicon'];

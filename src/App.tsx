@@ -10,6 +10,7 @@ import { Drawer } from './components/Drawer';
 import { FirstRun, Unreachable } from './components/Empty';
 import { Header } from './components/Header';
 import { Help } from './components/Help';
+import { LostBanner } from './components/Lost';
 import { ObservedTray, listenerName } from './components/Observed';
 import { ProblemBanner } from './components/Problems';
 import { Toasts, useToasts } from './components/Toasts';
@@ -215,6 +216,7 @@ export function App() {
       />
       <main className="hw-main">
         <ProblemBanner problems={banner} />
+        {state.lost?.items.length ? <LostBanner lost={state.lost} home={home} notify={toasts.push} /> : null}
         {nothing && !found ? <FirstRun state={state} /> : null}
         {order.map((s) => sections[s]?.())}
         {found && matches === 0 && (

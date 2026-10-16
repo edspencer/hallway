@@ -33,7 +33,7 @@ function passThrough(e: React.MouseEvent) {
 export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   const state = doorState(app);
   const thumb = app.thumb ? thumbUrl(app.slug, app.thumb) : null;
-  // a favicon is drawn small on the door; a screenshot is its glass; a generated card is the whole door (D54)
+  // a favicon is drawn small on the door; a screenshot is its glass; a generated card is the whole door (D55)
   const kind = thumb ? (app.thumbKind ?? 'favicon') : null;
   const colour = useImageColour(kind === 'card' ? null : thumb);
   const error = app.problems.find((p) => p.severity === 'error');

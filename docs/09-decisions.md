@@ -770,7 +770,46 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
 - **Rejected:** `restart_app` for services with `keepAlive` only, or only when the installed job matches the YAML
   (still starts a process; the check is subtle and easy to get wrong in a later change).
 
-### D54 — The generated card, and which tier a door shows (2026-10-16)
+### D54 — "Lost at last reboot": what counts, where it's kept, and how it's started again (2026-10-16)
+
+- **What counts as lost.** When `state/boot.json`'s boot time has moved on (D18), the lost set is every observation in
+  `state/observed.json` that was **alive at the end of the previous boot** and **isn't listening now**. "Alive at the
+  end" is "seen in the last scans before the boot": its `lastSeen` is before the new boot time, after the previous
+  one, and within two scan intervals plus a minute of the newest such `lastSeen`. A server stopped by hand a day before
+  the reboot was last seen long before that, so it isn't blamed on the reboot. One item per port (the latest
+  observation). Declared apps are covered by the same records (the scanner records every listener, declared ports
+  included); an app the scanner never recorded (scanning off, or its port ignored) is lost when the prober's last
+  sample before the boot was `healthy` or `unhealthy` (`state/health.sqlite`, kept 48 h).
+- **Not yet listening is not lost.** A service that starts at login can still be starting when the daemon's first scan
+  runs (both start at login). If any such app isn't listening at the first scan, the daemon waits out
+  `services.startGraceSeconds` and scans again before deciding. "Not listening" is the same id listening again, or, for
+  an item with an app, anything answering on the app's port.
+- **Kept in `state/lost.json`** until every item in it is dismissed (the file is then removed), so a daemon restart
+  doesn't lose the notice; the next reboot **replaces** it (what the older notice listed was not alive before the newer
+  boot, so it can't be "lost" by it, and merging two reboots' lists would make the banner's date wrong). `state/` stays
+  safe to delete: losing the file loses only the notice.
+- **Back is live, not a removal.** An item that is listening again (restarted by one of the actions, by hand, or by its
+  job) stays listed as `● back` until dismissed, computed on every read from the latest scan and the prober, and
+  announced with a `reboot` event when it changes. The banner counts what is still not running and turns calm when
+  everything is back. Removing items as they come back would make the one-click action look as if it had deleted the
+  row, and would hide what the reboot did.
+- **The actions are `hallway run`** (`runApp`, the CLI's code path), so the process belongs to launchd or systemd,
+  never the daemon: **Restart once** is `run` without `--persist` (an app that is already a service keeps its recorded
+  choice); **Make it a service** is `run --persist` (start at login, restart on exit: `service add`'s settings). An item
+  with no app yet is first registered as a claim would register it (its own port, D17; name, project directory,
+  `expected: adhoc`) with the command and directory recorded while it was alive; the slug is the scanner's suggestion
+  unless the request gives one. No command recorded, or a directory that no longer exists, is refused with a plain
+  reason and nothing is written. The daemon gives the job the start grace period (`starting`, not `down`).
+- **Not in MCP.** `get_status` reports the notice (read-only, with each item's directory, branch, command and whether
+  it's back), and so do `llms.txt` and `/agent-guide.md`; the actions are HTTP routes for the dashboard and `hallway
+  lost` for the terminal. No MCP tool starts a process (D10, D53).
+- **Rejected:** comparing against everything seen since the previous boot (blames the reboot for servers stopped days
+  earlier); keeping the notice only in memory (a daemon restart would lose it, and the daemon restarts after upgrades);
+  restarting lost things automatically (the user may not want all of them, and some won't work any more); a
+  `restart_lost` MCP tool (D53); a slug form on every row (the scanner's suggestion is what Claim pre-fills, and the API
+  and `--slug` take another).
+
+### D55 — The generated card, and which tier a door shows (2026-10-16)
 
 - **The card** (`server/thumbs/card.ts`) is a drawing of one of the dashboard's doors: the slug's door paint (the same
   FNV hash and ten paints as `src/lib/colour.ts`), raised panels under an arch, the knob, and a brass plate carrying
@@ -804,7 +843,7 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   for measuring (a dependency for a few pixels of precision); reading tokens.css at run time (not shipped); system
   fonts (different bytes per machine, slow scans).
 
-### D55 — Screenshots: a browser installed into the data home at run time, never a dependency (2026-10-16)
+### D56 — Screenshots: a browser installed into the data home at run time, never a dependency (2026-10-16)
 
 - `hallway thumbs enable` runs `npm install playwright-core@<pinned>` into `cache/browser/` (with its own package.json,
   so npm doesn't climb into a project above the data home), then that copy's `install --only-shell chromium` with
@@ -832,7 +871,7 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   machine, differs per machine, and could drive the user's real profile); `sharp` or another decoder for downscaling
   (half-scale rendering does it for free).
 
-### D56 — The 90-day view: no rollup scan on every read (2026-10-16)
+### D57 — The 90-day view: no rollup scan on every read (2026-10-16)
 
 - Measured with 30 apps and 90 days seeded through `UptimeStore` (`add` → `prune`: 340 k samples, 64.8 k rollups):
   one app's 90-day history took ~47 ms, 28 ms of it the `rollup(now)` each `history()` starts with, a correlated

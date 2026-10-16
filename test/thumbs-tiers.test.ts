@@ -1,4 +1,4 @@
-// The other two thumbnail tiers (D54, D55): the generated card (deterministic SVG and PNG, its colours kept in step with
+// The other two thumbnail tiers (D55, D56): the generated card (deterministic SVG and PNG, its colours kept in step with
 // tokens.css), which tier an app gets, screenshots (with a fake Playwright: never a real browser here), the
 // `hallway thumbs` commands (with the installer mocked) and POST /api/thumbs/refresh.
 import { after, describe, test } from 'node:test';

@@ -20,6 +20,7 @@ just works.
     health.sqlite             # probe samples and rollups
     observed.json             # last-known identity of every observed listener, first and last seen
     boot.json                 # the last boot time seen, to detect reboots
+    lost.json                 # what the last reboot took down, until dismissed
   cache/                      # machine-written; regenerable
     thumbs/<slug>.<hash>.png
     favicons/<slug>.<hash>.<ext>

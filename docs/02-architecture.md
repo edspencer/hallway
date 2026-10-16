@@ -87,10 +87,11 @@ Mirror Local Review (D16). Keep dependencies minimal.
     health.sqlite             # probe samples + hourly rollups (node:sqlite, D37)
     observed.json             # last-known identity of every observed listener, with first/last seen
     boot.json                 # last seen boot time, to detect reboots
+    lost.json                 # "Lost at last reboot": the notice, until it's dismissed (D54)
     daemon.json               # the running daemon's pid and port, where the CLI also looks for it (D46)
   cache/                      # machine-written; regenerable
-    thumbs/<slug>.png, <slug>.json   # screenshots (opt-in, D55) and what was shot when, from which PID
-    browser/                  # `hallway thumbs enable`: playwright-core and Chromium's headless shell (D55)
+    thumbs/<slug>.png, <slug>.json   # screenshots (opt-in, D56) and what was shot when, from which PID
+    browser/                  # `hallway thumbs enable`: playwright-core and Chromium's headless shell (D56)
     favicons/<hash>.img, <hash>.json   # tier-1 icons for apps and bookmarks, and what was looked up (D39)
   generated/                  # machine-written; regenerable
     caddy.json                # last config pushed to Caddy (v1)
@@ -162,7 +163,7 @@ scan:
   minPort: 1024
 
 thumbnails:
-  mode: favicon                 # favicon | screenshot (after `hallway thumbs enable`) | card   (D54)
+  mode: favicon                 # favicon | screenshot (after `hallway thumbs enable`) | card   (D55)
 
 dashboard:
   title: null                   # defaults to the machine's hostname
@@ -281,7 +282,7 @@ type ServerEvent =
   | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' | 'config' }
   | { type: 'thumb'; slug: string }
   | { type: 'config' }
-  | { type: 'reboot'; lost: string[] };                     // v1
+  | { type: 'reboot'; lost: string[] };                     // v1: the "Lost at last reboot" notice changed (D54)
 ```
 
 Reference implementation of the SSE endpoint, from Local Review's `server/index.ts` (MIT, same author):
@@ -325,7 +326,7 @@ All JSON. All under the security middleware below.
 | DELETE | `/api/apps/:slug` | Remove declared app (moves file to `backups/`, never hard-deletes) |
 | GET | `/api/apps/:slug/history?window=24h\|7d\|90d` | Uptime buckets + latency series |
 | GET | `/api/apps/:slug/thumb` | Thumbnail image, with ETag (its etag is also `thumb` on the AppView, and its tier `thumbKind`: favicon, screenshot or card) |
-| POST | `/api/thumbs/refresh` | Re-shoot screenshots now: `{"slug"?}` → `{"taken": n}`; 409 when screenshots are off (D55) |
+| POST | `/api/thumbs/refresh` | Re-shoot screenshots now: `{"slug"?}` → `{"taken": n}`; 409 when screenshots are off (D56) |
 | POST | `/api/apps/:slug/service/:action` | `start`/`stop`/`restart` a managed service (v1) |
 | GET | `/api/apps/:slug/logs?lines=200` | Tail of a managed service's logs (v1) |
 | GET | `/api/bookmarks` | All groups |
@@ -336,6 +337,9 @@ All JSON. All under the security middleware below.
 | POST | `/api/observed/:id/claim` | Body `{ slug, name?, expected? }` → writes `apps/<slug>.yaml` from the observation |
 | POST | `/api/observed/:id/ignore` | Adds to `ignore.yaml` (by port, process, or dir) |
 | POST | `/api/scan` | Trigger a scan now |
+| GET | `/api/lost` | "Lost at last reboot" (v1, D54): `{ lost: LostNotice \| null }`, also `lost` in `/api/state` |
+| POST | `/api/lost/:id/restart`, `/api/lost/:id/service` | Body `{}` or `{ slug }` → `hallway run` it again, once or as a service; answers `{ ok, slug, url, port, persist, reason?, tail?, lost }` |
+| POST | `/api/lost/:id/dismiss`, `/api/lost/dismiss` | Dismiss one item, or the whole notice |
 | GET | `/api/events` | SSE |
 | GET | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | Agent-facing docs (see `06`) |
 | POST | `/mcp` | MCP Streamable HTTP (D50); GET and DELETE answer 405 |

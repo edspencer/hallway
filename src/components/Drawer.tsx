@@ -35,7 +35,7 @@ export function Drawer({ app, state, home, onClose, onCopy, onSaved }: DrawerPro
   const s = doorState(app);
   const checking = state.daemon.providers.health;
   const thumb = app.thumb ? thumbUrl(app.slug, app.thumb) : null;
-  // the drawer already says what a generated card says, so it shows only a favicon or a screenshot (D54)
+  // the drawer already says what a generated card says, so it shows only a favicon or a screenshot (D55)
   const kind = thumb ? (app.thumbKind ?? 'favicon') : null;
   const colour = useImageColour(kind === 'card' ? null : thumb);
   const glyph = isGlyph(app.config?.icon) ? app.config!.icon : null;

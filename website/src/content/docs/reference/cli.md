@@ -31,6 +31,9 @@ Each command is marked with its milestone: <span class="ms ms--v0">v0</span> com
 | `hallway scan [--json]` | Run the scanner now and print the observed listeners, with identity. | <span class="ms ms--v0">v0</span> |
 | `hallway claim <port\|observation-id> [--slug S] [--name N] [--expected E]` | Turn an observed listener into a declared app. | <span class="ms ms--v0">v0</span> |
 | `hallway ignore <port\|observation-id> [--by port\|process\|dir]` | Hide an observed listener. | <span class="ms ms--v0">v0</span> |
+| `hallway lost [--json]` | What was running before the last reboot and isn't now. See [Lost at last reboot](/concepts/services/#lost-at-last-reboot). | <span class="ms ms--shipped">v1</span> |
+| `hallway lost restart\|service <id\|port> [--slug S]` | Start one again, once or as a service (needs the daemon). | <span class="ms ms--shipped">v1</span> |
+| `hallway lost dismiss <id\|port>` / `--all` | Clear one, or the whole notice. | <span class="ms ms--shipped">v1</span> |
 
 ## Apps
 
