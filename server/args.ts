@@ -6,6 +6,8 @@ export class UsageError extends Error {}
 
 /** Options that take a value (`--port 5050` or `--port=5050`). */
 const VALUE_FLAGS = ['port'];
+/** Options that don't. */
+const BOOLEAN_FLAGS = ['snippet'];
 
 export interface ParsedArgs {
   pos: string[];
@@ -21,6 +23,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (a === '-v' || a === '--version') flags.version = '1';
     else if (a === '-q' || a === '--quiet') flags.quiet = '1';
     else if (a.startsWith('--')) {
+      if (BOOLEAN_FLAGS.includes(a.slice(2))) {
+        flags[a.slice(2)] = '1';
+        continue;
+      }
       const eq = a.indexOf('=');
       const [k, v] = eq > 0 ? [a.slice(2, eq), a.slice(eq + 1)] : [a.slice(2), argv[++i]];
       if (!VALUE_FLAGS.includes(k)) throw new UsageError(`unknown option --${k}`);

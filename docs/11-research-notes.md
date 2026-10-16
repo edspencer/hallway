@@ -71,7 +71,7 @@ Sources:
   and `select sqlite_version()` succeed, and Node prints `ExperimentalWarning: SQLite is an experimental feature`. The
   daemon would want to silence that warning (or accept it in the log) if Q-STORE picks SQLite. Earlier 22.x releases
   are still unchecked (Q-NODE-MIN). *Verified 2026-10-16.*
-- **The oldest Node 22 that loads `node:sqlite` without a flag is 22.13.0** (Q-NODE-MIN, D32). Checked with the
+- **The oldest Node 22 that loads `node:sqlite` without a flag is 22.13.0** (Q-NODE-MIN, D37). Checked with the
   official `linux-x64` builds from nodejs.org, running `require('node:sqlite')`, `new DatabaseSync(':memory:')` and
   `select sqlite_version()`: **22.0.0**, **22.5.0** and **22.12.0** fail with `ERR_UNKNOWN_BUILTIN_MODULE` (22.5–22.12
   have it only behind `--experimental-sqlite`; 22.0 not at all); **22.13.0** works (SQLite 3.47.2) and prints the same
@@ -113,6 +113,7 @@ a Mac**. Move an item out of this list, with the date and how, once it has been.
 |------|-----------|--------|
 | `server/platform/darwin.ts`: LaunchAgents directory (`~/Library/LaunchAgents`) and `<label>.plist` naming | scaffold | Unit-tested on Linux and macOS CI; never installed on a Mac. |
 | The daemon binding 127.0.0.1 and serving the built dashboard on macOS | scaffold | CI (`macos-latest`) runs the tests and `smoke:pack`, which start the packed daemon and fetch from it. Not run interactively on a Mac. |
+| The file watcher (chokidar 5) on macOS | v0 | chokidar 4+ dropped its `fsevents` backend and uses `fs.watch` per directory. Verified on Linux 2026-10-16 (create, edit, delete and a broken file in `apps/` arrive over SSE in 150–260 ms, including an editor-style save by rename; `test/events.test.ts` and a curl run against the daemon). On macOS only CI's `macos-latest` run of the same tests; not tried with real editors (atomic-rename saves from vim, VS Code) on a Mac. |
 | `hallway service install` via `launchctl bootstrap gui/<uid>` | v0 | Not built yet. |
 | `lsof -nP -iTCP -sTCP:LISTEN -F pcLn` parsing on current macOS | v0 | Built (`darwin.ts`, `parseLsofListeners`). Unit-tested against a **hand-written** fixture in the documented `-F` format (`test/fixtures/platform/lsof-listen.txt`); never captured on a Mac. The real-scan test (`test/scanner.test.ts`) runs lsof for real on CI's `macos-latest`, which checks that a server we start is found with its cwd, but not lsof's output for anyone else's processes. **That test passed on `macos-latest` with Node 22 and 24 on 2026-10-16** (PR #4): real `lsof -F pcLn`, `lsof -d cwd` and `ps -o …lstart…` output parsed, and the server found with its PID, cwd and project name. A CI runner is not a developer's Mac (no IDE helpers, Docker or AirPlay listeners), so this stays listed. |
 | cwd via `lsof -a -p <pids> -d cwd -Fn` (batched: one call for every PID) | v0 | Built; hand-written fixture; exercised by the same CI test. |

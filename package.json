@@ -32,6 +32,7 @@
     "dist/server/",
     "dist/shared/",
     "dist/web/",
+    "AGENT-GUIDE.md",
     "CHANGELOG.md"
   ],
   "engines": {
@@ -50,6 +51,7 @@
     "typecheck": "tsc -p tsconfig.server.json && tsc -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
     "hallway": "tsx server/cli.ts",
+    "sync:guide": "tsx scripts/sync-guide.ts",
     "check:nul": "node scripts/check-no-nul-bytes.mjs",
     "prepack": "npm run build",
     "smoke:pack": "node scripts/smoke-pack.mjs",
@@ -58,7 +60,9 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.4",
-    "hono": "^4.13.13"
+    "chokidar": "^5.0.0",
+    "hono": "^4.13.13",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",

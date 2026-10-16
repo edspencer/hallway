@@ -14,16 +14,16 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
 | Q-HMR | Do Vite and Astro HMR websockets work through Caddy on :443 with Host rewritten? Is `server.hmr.clientPort: 443` needed? | v1 acceptance criterion 4. | Experiment; document per-framework fixes. |
 | Q-CADDY-UNPRIVILEGED | **Blocking for v1.** How to front on :443 without a root Caddy whose unauthenticated admin API lets any local process escalate (see the security caveat in `03-networking.md`). Leading option: user-level Caddy on high loopback ports + a one-time pf `rdr` on `lo0`. Others: admin API on a permission-restricted Unix socket; `admin off` + privileged reload helper; wildcard bind + `remote_ip` filter (rejected: exposes to LAN). | A root process that any local process can reconfigure is a privilege-escalation path. | Experiment with pf on current macOS (persistence across reboots and OS updates; anchor files); write up the trade-off as a decision. |
 | Q-HOOK | Current Claude Code (and other agents') pre-tool-use hook payload format and blocking convention. | For `hallway hook check-command`. | Agent docs at implementation time. |
-| Q-NODE-MIN | **Resolved 2026-10-16 (D32):** `node:sqlite` needs no flag from **Node 22.13.0**; 22.0–22.12 can't load it without `--experimental-sqlite` (22.0 not at all). `engines.node` is now `>=22.13` and CI tests 22.13. | | |
+| Q-NODE-MIN | **Resolved 2026-10-16 (D37):** `node:sqlite` needs no flag from **Node 22.13.0**; 22.0–22.12 can't load it without `--experimental-sqlite` (22.0 not at all). `engines.node` is now `>=22.13` and CI tests 22.13. | | |
 | Q-LAUNCHCTL | Confirm modern `launchctl bootstrap/bootout/kickstart/print` behaviour and output parsing on the current macOS. | Service management. | Experiment. |
 
 ## Design decisions deliberately left open
 
 | ID | Question | Current leaning |
 |----|----------|-----------------|
-| Q-STORE | **Resolved 2026-10-16 (D32):** `node:sqlite`, in `state/health.sqlite`. | |
+| Q-STORE | **Resolved 2026-10-16 (D37):** `node:sqlite`, in `state/health.sqlite`. | |
 | Q-DASHBOARD-HOST | Default dashboard hostname in `localhost` mode: `hallway.localhost` (current spec), a shorter `hall.localhost`, or bare `localhost`? | `hallway.localhost`: it matches the product and binary name. Bare `localhost` on :443 may collide with other tools. Whichever is chosen is a reserved app slug. |
-| Q-VALIDATION | Hand-rolled validation or a small schema library? | Hand-rolled (Local Review style) unless the schema grows; the agent-guide file reference should be generated from whatever is chosen. |
+| Q-VALIDATION | Hand-rolled validation or a small schema library? | **Resolved (D37):** hand-rolled, with the schemas as data in `server/store/schema.ts`; the agent guide's file-format reference is generated from them. |
 | Q-BOOKMARK-HEALTH | Health-check remote bookmarks? | Off by default; maybe opt-in per link later. Remote checks leak timing/traffic and often hit auth walls. |
 | Q-MCP-AUTH | Should `/mcp` require a token? | No for v2 (same trust boundary as the data home). Revisit if MCP ever gains process control. |
 | Q-MCP-RESTART | Allow MCP `restart_app` for services already installed via CLI? | Plausible middle ground; decide when v2 starts. |

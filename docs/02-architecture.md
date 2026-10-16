@@ -45,13 +45,13 @@ Mirror Local Review (D16). Keep dependencies minimal.
 
 | Concern | Choice | Notes |
 |---------|--------|-------|
-| Runtime | Node ≥ 22.13 | 22.13 is the first 22.x where `node:sqlite` loads without a flag (D32, verified: `11-research-notes.md`). |
+| Runtime | Node ≥ 22.13 | 22.13 is the first 22.x where `node:sqlite` loads without a flag (D37, verified: `11-research-notes.md`). |
 | Language | TypeScript, ESM | |
 | HTTP | Hono + `@hono/node-server` | Including `hono/streaming` `streamSSE` for events. |
 | UI | React + Vite | Built into `dist/web`, served statically by the daemon. |
 | File watching | chokidar | |
 | Config format | `yaml` package | Preserve comments on round-trip writes where possible (the `yaml` package's Document API supports this). |
-| Health/uptime store | `node:sqlite` | `state/health.sqlite`; decided in D32 (was Q-STORE). |
+| Health/uptime store | `node:sqlite` | `state/health.sqlite`; decided in D37 (was Q-STORE). |
 | MCP | the official MCP TypeScript SDK | v2. Streamable HTTP transport mounted in Hono, plus stdio. |
 | Image rendering | `@resvg/resvg-js` + `opentype.js` | Only for generated cards (v2), reusing Local Review's approach. |
 | Screenshots | Playwright, **optional, lazily installed** | v2. Never a hard dependency. |
@@ -84,7 +84,7 @@ Mirror Local Review (D16). Keep dependencies minimal.
     <group-slug>.yaml         # one bookmark group per file (human/agent-editable)
   ignore.yaml                 # observed listeners the user chose to hide (human/agent-editable)
   state/                      # machine-written; never hand-edit; safe to delete
-    health.sqlite             # probe samples + hourly rollups (node:sqlite, D32)
+    health.sqlite             # probe samples + hourly rollups (node:sqlite, D37)
     observed.json             # last-known identity of every observed listener, with first/last seen
     boot.json                 # last seen boot time, to detect reboots
   cache/                      # machine-written; regenerable
@@ -96,7 +96,8 @@ Mirror Local Review (D16). Keep dependencies minimal.
     daemon.out.log, daemon.err.log
     <slug>.out.log, <slug>.err.log   # managed services (v1)
   backups/
-    <ISO-timestamp>/          # periodic snapshots of the human-editable files
+    <ISO-timestamp>/          # periodic snapshots of the human-editable files (D34)
+    removed/<ISO-timestamp>/  # files deleted through Hallway, at their original relative path (D34)
 ```
 
 Principles:
@@ -235,8 +236,9 @@ it; nothing else writes those files.
 
 - **Atomic writes:** write `<file>.tmp-<pid>`, then `rename`. The watcher ignores `*.tmp*` files (Local Review does the
   same).
-- **Validate before writing.** Reject invalid slugs, ports outside 1–65535, unknown enum values. Keep validation
-  hand-rolled or use one tiny library (Q-VALIDATION).
+- **Validate before writing.** Reject invalid slugs, ports outside 1–65535, unknown enum values. Validation is
+  hand-rolled, with the schemas as data, and the agent guide's file reference is generated from them (D37). PUT and
+  PATCH semantics: D33.
 - **Optimistic concurrency** for API/MCP writes: reads return an ETag (hash of file bytes); writes may send
   `If-Match`; a mismatch returns 409 so the UI or agent can re-read. Local Review has the same idea
   (`ReviewConflictError`).
@@ -295,7 +297,9 @@ app.get('/api/events', (c) =>
 );
 ```
 
-The UI refetches the affected resource on each event rather than trusting the event payload as data.
+The UI refetches the affected resource on each event rather than trusting the event payload as data. The
+implemented types are `ServerEvent` in `shared/api.ts`; the bus and SSE handler are `server/events.ts`, the watcher
+`server/watcher.ts`.
 
 ## HTTP API (initial)
 
@@ -315,7 +319,8 @@ All JSON. All under the security middleware below.
 | POST | `/api/apps/:slug/service/:action` | `start`/`stop`/`restart` a managed service (v1) |
 | GET | `/api/apps/:slug/logs?lines=200` | Tail of a managed service's logs (v1) |
 | GET | `/api/bookmarks` | All groups |
-| PUT/DELETE | `/api/bookmarks/:group` | Upsert/remove a group |
+| GET/PUT/PATCH/DELETE | `/api/bookmarks/:group` | One group; upsert; merge-patch; remove (moves the file to `backups/`) |
+| GET | `/api/config` | The settings in force, with the file's ETag and problems |
 | GET | `/api/observed` | Observed listeners with identity |
 | POST | `/api/observed/:id/claim` | Body `{ slug, name?, expected? }` → writes `apps/<slug>.yaml` from the observation |
 | POST | `/api/observed/:id/ignore` | Adds to `ignore.yaml` (by port, process, or dir) |
@@ -323,6 +328,11 @@ All JSON. All under the security middleware below.
 | GET | `/api/events` | SSE |
 | GET | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | Agent-facing docs (see `06`) |
 | * | `/mcp` | MCP Streamable HTTP (v2) |
+
+The response types are in `shared/api.ts`. Writes return the entity and its `ETag`; errors are `{ error, issues?,
+etag? }` with 400 (invalid), 404, 409 (stale `If-Match`, broken file, changed on disk, exists under
+`If-None-Match: *`) or 503 (the provider for that slot isn't running). Live data (health, history, observed
+listeners, discovered apps, thumbnails) comes from providers (D35).
 
 Deleting moves to `backups/` rather than unlinking, so an agent mistake is recoverable (Local Review's examples
 feature "renames, never deletes" for the same reason).
