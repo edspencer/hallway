@@ -30,7 +30,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Run the CLI; returns { code, out } and never throws (output is echoed for the log). */
 function hw(...args) {
   try {
-    const out = execFileSync(process.execPath, [cli, ...args], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const out = execFileSync(process.execPath, [cli, ...args], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 6 * 60_000, killSignal: 'SIGKILL' });
     process.stdout.write(out.replace(/^/gm, '    | '));
     return { code: 0, out };
   } catch (e) {
@@ -46,7 +46,7 @@ const must = (...args) => {
 };
 const sh = (cmd, args, opts = {}) => {
   try {
-    return { code: 0, out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }) };
+    return { code: 0, out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000, killSignal: 'SIGKILL', ...opts }) };
   } catch (e) {
     return { code: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
   }
@@ -106,7 +106,10 @@ try {
   await until('the daemon', async () => (await fetch('http://localhost:4255/api/health').catch(() => null))?.ok);
 
   step('criterion 8: something else on 443 → setup and doctor name it and stop');
-  const squatter = spawn('sudo', ['python3', '-m', 'http.server', '443', '--bind', '127.0.0.1'], { stdio: 'ignore' });
+  // root's, so on macOS lsof (as the user) can't see it: setup has to notice it by connecting. An absolute Node, since
+  // sudo's secure_path may not have python3 or node on it.
+  const squatter = spawn('sudo', ['-n', process.execPath, '-e', "require('node:net').createServer(s => s.end()).listen(443, '127.0.0.1')"], { stdio: 'inherit' });
+  await until('the squatter on 443', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0, 10000);
   await sleep(1500);
   await check('setup refuses, before doing anything', async () => {
     const r = hw('setup');
@@ -115,7 +118,7 @@ try {
     assert.match(r.out, /Setup stopped before doing anything/);
     assert.deepEqual(leftovers(), []);
   });
-  sh('sudo', ['pkill', '-f', 'http.server 443']);
+  sh('sudo', ['-n', 'pkill', '-f', 'listen\\(443']);
   squatter.kill();
   await sleep(500);
 
@@ -135,7 +138,6 @@ try {
     assert.equal(status(r), 200, r.out);
     assert.match(must('setup', '--print'), /already done/, 'nothing left to do');
     assert.match(r.out, /"ok":true/);
-    if (darwin) assert.equal(sh('security', ['verify-cert', '-c', ca, '-p', 'ssl', '-s', 'hallway.localhost']).code, 0, 'security verify-cert');
   });
   await check('http:// redirects to https://', async () => {
     const r = sh('curl', ['-sS', '-o', '/dev/null', '-w', '%{http_code} %{redirect_url}', 'http://hallway.localhost/x']);

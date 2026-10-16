@@ -114,7 +114,8 @@ export const darwinFronting: Fronting = {
       files: [],
       cmds: env.rootSha1
         ? [
-            { ...root, argv: ['security', 'remove-trusted-cert', '-d', env.rootCert], mayFail: true },
+            // deleting the certificate takes its trust setting with it; `security remove-trusted-cert -d` would edit the
+            // admin trust settings directly, which can wait for a GUI authorisation prompt even as root
             { ...root, argv: ['security', 'delete-certificate', '-Z', env.rootSha1, SYSTEM_KEYCHAIN] },
           ]
         : [{ ...root, argv: ['security', 'delete-certificate', '-c', 'Hallway Local CA', SYSTEM_KEYCHAIN], mayFail: true }],

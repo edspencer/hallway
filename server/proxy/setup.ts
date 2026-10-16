@@ -337,11 +337,24 @@ export const cmdLine = (c: Cmd, isRoot = false) => [...(c.sudo && !isRoot ? ['su
 
 export class SetupError extends Error {}
 
+/** How long one command may take. sudo's password prompt counts, so it's generous; a hung GUI prompt still ends. */
+export const COMMAND_TIMEOUT_MS = 5 * 60_000;
+
 const defaultExec = (argv: string[]) =>
   new Promise<number>((resolve) => {
     const p = spawn(argv[0], argv.slice(1), { stdio: 'inherit' });
-    p.on('error', () => resolve(127));
-    p.on('exit', (code) => resolve(code ?? 1));
+    const timer = setTimeout(() => {
+      process.stderr.write(`hallway: \`${argv.join(' ')}\` took longer than ${COMMAND_TIMEOUT_MS / 60_000} minutes (is it waiting for a prompt?); stopping it\n`);
+      p.kill('SIGTERM');
+    }, COMMAND_TIMEOUT_MS);
+    p.on('error', () => {
+      clearTimeout(timer);
+      resolve(127);
+    });
+    p.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve(code ?? 1);
+    });
   });
 
 /** Run a plan's steps in order, printing each first; a failed command stops it. */
