@@ -16,7 +16,7 @@ import { ObservedStore, labelListeners, normaliseCommand, observationId, recordB
 import { htmlFavicon, htmlTitle, sniff } from '../server/scanner/sniff.ts';
 import { createScanner } from '../server/scanner/index.ts';
 import { type Platform, type ProcessInfo, type RawListener, currentPlatform } from '../server/platform/index.ts';
-import { exitWatchdog, onWindows, tmpDir } from './fixture.ts';
+import { exitWatchdog, tmpDir } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -421,7 +421,7 @@ describe('a whole scan over a fake platform', () => {
   });
 });
 
-describe('a real scan on this machine', { skip: onWindows('the scanner sees no listeners on Windows until stage B (D58)') }, () => {
+describe('a real scan on this machine', () => {
   test('finds a server started in a temp directory, with its cwd and project', { timeout: 30_000 }, async (t) => {
     const dir = path.join(TMP, 'real-app');
     fs.mkdirSync(dir);

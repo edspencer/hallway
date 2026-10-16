@@ -129,8 +129,9 @@ out of scope on Windows, and `hallway setup` refuses with the reason.
   commands run natively, with no administrator rights; unit tests run on `windows-latest` (Node 22.13 and 24) and
   `smoke:pack` installs and runs the packed tarball there. The scanner sees nothing yet, and `hallway run` /
   `hallway service` refuse with a message.
-- **B, the scanner:** listeners, process details and working directories, boot time and the ephemeral range on
-  Windows, with the observed tray and Claim working.
+- **B, the scanner:** ✅ listeners, process details and working directories, boot time and the ephemeral range on
+  Windows, with the observed tray and Claim working (D59). Checked on a runner as its administrator and as a fresh
+  standard user; an elevated, another user's or a 32-bit process shows its command line instead of a directory.
 - **C, if feasible:** the daemon and managed apps as per-user scheduled tasks, with a real-Windows CI job like the
   launchd and systemd ones.
 

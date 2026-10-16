@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { AppHealth } from '../shared/api.ts';
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
-import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, slugify, tildify } from '../src/lib/format.ts';
+import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, shorten, slugify, tildify } from '../src/lib/format.ts';
 import { bootLabel, lostCommand, lostCount, lostWhere } from '../src/lib/lost.ts';
 import { countStates, doorState, faviconMark, isScanning, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
@@ -69,6 +69,10 @@ describe('format', () => {
     assert.equal(tildify('/Users/me/Code/app', '/Users/me'), '~/Code/app');
     assert.equal(tildify('/Users/meant/x', '/Users/me'), '/Users/meant/x');
     assert.equal(tildify('/x', null), '/x');
+    assert.equal(shorten('abcdef', 6), 'abcdef');
+    assert.equal(shorten('abcdefg', 6), 'abcde…');
+    assert.equal(tildify('C:\\Users\\me\\Code\\app', 'C:\\Users\\me'), '~\\Code\\app');
+    assert.equal(tildify('C:\\Users\\meant\\x', 'C:\\Users\\me'), 'C:\\Users\\meant\\x');
   });
 
   test('durations, percentages, latencies', () => {

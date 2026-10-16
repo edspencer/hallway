@@ -1,0 +1,25 @@
+
+Active Connections
+
+  Proto  Local Address          Foreign Address        State           PID
+  TCP    [::]:22                [::]:0                 LISTENING       4060
+  TCP    [::]:80                [::]:0                 LISTENING       4
+  TCP    [::]:135               [::]:0                 LISTENING       1120
+  TCP    [::]:445               [::]:0                 LISTENING       4
+  TCP    [::]:1801              [::]:0                 LISTENING       4248
+  TCP    [::]:2103              [::]:0                 LISTENING       4248
+  TCP    [::]:2105              [::]:0                 LISTENING       4248
+  TCP    [::]:2107              [::]:0                 LISTENING       4248
+  TCP    [::]:2179              [::]:0                 LISTENING       2036
+  TCP    [::]:3389              [::]:0                 LISTENING       1384
+  TCP    [::]:5985              [::]:0                 LISTENING       4
+  TCP    [::]:5986              [::]:0                 LISTENING       4
+  TCP    [::]:47001             [::]:0                 LISTENING       4
+  TCP    [::]:49664             [::]:0                 LISTENING       1000
+  TCP    [::]:49665             [::]:0                 LISTENING       852
+  TCP    [::]:49666             [::]:0                 LISTENING       2520
+  TCP    [::]:49668             [::]:0                 LISTENING       2796
+  TCP    [::]:49669             [::]:0                 LISTENING       2684
+  TCP    [::]:49671             [::]:0                 LISTENING       3492
+  TCP    [::]:49672             [::]:0                 LISTENING       4248
+  TCP    [::]:49695             [::]:0                 LISTENING       972

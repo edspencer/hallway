@@ -1,0 +1,51 @@
+# Runs scripts/scanner-real-win.mjs as a new standard (non-administrator) local user, through a one-off scheduled task,
+# and fails unless that user's scanner found its own listener with its working directory (D59). CI only: it creates a
+# user. Run from a checkout after `npm run build`.
+$ErrorActionPreference = 'Stop'
+$user = 'hwscan'
+$pass = 'Hw-' + [guid]::NewGuid().ToString('N').Substring(0, 16) + '!a1'
+$root = 'C:\hwscan'
+New-Item -ItemType Directory -Force -Path "$root\work" | Out-Null
+Copy-Item -Recurse -Force dist "$root\dist"
+Copy-Item -Force scripts\scanner-real-win.mjs "$root\scan.mjs"
+# New-LocalUser, not `net user`: that one stops to ask about passwords over 14 characters
+New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -AccountNeverExpires -PasswordNeverExpires | Out-Null
+# New-LocalUser may put the account in no group at all: Users is what a standard account is. Only if it isn't there
+# already, since adding a member twice is an error (and this script stops at errors)
+if (-not (Get-LocalGroupMember -Group Users -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "\\$user$" })) {
+  Add-LocalGroupMember -Group Users -Member $user
+}
+# a task that runs with a stored password is a batch logon, a right only administrators have by default
+$sid = (Get-LocalUser $user).SID.Value
+secedit /export /cfg "$root\sec.inf" /areas USER_RIGHTS | Out-Null
+$inf = Get-Content "$root\sec.inf"
+if ($inf -match '^SeBatchLogonRight') { $inf = $inf -replace '^(SeBatchLogonRight = .*)$', "`$1,*$sid" }
+else { $inf = $inf -replace '^\[Privilege Rights\]$', "[Privilege Rights]`r`nSeBatchLogonRight = *$sid" }
+Set-Content "$root\sec.inf" $inf -Encoding Unicode
+secedit /configure /db "$root\sec.sdb" /cfg "$root\sec.inf" /areas USER_RIGHTS | Out-Null
+Write-Host "groups of ${user}: $((Get-LocalGroup | Where-Object { (Get-LocalGroupMember $_ -ErrorAction SilentlyContinue).Name -match "\\$user$" }).Name -join ', ')"
+# only Users: not an administrator
+icacls $root /grant "${user}:(OI)(CI)M" | Out-Null
+$node = (Get-Command node).Source
+$cmd = "cmd.exe /c set HW_WORK=$root\work&& `"$node`" $root\scan.mjs $root\dist > $root\out.txt 2>&1"
+schtasks /Create /TN hwscan /RU $user /RP $pass /SC ONCE /ST 23:59 /TR $cmd /F
+if ($LASTEXITCODE) { throw "schtasks /Create failed ($LASTEXITCODE)" }
+schtasks /Run /TN hwscan
+if ($LASTEXITCODE) { throw "schtasks /Run failed ($LASTEXITCODE)" }
+# wait for the verdict itself: the task can still be Ready (not yet started) a moment after /Run, and the first
+# PowerShell on a fresh machine takes 10-15 s
+$verdict = { if (Test-Path "$root\out.txt") { Get-Content "$root\out.txt" | Where-Object { $_ -match '^\{.*\}\s*$' } | Select-Object -Last 1 } }
+$deadline = (Get-Date).AddSeconds(180)
+while (-not (& $verdict) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+$info = Get-ScheduledTaskInfo -TaskName hwscan
+Write-Host "task state: $((Get-ScheduledTask -TaskName hwscan).State), last result: $($info.LastTaskResult), last run: $($info.LastRunTime)"
+$out = if (Test-Path "$root\out.txt") { Get-Content -Raw "$root\out.txt" } else { '(no output)' }
+Write-Host $out
+$v = & $verdict
+schtasks /Delete /TN hwscan /F | Out-Null
+Remove-LocalUser -Name $user
+if (-not $v) { throw 'no verdict from the standard user' }
+$j = $v | ConvertFrom-Json
+if ($j.user -ne $user) { throw "it ran as $($j.user), not $user" }
+if (-not $j.ok) { throw 'the scanner, as a standard user, did not find its listener with its working directory' }
+Write-Host "ok: as $($j.user), listener on $($j.port) found with cwd $($j.info.cwd)"

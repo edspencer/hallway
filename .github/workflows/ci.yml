@@ -55,6 +55,11 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      # The raw output win32.ts parses, for its fixtures (D59): kept in the log, never a failure.
+      - name: Capture Windows command output
+        if: runner.os == 'Windows' && matrix.node == 24
+        continue-on-error: true
+        run: node scripts/capture-win32.mjs
       # Packs the package, installs the tarball into a temp prefix and runs it as a user would (scripts/smoke-pack.mjs).
       - name: Smoke-test the npm package
         run: npm run smoke:pack
@@ -91,6 +96,29 @@ jobs:
         env:
           HALLWAY_REAL_SERVICES: '1'
         run: node scripts/services-real.mjs
+
+  # ---------------------------------------------------------------------------------------------------------------
+  # The Windows scanner for real (D59): as the runner's administrator, then as a new standard user through a scheduled
+  # task, since reading another process's working directory without administrator rights is the case that matters.
+  # It creates a local user, which is why it runs only here.
+  # ---------------------------------------------------------------------------------------------------------------
+  scanner-windows:
+    name: Scanner (real Windows, standard user)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: As the runner (an administrator)
+        run: node scripts/scanner-real-win.mjs
+      - name: As a standard user, through a scheduled task
+        shell: pwsh
+        run: ./scripts/scanner-real-win.ps1
 
   # ---------------------------------------------------------------------------------------------------------------
   # Fronted mode for real (D47): `hallway setup` with the runner's passwordless sudo installs the 443/80 redirect (pf
@@ -198,7 +226,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [test, services, fronted, website]
+    needs: [test, services, scanner-windows, fronted, website]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to have passed

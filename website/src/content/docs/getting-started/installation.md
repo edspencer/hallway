@@ -48,7 +48,7 @@ hallway open         # open the dashboard in your browser
 
 | | |
 | --- | --- |
-| **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort: the dashboard, health checks and bookmarks work, with no fronted mode, port scanner or `hallway service` yet. |
+| **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort: the dashboard, health checks, the port scanner and bookmarks work, with no fronted mode or `hallway service` yet. |
 | **Node** | 22.13 or later (for the built-in `node:sqlite` that holds uptime history). |
 | **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`. |
 | **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and one guided sudo step. On Linux also systemd, `nft` and a system CA store. See [Setup](/networking/setup-and-doctor/). |

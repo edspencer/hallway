@@ -30,11 +30,17 @@ export function homeDir(dataHome: string, dataHomeDisplay: string): string | nul
   return dataHome.endsWith(rest) ? dataHome.slice(0, dataHome.length - rest.length) || null : null;
 }
 
+/** At most `max` characters, with an ellipsis when cut. */
+export function shorten(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+}
+
 /** A path as people see it: the home directory as `~`. */
 export function tildify(p: string, home: string | null): string {
   if (!home) return p;
   if (p === home) return '~';
-  return p.startsWith(home + '/') ? '~' + p.slice(home.length) : p;
+  // `/` on macOS and Linux, `\` on Windows (D58)
+  return p.startsWith(home + '/') || p.startsWith(home + '\\') ? '~' + p.slice(home.length) : p;
 }
 
 /** `3 s`, `5 min`, `2 h`, `9 days`. */

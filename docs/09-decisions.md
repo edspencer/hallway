@@ -924,6 +924,37 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   most of the daemon is portable Node); `process.platform` checks scattered through the server (D26); fronted mode
   through an elevated helper service (a second, privileged component to install and keep secure, for one OS).
 
+### D59 — The scanner on Windows: netstat, tasklist, and one PowerShell call that reads each working directory from the PEB (2026-10-16)
+
+- **Listeners:** `netstat -ano -p TCP` and `-p TCPv6`, with names from `tasklist /FO CSV /NH`, about 0.3 s
+  together. A listening row is told by its foreign address (`0.0.0.0:0` / `[::]:0`), not by the state word, which
+  Windows localises (`LISTENING`, `ABHÖREN`, `ÉCOUTE`, …); tasklist is read by column for the same reason. Names drop
+  `.exe` (`node`, as lsof and ss show it), so `ignore.yaml`'s process rules and the noise list work alike everywhere.
+  The kernel's own HTTP.sys listeners (WinRM on 5985 and 47001, IIS) belong to `System`, PID 4, which is on the noise
+  list with the other Windows service hosts.
+- **Process details:** one `powershell.exe -NoProfile -EncodedCommand …` per scan, for the listeners' PIDs only:
+  `Win32_Process` (CIM) gives the command line, executable path, parent and creation time; the command line is split
+  into argv by the C runtime's rules (`splitCommandLine`). Windows doesn't re-parent, so "orphaned" means the parent
+  PID is no longer running, or is now a newer process that reused it.
+- **The working directory, which Windows doesn't expose:** the same script compiles a small C# reader (`Add-Type`)
+  that opens the process with `PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ` and follows its PEB to
+  `ProcessParameters.CurrentDirectory`, the approach psutil has shipped for years. A user's own non-elevated processes
+  grant this without administrator rights; elevated processes, other users' and services' don't, and 32-bit (WOW64)
+  processes are skipped (their PEB has other offsets). Those come back with no directory, and the observed tray shows
+  the command line instead, with a tooltip saying why.
+- **Cost:** about 0.5 s warm, and several seconds for the first call on a fresh machine (.NET, CIM and the C# compile).
+  It runs once per scan (every two minutes by default) and only for listeners that survive the noise filter.
+- **Boot time:** `os.uptime()` (D58). **The ephemeral range:** `netsh int ipv4 show dynamicport tcp`, read
+  positionally (localised labels), falling back to 49152–65535.
+- **Checked on a real Windows runner**, as its administrator and as a fresh standard user through a scheduled task
+  (`scripts/scanner-real-win.mjs`, CI's "Scanner (real Windows, standard user)"); the parsers are tested on every OS
+  against output captured there (`test/fixtures/platform/win32-*`).
+- **Rejected:** `Get-NetTCPConnection` for the listeners (structured, but a PowerShell start on every scan, where
+  netstat is instant); parsing netstat's state word (localised); `handle.exe` or another Sysinternals tool (not
+  installed, and a licence click-through); a native addon (Hallway ships no compiled code); WMI's
+  `Win32_Process.ExecutablePath` alone as the identity (it names the runtime, `node.exe`, never the project); asking
+  for administrator rights to read every process (never: D58).
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |
