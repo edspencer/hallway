@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Make the generated card's fonts (server/fonts/, D54): static TTF instances of the dashboard's own variable fonts
+# Make the generated card's fonts (assets/fonts/, D54): static TTF instances of the dashboard's own variable fonts
 # (the @fontsource-variable devDependencies, Latin subset, SIL OFL 1.1), because resvg wants plain TrueType and
 # draws a variable font at its default instance. One weight each keeps the package small.
 #
@@ -12,7 +12,7 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
 SRC = 'node_modules/@fontsource-variable'
-OUT = 'server/fonts'
+OUT = 'assets/fonts'
 
 FACES = [
     # (source, axes, family name, output file)

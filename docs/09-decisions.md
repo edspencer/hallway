@@ -770,6 +770,84 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
 - **Rejected:** `restart_app` for services with `keepAlive` only, or only when the installed job matches the YAML
   (still starts a process; the check is subtle and easy to get wrong in a later change).
 
+### D54 — The generated card, and which tier a door shows (2026-10-16)
+
+- **The card** (`server/thumbs/card.ts`) is a drawing of one of the dashboard's doors: the slug's door paint (the same
+  FNV hash and ten paints as `src/lib/colour.ts`), raised panels under an arch, the knob, and a brass plate carrying
+  the address; on it the name (Fraunces), `repo @ branch` and a framework chip (JetBrains Mono), the last two from the
+  scanner's identity. 320×200 drawn at 2×: a 640×400 PNG, the size a screenshot is stored at.
+  - Rendered with `@resvg/resvg-js` (a runtime dependency: ~70 kB plus one native binary of ~4 MB for the platform)
+    with **only the bundled fonts** (`loadSystemFonts: false`), so the bytes are the same on every machine; a test
+    checks the text vanishes with no fonts, which proves nothing falls back to a system font.
+  - **Fonts:** static, Latin-subset TrueType instances of the dashboard's own OFL faces (Fraunces SemiBold at opsz 48,
+    Inter Medium, JetBrains Mono Regular), cut from the `@fontsource-variable` devDependencies by
+    `scripts/card-fonts.py` and committed in `assets/fonts/` with their licences: 160 kB on disk, ~98 kB more tarball
+    (836.1 → 933.8 kB). resvg wants plain TrueType and draws a variable font at its default instance, hence static.
+    `assets/`, not `server/`: the package ships no source directories (`smoke:pack` checks).
+  - Text is measured without a font parser: JetBrains Mono's advance is exactly 0.6 em, and names use a generous
+    0.6 em average for Fraunces, cut with an ellipsis. Glyphs outside Latin draw as boxes (as in Local Review).
+  - **Colours:** tokens.css isn't shipped, so the card carries a copy of the paints, lift, shade, lamplight, plate and
+    ink; `test/thumbs-tiers.test.ts` fails if they drift from tokens.css, so D28's one source of truth holds.
+  - Drawn lazily: the ETag is a hash of what the card shows (computed for every AppView without drawing), the PNG only
+    when its bytes are asked for (never for a 304), then kept in memory per slug. ~10 ms a card.
+- **Which tier** (`pickThumb`): `favicon` (the default) → the favicon, else none; `screenshot` → the screenshot, else
+  the favicon, else none; `card` → the card. **A card is never a silent fallback for a missing favicon.** Judged with
+  screenshots (`11-research-notes.md`, "Thumbnails"): a card on a door repeats the name printed right under it and
+  shrinks its address to a plate too small to read, while the monogram door reads at a glance. So `card` is a mode
+  you choose (uniform, labelled doors), and an app with no picture still has none.
+- **How the dashboard draws each** (`AppView.thumbKind`, additive): a favicon as before (the small tile; its colour is
+  the paint); a **screenshot as the door's glass**, set in the panels' frame clear of the knob, with the paint (picked
+  from the screenshot) around it and the number plate on top; a **card as the whole door**, replacing the CSS one.
+  The state filters (closed, boarded up) apply to the picture too. The drawer shows a screenshot as a preview and never
+  a card (it already says everything a card says).
+- **Rejected:** the card as the favicon-mode fallback (above); the card in the 32 px tile (illegible); opentype.js
+  for measuring (a dependency for a few pixels of precision); reading tokens.css at run time (not shipped); system
+  fonts (different bytes per machine, slow scans).
+
+### D55 — Screenshots: a browser installed into the data home at run time, never a dependency (2026-10-16)
+
+- `hallway thumbs enable` runs `npm install playwright-core@<pinned>` into `cache/browser/` (with its own package.json,
+  so npm doesn't climb into a project above the data home), then that copy's `install --only-shell chromium` with
+  `PLAYWRIGHT_BROWSERS_PATH=cache/browser/ms-playwright`, writes `installed.json`, and sets `thumbnails.mode:
+  screenshot` through the store (comments kept). About 300 MB (measured on Linux: 278 MB of headless shell and ffmpeg,
+  14 MB of playwright-core). The daemon `import()`s playwright-core from that path, so the package neither contains
+  nor resolves it, and a base install never downloads a browser (v2 criterion 3; `smoke:pack` checks).
+  - `disable` sets the mode back to `favicon` and deletes `cache/browser/` and `cache/thumbs/`; the daemon sees the
+    config change, closes its browser and forgets its pictures. `refresh [slug]` asks the daemon
+    (`POST /api/thumbs/refresh`, 409 when screenshots are off) and waits for the shots. `status` says what's installed.
+  - npm is the one beside the running Node (where a global install puts it), else PATH's. Playwright's version is
+    pinned in `server/thumbs/browser.ts`; an upgrade that bumps it needs `hallway thumbs enable` again (idempotent).
+  - `cache/` because it's machine-written, git-ignored and regenerable: no change to the data home's layout.
+- **Shooting** (`server/thumbs/shots.ts`): healthy apps only (declared or discovered, never bookmarks), one page at a
+  time in one browser that closes after two idle minutes. 1280×800 at `deviceScaleFactor: 0.5`, so Chromium itself
+  produces the ~640×400 PNG and the daemon needs no image library. `load`, then network idle, ten seconds in all; a
+  page that never goes quiet is shot when time is up; one that refuses the connection isn't, and isn't tried again
+  for 15 minutes unless asked. Due when there's none, the app's PID changed (both known), its address changed, or it's
+  six hours old; checked every minute, on a `healthy` transition and on `refresh`. Stored as
+  `cache/thumbs/<slug>.png` + `.json` (url, pid, takenAt, etag); a `thumb` event when one changes.
+  - `--no-sandbox` only when the daemon runs as root (containers, CI); a normal user keeps Chromium's sandbox.
+- **Rejected:** `playwright` as an optional peer dependency (npm 7+ installs peers by default, so most base installs
+  would get it, and `npm i -g hallway` gives no place to add it by hand); an `optionalDependency` (always installed
+  where it can be); `puppeteer` (downloads Chrome on install unless told not to); the system Chrome (not on every
+  machine, differs per machine, and could drive the user's real profile); `sharp` or another decoder for downscaling
+  (half-scale rendering does it for free).
+
+### D56 — The 90-day view: no rollup scan on every read (2026-10-16)
+
+- Measured with 30 apps and 90 days seeded through `UptimeStore` (`add` → `prune`: 340 k samples, 64.8 k rollups):
+  one app's 90-day history took ~47 ms, 28 ms of it the `rollup(now)` each `history()` starts with, a correlated
+  `NOT EXISTS` over every sample row that almost always finds nothing.
+- `rollup` now remembers the hour it has rolled up to and does nothing until the clock reaches a new hour, then looks
+  only at samples since. Samples are written as they're taken, so a finished hour never gains one (anything that ever
+  back-fills must use a fresh store). The 7- and 90-day bars are built in one pass over the hour-ordered rows instead
+  of a filter per bar. The 90-day view reads only rollups, plus the current hour's samples.
+- Result: 6–7 ms for one app's 90 days in the store, ~2.3 ms warm through `GET /api/apps/:slug/history?window=90d`,
+  ~160 ms for all 30 apps in a row; the drawer paints 90 days and the latency chart ~42 ms after the click.
+  `test/uptime-perf.test.ts` holds it (generous limits: 100 ms one app, 2 s all thirty).
+- **Rejected:** an index on `samples(ts)` (measured no faster, and every insert pays for it); caching whole history
+  responses (invalidated by every probe, for no measurable gain); a daily rollup table (90 rows instead of 2,160, but a
+  second table to keep consistent for a 6 ms read).
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |

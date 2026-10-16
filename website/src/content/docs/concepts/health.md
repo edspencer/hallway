@@ -57,8 +57,9 @@ Each probe is recorded: the state, the HTTP status and the latency.
 
 - <span class="ms ms--v0">v0</span> The last **24 hours** at full resolution, drawn on every card as 48 bars of 30
   minutes each.
-- <span class="ms">v2</span> **7-day and 90-day** history from hourly rollups (with p50/p95 latency), in the app's
-  detail drawer.
+- <span class="ms ms--v0">v0</span> **7-day and 90-day** history from hourly rollups (with p50/p95 latency and a latency chart), in the app's
+  detail drawer. The 90-day view reads only the rollups, so it stays quick: a few milliseconds per app with 30 apps
+  and 90 days of history.
 
 Periods when Hallway itself was not running are drawn as **no data**, an empty outline, never as down.
 

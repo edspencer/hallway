@@ -88,14 +88,15 @@ Acceptance criteria:
 thumbnails; 7 d / 90 d uptime from hourly rollups with latency charts; `hallway hook check-command`. (Linux support
 moved forward to v0/v1: D26.)
 
-Acceptance criteria (1 and 2 met on 2026-10-16: `11-research-notes.md`, "The v2 MCP acceptance run"):
+Acceptance criteria (1 and 2 met on 2026-10-16: `11-research-notes.md`, "The v2 MCP acceptance run"; 3 and 4 met on
+2026-10-16: "Thumbnails and the 90-day view"):
 
 1. An MCP client can `add_bookmark` and the dashboard shows it live; it appears in the YAML file with comments in that
    file preserved.
 2. `declare_app` with a `service` block is rejected; no MCP tool can start a process.
-3. `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots; `hallway thumbs disable`
-   removes it; the base install never depends on it.
-4. The 90-day view renders from rollups only and stays fast with 30 apps.
+3. ✅ `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots; `hallway thumbs disable`
+   removes it; the base install never depends on it. (D55; `smoke:pack` checks the last part.)
+4. ✅ The 90-day view renders from rollups only and stays fast with 30 apps. (D56; `test/uptime-perf.test.ts`.)
 5. Every v0 and v1 criterion has been run on a real Mac, and nothing is left marked "unverified on macOS" in
    `11-research-notes.md`.
 

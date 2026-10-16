@@ -297,8 +297,8 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `scan.intervalSeconds` | number ≥ 10 | `120` | Seconds between scans. |
 | `scan.includeEphemeralPorts` | true/false | `false` | Include ephemeral ports (49152–65535, and Linux's own range), where IDE and tool helpers listen. |
 | `scan.minPort` | number 1–65535 | `1024` | Ignore ports below this. |
-| `thumbnails` | mapping |  | Card images. |
-| `thumbnails.mode` | `favicon` \| `screenshot` \| `card` | `favicon` | `favicon` (a favicon on a colour tile); `screenshot` and `card` arrive in v2. |
+| `thumbnails` | mapping |  | The pictures on the doors. |
+| `thumbnails.mode` | `favicon` \| `screenshot` \| `card` | `favicon` | `favicon`: the app's favicon on its door (a monogram if it has none). `screenshot`: a picture of each healthy app as the door's glass (run `hallway thumbs enable` first: it installs the browser). `card`: every door drawn as a generated card. |
 | `dashboard` | mapping |  | The home page. |
 | `dashboard.title` | text | the machine's host name | The page title. |
 | `dashboard.sections` | list of `apps` \| `observed` \| `bookmarks` | `[apps, observed, bookmarks]` | Which sections to show, in order. |

@@ -19,7 +19,8 @@ All routes are in <span class="ms ms--v0">v0</span>, available now, unless marke
 | `PATCH` | `/api/apps/:slug` | Partial update. |
 | `DELETE` | `/api/apps/:slug` | Remove a declared app (its file moves to `backups/`; never hard-deleted). |
 | `GET` | `/api/apps/:slug/history?window=24h\|7d\|90d` | Uptime buckets and latency figures. |
-| `GET` | `/api/apps/:slug/thumb` | The thumbnail image, with an ETag. |
+| `GET` | `/api/apps/:slug/thumb` | The thumbnail image, with an ETag. The app's `thumbKind` says which it is: `favicon`, `screenshot` or `card`. |
+| `POST` | `/api/thumbs/refresh` | Take new screenshots now: `{"slug": "..."}` for one app, `{}` for every healthy one. Answers `{"taken": n}` once they're done; 409 when screenshots are off. |
 | `POST` | `/api/apps/:slug/service/:action` | `start`, `stop` or `restart` a managed service. |
 | `GET` | `/api/apps/:slug/logs?lines=200` | The tail of a managed service's logs. |
 | `GET` | `/api/bookmarks` | All bookmark groups. |

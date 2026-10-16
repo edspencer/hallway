@@ -80,8 +80,10 @@ Commands that are richer with live data look for the daemon on `127.0.0.1:<confi
 
 | Command | Description |
 |---------|-------------|
-| `hallway thumbs enable` / `disable` | Install/remove the optional headless browser and switch `thumbnails.mode`. [v2] |
-| `hallway thumbs refresh [slug]` | Re-shoot now. [v2] |
+| `hallway thumbs enable` | Install playwright-core and Chromium's headless shell into `cache/browser/` in the data home (about 300 MB; nothing outside the data home), then set `thumbnails.mode: screenshot`. Idempotent (D55). [v2, **built**] |
+| `hallway thumbs disable` | Set `thumbnails.mode` back to `favicon` and delete the browser and the screenshots. [v2, **built**] |
+| `hallway thumbs refresh [slug]` | Re-shoot now (one app, or every healthy one) through the running daemon: `POST /api/thumbs/refresh` with `{"slug"?}`, answering `{"taken": n}`, 409 when screenshots are off. [v2, **built**] |
+| `hallway thumbs status` | The mode, whether a browser is installed (and its size), and how many screenshots there are. [v2, **built**] |
 
 ## Environment variables
 

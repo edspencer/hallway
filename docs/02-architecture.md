@@ -89,7 +89,8 @@ Mirror Local Review (D16). Keep dependencies minimal.
     boot.json                 # last seen boot time, to detect reboots
     daemon.json               # the running daemon's pid and port, where the CLI also looks for it (D46)
   cache/                      # machine-written; regenerable
-    thumbs/<slug>.<hash>.png
+    thumbs/<slug>.png, <slug>.json   # screenshots (opt-in, D55) and what was shot when, from which PID
+    browser/                  # `hallway thumbs enable`: playwright-core and Chromium's headless shell (D55)
     favicons/<hash>.img, <hash>.json   # tier-1 icons for apps and bookmarks, and what was looked up (D39)
   generated/                  # machine-written; regenerable
     caddy.json                # last config pushed to Caddy (v1)
@@ -161,7 +162,7 @@ scan:
   minPort: 1024
 
 thumbnails:
-  mode: favicon                 # favicon | screenshot | card   (screenshot/card: v2)
+  mode: favicon                 # favicon | screenshot (after `hallway thumbs enable`) | card   (D54)
 
 dashboard:
   title: null                   # defaults to the machine's hostname
@@ -323,7 +324,8 @@ All JSON. All under the security middleware below.
 | PATCH | `/api/apps/:slug` | Partial update |
 | DELETE | `/api/apps/:slug` | Remove declared app (moves file to `backups/`, never hard-deletes) |
 | GET | `/api/apps/:slug/history?window=24h\|7d\|90d` | Uptime buckets + latency series |
-| GET | `/api/apps/:slug/thumb` | Thumbnail image, with ETag (its etag is also `thumb` on the AppView) |
+| GET | `/api/apps/:slug/thumb` | Thumbnail image, with ETag (its etag is also `thumb` on the AppView, and its tier `thumbKind`: favicon, screenshot or card) |
+| POST | `/api/thumbs/refresh` | Re-shoot screenshots now: `{"slug"?}` → `{"taken": n}`; 409 when screenshots are off (D55) |
 | POST | `/api/apps/:slug/service/:action` | `start`/`stop`/`restart` a managed service (v1) |
 | GET | `/api/apps/:slug/logs?lines=200` | Tail of a managed service's logs (v1) |
 | GET | `/api/bookmarks` | All groups |

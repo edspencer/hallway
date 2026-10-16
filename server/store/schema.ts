@@ -263,8 +263,8 @@ export const CONFIG_SCHEMA: Field = {
     },
     thumbnails: {
       t: 'object',
-      doc: 'Card images.',
-      fields: { mode: { t: 'enum', values: ['favicon', 'screenshot', 'card'], default: 'favicon', doc: '`favicon` (a favicon on a colour tile); `screenshot` and `card` arrive in v2.' } },
+      doc: 'The pictures on the doors.',
+      fields: { mode: { t: 'enum', values: ['favicon', 'screenshot', 'card'], default: 'favicon', doc: '`favicon`: the app\'s favicon on its door (a monogram if it has none). `screenshot`: a picture of each healthy app as the door\'s glass (run `hallway thumbs enable` first: it installs the browser). `card`: every door drawn as a generated card.' } },
     },
     dashboard: {
       t: 'object',

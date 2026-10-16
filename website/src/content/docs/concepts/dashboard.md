@@ -51,8 +51,10 @@ observed tray hides itself when empty, and so do bookmarks.
 
 Top to bottom:
 
-- **A thumbnail**: the app's favicon on a tile of its own dominant colour (v0); real screenshots, opt-in, in
-  <span class="ms">v2</span>.
+- **A thumbnail**: the app's favicon on a tile of its own dominant colour, or a monogram when it has none. Opt in to
+  real screenshots (<span class="ms ms--v0">v0</span>, `hallway thumbs enable`) and each healthy app's door gets a pane of glass showing the app
+  itself, re-shot when the app restarts and every six hours. Or set `thumbnails.mode: card` and every door is drawn
+  as a generated card with its name, address, framework and `repo @ branch`.
 - **The name**, and for worktree siblings `repo @ branch` in smaller type.
 - **The address**, the main click target: `localhost:4321` in direct mode, `slides.localhost` in fronted mode, with a
   copy button on hover.

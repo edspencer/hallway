@@ -1,6 +1,6 @@
 // Tier-3 thumbnails (D13, D54): a generated card, for an app with no screenshot. An SVG drawn as one of the dashboard's
 // doors (its paint, raised panels, knob and brass number plate) carrying the app's name, its framework, `repo @ branch`
-// and its address; rendered to PNG by resvg with the bundled fonts only (server/fonts/, made by
+// and its address; rendered to PNG by resvg with the bundled fonts only (assets/fonts/, made by
 // scripts/card-fonts.py), so the same app gives the same bytes on every machine and nothing scans the system's fonts.
 //
 // The colours are tokens.css's (the door paints, the lift and shade, the plate's brass). The daemon can't read that
@@ -10,7 +10,7 @@ import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import { ROOT } from '../config.js';
 
-export const FONT_DIR = path.join(ROOT, 'server', 'fonts');
+export const FONT_DIR = path.join(ROOT, 'assets', 'fonts');
 export const FONT_FILES = ['Fraunces-SemiBold.ttf', 'Inter-Medium.ttf', 'JetBrainsMono-Regular.ttf'];
 
 /** The card's size in CSS pixels; the PNG is drawn at `ZOOM`× (the size a screenshot is stored at, ~640×400). */
