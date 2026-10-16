@@ -1,5 +1,11 @@
 # hallway
 
+## 0.3.1
+
+### Patch Changes
+
+- [#21](https://github.com/edspencer/hallway/pull/21) [`7dfebc1`](https://github.com/edspencer/hallway/commit/7dfebc1a89a075f98d56aeadc661b36ef21a5e91) Thanks [@edspencer](https://github.com/edspencer)! - `hallway lost dismiss --all` works: it was refused with "unknown option --all", although `--help` lists it. (`hallway lost dismiss <id>` and the dashboard's Dismiss were unaffected.)
+
 ## 0.3.0
 
 ### Minor Changes
