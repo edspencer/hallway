@@ -59,6 +59,12 @@ async function setup({ era = 'legacy' as 'legacy' | 'auto', withProviders = fals
       appHealth: () => health,
       observed: () => [OBS],
       appHistory: (_slug, window) => ({ window, buckets: [], uptime: 1, latency: { p50: 3, p95: 4, max: 5 } }),
+      lost: () => ({
+        bootTime: '2026-09-28T20:05:00.000Z',
+        previousBootTime: null,
+        detectedAt: '2026-09-28T20:06:00.000Z',
+        items: [{ id: 'lost1', port: 5173, label: 'viz @ feature/x', slug: null, managed: false, title: null, identity: { ...OBS.identity, branch: 'feature/x', cwd: '/home/me/Code/viz' }, firstSeen: null, lastSeen: null, back: false, suggestedSlug: 'viz', command: ['npm', 'run', 'dev'], cwd: '/home/me/Code/viz' }],
+      }),
     });
   }
   const app = createApp({ store: s.store, bus: s.bus, providers, webDist: null });
@@ -216,6 +222,7 @@ describe('MCP reads', () => {
     assert.equal(status.apps.length, 2);
     assert.equal(status.counts.healthy, 2);
     assert.equal(status.observed, 1);
+    assert.deepEqual(status.lostAtReboot.items[0], { id: 'lost1', label: 'viz @ feature/x', port: 5173, slug: null, dir: OBS.identity.projectDir ?? '/home/me/Code/viz', branch: 'feature/x', command: 'npm run dev', back: false });
     assert.equal((await t.call('get_status', { filter: 'web' })).data.apps.length, 1);
     assert.deepEqual((await t.call('list_apps', { tag: 'web' })).data.apps.map((a: { slug: string }) => a.slug), ['one']);
     assert.equal((await t.call('list_apps', { state: 'down' })).data.apps.length, 0);
