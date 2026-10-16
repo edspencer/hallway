@@ -1,6 +1,6 @@
 // "Lost at last reboot" (docs/05-ui.md): the banner's words. Pure, tested under node.
-import type { LostItem, LostNotice } from '../../shared/api';
-import { tildify } from './format';
+import type { LostItem, LostNotice } from '../../shared/api.js';
+import { tildify } from './format.js';
 
 /** When the machine booted, as the banner says it: `Mon 28 Sep 20:05`. */
 export function bootLabel(iso: string): string {

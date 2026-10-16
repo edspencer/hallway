@@ -298,7 +298,7 @@ describe('after a reboot', () => {
     let res = await post('/api/lost/viz00000000000001/restart');
     let body = (await res.json()) as LostActionResponse;
     assert.equal(res.status, 200, JSON.stringify(body));
-    assert.equal(body.ok, true, body.reason);
+    assert.equal(body.ok, true, body.reason ?? '');
     assert.equal(body.slug, 'scratch-pad');
     assert.equal(body.port, r.ports.pViz);
     assert.equal(body.persist, false);
@@ -318,7 +318,7 @@ describe('after a reboot', () => {
     // a declared app with a service: block: made a service, so it starts at login and restarts
     res = await post('/api/lost/docs0000000000001/service');
     body = (await res.json()) as LostActionResponse;
-    assert.equal(body.ok, true, body.reason);
+    assert.equal(body.ok, true, body.reason ?? '');
     assert.equal(body.persist, true);
     const d = r.store.apps.get('docs')!.value!;
     assert.equal(d.service?.runAtLoad, true);
