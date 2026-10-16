@@ -1006,6 +1006,39 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   - `schtasks /Create /TR` without XML (no way to remove the time limit or the battery conditions);
   - wscript or a VBS launcher for the hidden window (`conhost --headless` ships with Windows 10 1809 and later).
 
+### D61 — No job runs Hallway from npx's cache (2026-10-16)
+
+- **The bug:** `npx hallway service install` wrote a daemon job whose program was the CLI in npx's per-invocation
+  cache (`~/.npm/_npx/<hash>/node_modules/hallway/dist/server/cli.js`; `%LocalAppData%\npm-cache\_npx\…` on
+  Windows). npm prunes that cache when it likes, so the service broke silently at some later login, and it was
+  pinned to that version: `npm i -g hallway@latest` didn't upgrade it. `PER_SHELL_PATTERNS` already kept `_npx` off
+  a job's PATH (the PATH trap), but nothing looked at Hallway's own script.
+- **One pure function decides it,** `transientInstall()` in `server/services/transient.ts`, on the string alone (so
+  POSIX and Windows paths are tested on every OS): `_npx` (npx), `pnpm*/dlx/` (pnpm 9+'s dlx cache), `bunx-*`
+  (bunx's temporary install) and `dlx-<pid>` (older pnpm dlx, yarn dlx).
+- **Every write of a job that runs Hallway's CLI refuses** with a ServiceError (exit 1): "Hallway is running from
+  npx's cache, which npm can delete at any time. Install it first: `npm i -g hallway`, then run `hallway service
+  install` again." That's the daemon's job on every OS, and on Windows every job, since each task runs `hallway
+  supervise` (D60). The check sits in `Services` (`refuseTransient`, called from its one `write`), so `service
+  install`, `restart`, `regenerate`, `run`, `start`, `service add` and Lost's revive are all covered, and the
+  commands that would first write YAML (`run`, `service add`, Lost's revive) call it before they do, so a refusal
+  leaves nothing behind. Removing a job (`service uninstall`, `service rm`, `stop`) still works from npx. On macOS and
+  Linux an app's job runs the app's own command, and fronted mode's Caddy and dnsmasq jobs run those programs, so
+  they're unaffected.
+- **`npx hallway` and `npx hallway serve` keep working:** a foreground daemon lasts as long as the terminal, which is
+  what trying it out wants. The docs say so: `npx hallway` to try it, `npm i -g hallway && hallway service install`
+  to keep it.
+- **doctor warns** (`job-transient`) about an existing job whose program (its manifest; on Windows, the task's
+  supervisor command) is in such a cache, with the fix `npm i -g hallway && hallway service regenerate`. A warning,
+  not a failure: it works until the cache is pruned.
+- **Rejected:**
+  - copying the package somewhere lasting (into the data home) and pointing the job there: a second, hidden install
+    that `npm i -g hallway@latest` wouldn't upgrade either;
+  - resolving a global `hallway` on PATH and using it instead: it may be a different version from the one the user
+    ran, and it silently does something other than what was asked;
+  - a warning instead of a refusal: the failure comes much later, at a login, with nothing on screen;
+  - refusing `npx hallway serve` too: nothing about a foreground run outlives the cache.
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |

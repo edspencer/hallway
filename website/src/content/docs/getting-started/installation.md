@@ -15,6 +15,16 @@ hallway service install      # run the daemon at every login
 
 Then open `http://localhost:4255`, or run `hallway open`.
 
+### Just trying it?
+
+```sh
+npx hallway                  # the dashboard, in the foreground
+```
+
+That runs Hallway from npx's cache until you close the terminal. It's the quick way to try it, not to keep it:
+npm can delete that cache at any time, so `hallway service install` refuses to run from it (and `hallway doctor`
+flags a service that already does). To keep it, install it with the two commands above.
+
 `hallway service install` registers the daemon with your OS's own service manager and starts it, so the dashboard is
 always there without you starting anything:
 
