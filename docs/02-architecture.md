@@ -87,6 +87,7 @@ Mirror Local Review (D16). Keep dependencies minimal.
     health.sqlite             # probe samples + hourly rollups (node:sqlite, D37)
     observed.json             # last-known identity of every observed listener, with first/last seen
     boot.json                 # last seen boot time, to detect reboots
+    daemon.json               # the running daemon's pid and port, where the CLI also looks for it (D46)
   cache/                      # machine-written; regenerable
     thumbs/<slug>.<hash>.png
     favicons/<hash>.img, <hash>.json   # tier-1 icons for apps and bookmarks, and what was looked up (D39)
