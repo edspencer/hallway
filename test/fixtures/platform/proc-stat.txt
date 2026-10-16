@@ -1,0 +1,5 @@
+cpu  1 2 3 4
+intr 5
+ctxt 6
+btime 1760000000
+processes 7

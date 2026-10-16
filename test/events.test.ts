@@ -8,7 +8,9 @@ import { Hono } from 'hono';
 import type { ServerEvent } from '../shared/api.ts';
 import { DEBOUNCE_MS, EventBus, sseHandler } from '../server/events.ts';
 import { startWatcher } from '../server/watcher.ts';
-import { tmpStore } from './fixture.ts';
+import { exitWatchdog, tmpStore } from './fixture.ts';
+
+await exitWatchdog();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -157,15 +159,27 @@ describe('the watcher', () => {
     assert.ok(!store.apps.has('foo'));
   });
 
-  test('a burst of writes to one file is one event', async () => {
-    // the daemon's own debounce, and writes back to back: a timer between writes can stretch past a short debounce
-    // on a loaded runner, which would test the scheduler rather than the watcher
-    const { home, until, got } = await watched(DEBOUNCE_MS);
+  test('a burst of writes to one file is one event', { timeout: 10_000 }, async () => {
+    // The debounce is trailing: writes closer together than the window are one event. A wide window keeps the burst
+    // (five writes ~5 ms apart) well inside it even on a loaded CI runner, where the 60 ms used elsewhere can be
+    // outlasted by a single stalled tick and legitimately split the burst in two.
+    const WINDOW = 400;
+    const { home, store, until, got } = await watched(WINDOW);
     const f = path.join(home, 'bookmarks', 'g.yaml');
-    for (let i = 0; i < 5; i++) fs.writeFileSync(f, `title: G${i}\nlinks: []\n`);
-    await until((e) => e.type === 'bookmarks');
-    await sleep(400);
-    assert.equal(got.filter((g) => g.e.type === 'bookmarks').length, 1);
+    const at: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      fs.writeFileSync(f, `title: G${i}\nlinks: []\n`);
+      at.push(Date.now());
+      await sleep(5);
+    }
+    const gaps = at.slice(1).map((t, i) => t - at[i]);
+    assert.ok(Math.max(...gaps) < WINDOW, `the writes weren't a burst (gaps ${gaps.join(', ')} ms): the runner stalled`);
+    await until((e) => e.type === 'bookmarks', 5000);
+    // quiescence: nothing more for two whole windows, rather than a fixed sleep
+    for (let n = got.length, quietSince = Date.now(); Date.now() - quietSince < 2 * WINDOW; await sleep(20))
+      if (got.length !== n) [n, quietSince] = [got.length, Date.now()];
+    assert.equal(got.filter((g) => g.e.type === 'bookmarks').length, 1, JSON.stringify(got.map((g) => g.e)));
+    assert.equal(store.groups.get('g')!.value!.title, 'G4', 'and the one event carries the last write');
   });
 
   test('a broken file arrives as an error event; temp files and machine dirs are ignored', async () => {

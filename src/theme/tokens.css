@@ -87,7 +87,7 @@
   --hw-shadow-lifted: 0 1px 0 rgba(255, 240, 220, 0.05) inset, 0 22px 44px -22px rgba(0, 0, 0, 0.95);
   --hw-overlay: rgba(8, 6, 4, 0.62);
 
-  /* type: all OFL, bundled with the dashboard (D37) */
+  /* type: all OFL, bundled with the dashboard (D39) */
   --hw-font-display: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
   --hw-font-ui: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --hw-font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

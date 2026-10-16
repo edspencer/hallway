@@ -78,7 +78,7 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D13 | Thumbnails are tiered: favicon + colour tile (default) → real screenshots (opt-in) → generated card (fallback). |
 | D14 | One YAML file per entity, not one big file. |
 | D15 | Ship a useful **v0 with no DNS, no proxy and no sudo**: dashboard linking to `http://localhost:<port>`. |
-| D16 | Tech stack and conventions mirror the author's existing open-source project Local Review (Node ≥ 22, TypeScript, Hono, React, Vite, chokidar, `yaml`). |
+| D16 | Tech stack and conventions mirror the author's existing open-source project Local Review (Node ≥ 22.13, TypeScript, Hono, React, Vite, chokidar, `yaml`). |
 | D17 | Never reassign an existing app's port. |
 | D18 | Record what the scanner observes while processes are alive, so losses can be reported after a reboot. |
 | D19 | All launchd jobs use the `hallway.*` label prefix. |
@@ -99,6 +99,9 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D34 | Deletes go to `backups/removed/`; snapshots of the editable files before destructive writes and hourly. |
 | D35 | Live data (health, history, observed, discovered, thumbnails) plugs into the core through `StateProvider`s and the event bus. |
 | D36 | Daemon port: `--port`, `$PORT`, `config.yaml`, 4255. A new data home's `config.yaml` has every setting commented out at its default. |
+| D37 | Uptime history in **`node:sqlite`** (`state/health.sqlite`); `engines.node` raised to **≥ 22.13**, the first 22.x that loads it without a flag. |
+| D38 | Scanner and prober details: `/proc` fallback on Linux, cwd-as-project, `repo @ branch` rules, observation ids, damping of any move off `healthy`, uptime bar sizes. |
+| D39 | The v0 dashboard: one `/api/state` paints it, SSE refetches what each event names; tier-1 favicons from `server/thumbs/` (colour picked in the browser); "not checked" when no prober runs; bundled OFL fonts; contrast-checked tokens. |
 
 ## 5. Glossary
 

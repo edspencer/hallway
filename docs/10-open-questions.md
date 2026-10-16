@@ -14,14 +14,14 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
 | Q-HMR | Do Vite and Astro HMR websockets work through Caddy on :443 with Host rewritten? Is `server.hmr.clientPort: 443` needed? | v1 acceptance criterion 4. | Experiment; document per-framework fixes. |
 | Q-CADDY-UNPRIVILEGED | **Blocking for v1.** How to front on :443 without a root Caddy whose unauthenticated admin API lets any local process escalate (see the security caveat in `03-networking.md`). Leading option: user-level Caddy on high loopback ports + a one-time pf `rdr` on `lo0`. Others: admin API on a permission-restricted Unix socket; `admin off` + privileged reload helper; wildcard bind + `remote_ip` filter (rejected: exposes to LAN). | A root process that any local process can reconfigure is a privilege-escalation path. | Experiment with pf on current macOS (persistence across reboots and OS updates; anchor files); write up the trade-off as a decision. |
 | Q-HOOK | Current Claude Code (and other agents') pre-tool-use hook payload format and blocking convention. | For `hallway hook check-command`. | Agent docs at implementation time. |
-| Q-NODE-MIN | Minimum Node version for `node:sqlite` without flags. Verified working without a flag on Node 24.15 and on **Node 22.23.3** (which prints an `ExperimentalWarning`; see `11-research-notes.md`). Still unchecked: the oldest Node 22.x releases. | Engines field and storage choice (Q-STORE). | Test on Node 22.0–22.12, or raise `engines.node` to a known-good 22.x. |
+| Q-NODE-MIN | **Resolved 2026-10-16 (D37):** `node:sqlite` needs no flag from **Node 22.13.0**; 22.0–22.12 can't load it without `--experimental-sqlite` (22.0 not at all). `engines.node` is now `>=22.13` and CI tests 22.13. | | |
 | Q-LAUNCHCTL | Confirm modern `launchctl bootstrap/bootout/kickstart/print` behaviour and output parsing on the current macOS. | Service management. | Experiment. |
 
 ## Design decisions deliberately left open
 
 | ID | Question | Current leaning |
 |----|----------|-----------------|
-| Q-STORE | Health samples/rollups in `node:sqlite` or JSONL? | `node:sqlite` if Q-NODE-MIN allows: rollups and pruning are trivial in SQL, and no dependency. JSONL day-files otherwise. |
+| Q-STORE | **Resolved 2026-10-16 (D37):** `node:sqlite`, in `state/health.sqlite`. | |
 | Q-DASHBOARD-HOST | Default dashboard hostname in `localhost` mode: `hallway.localhost` (current spec), a shorter `hall.localhost`, or bare `localhost`? | `hallway.localhost`: it matches the product and binary name. Bare `localhost` on :443 may collide with other tools. Whichever is chosen is a reserved app slug. |
 | Q-VALIDATION | Hand-rolled validation or a small schema library? | **Resolved (D32):** hand-rolled, with the schemas as data in `server/store/schema.ts`; the agent guide's file-format reference is generated from them. |
 | Q-BOOKMARK-HEALTH | Health-check remote bookmarks? | Off by default; maybe opt-in per link later. Remote checks leak timing/traffic and often hit auth walls. |
