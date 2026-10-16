@@ -16,7 +16,7 @@ Hallway gives them all a front door:
   default (or under your own domain). `hallway setup` runs Caddy as you, never as root, and prints each privileged
   step before it runs it.
 - **Survives reboots** — the things you want kept alive run as native OS services (launchd on macOS, systemd on
-  Linux), and after a restart Hallway lists what was running before and didn't come back, with one click to start
+  Linux, a per-user scheduled task on Windows), and after a restart Hallway lists what was running before and didn't come back, with one click to start
   each again.
 - **A glance at each app** — favicons by default; opt in to screenshots on the doors (`hallway thumbs enable`), or
   draw every door as a generated card.
@@ -33,12 +33,13 @@ Hallway gives them all a front door:
 ## Quick start
 
 You need Node.js 22.13 or later, on macOS or Linux. Windows is supported where feasible, best effort: the dashboard,
-health checks, the port scanner, bookmarks and managed services (as scheduled tasks) run there, without fronted mode
-([details](docs/09-decisions.md)).
+health checks, the port scanner, bookmarks and managed services (as scheduled tasks that start at logon) run there,
+without fronted mode. So far it has run only on GitHub's Windows runners, not on a real Windows desktop
+([details](https://hallway.edspencer.net/roadmap/#windows)).
 
 ```sh
 npm i -g hallway
-hallway service install    # run the daemon as a LaunchAgent (macOS) or a systemd user unit (Linux)
+hallway service install    # run the daemon at login: a LaunchAgent (macOS), systemd user unit (Linux) or scheduled task (Windows)
 hallway open               # or browse to http://localhost:4255
 ```
 
@@ -77,7 +78,7 @@ domain, a resolver entry for that domain only. It needs Caddy 2.7 or later.
 
 ## Status
 
-**Released** (0.3.1 is the latest). All of v0 and v1 and most of v2 are built ([docs/08-roadmap.md](docs/08-roadmap.md)):
+**Released** (0.5.0 is the latest). All of v0 and v1 and most of v2 are built ([docs/08-roadmap.md](docs/08-roadmap.md)):
 
 - **0.1.0 (v0):** the dashboard, live YAML files, health checks with uptime history, the port scanner with claim and
   ignore, bookmarks, the agent guide, `hallway service install` and `hallway doctor`, plus v1's managed servers
@@ -85,12 +86,16 @@ domain, a resolver entry for that domain only. It needs Caddy 2.7 or later.
 - **0.2.0:** v1's fronted mode (`hallway setup`, HTTPS names, custom domains), and v2's MCP server and agent hook.
 - **0.3.0:** v1's "Lost at last reboot", and v2's screenshot thumbnails, generated cards and a fast 90-day view.
 - **0.3.1:** a fix: `hallway lost dismiss --all`.
+- **0.4.0:** Windows, best effort: the daemon, dashboard and CLI run natively, and the port scanner finds Windows'
+  listeners with their directories, without administrator rights. `hallway setup` refuses there.
+- **0.5.0:** Windows managed services: `hallway service install` and `hallway run`, as per-user scheduled tasks.
 
 What's left is v2's last criterion: running everything on a real Mac. Everything has been run end to end on Linux;
 on macOS it's tested on CI (including real launchd jobs, `hallway setup` with its pf redirect and trusted
 certificate, and teardown) but not yet on a developer's Mac. In particular, no browser has been tried against
 fronted mode on a Mac, nothing has been checked across a real reboot, and whether the pf redirect survives a macOS
-update is unknown. Reports are welcome. The design is in [spec.md](spec.md) and [docs/](docs/).
+update is unknown. Windows has run only on CI's runners: a real logon starting the scheduled tasks, and an
+interactive desktop user's dev servers, are untested. Reports are welcome. The design is in [spec.md](spec.md) and [docs/](docs/).
 
 ## Development quick start
 

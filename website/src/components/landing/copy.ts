@@ -34,7 +34,7 @@ export const QUICKSTART = {
 	label: 'Install',
 	/** The pill in the terminal bar. */
 	tag: 'On npm',
-	blurb: 'macOS and Linux, Node 22.13+. The second command runs Hallway at every login (a LaunchAgent on macOS, a systemd user unit on Linux); then open http://localhost:4255.',
+	blurb: 'macOS and Linux, and Windows best effort (no HTTPS names there, and not yet tried on a real Windows desktop). Node 22.13+. The second command runs Hallway at every login (a LaunchAgent on macOS, a systemd user unit on Linux, a scheduled task on Windows); then open http://localhost:4255.',
 	command: `${INSTALL_COMMAND} && hallway service install`,
 	link: { text: 'The first five minutes', href: '/getting-started/quickstart/' },
 } as const;
@@ -102,7 +102,7 @@ export const VALUE_PROPS = [
 		icon: 'refresh',
 		ms: 'v1',
 		title: 'Survives the reboot',
-		body: 'hallway run --persist makes the apps you care about native services (launchd on macOS, systemd on Linux) that come back on their own. Everything else is remembered: after a restart Hallway lists what was lost, with one click to start each again.',
+		body: 'hallway run --persist makes the apps you care about native services (launchd on macOS, systemd on Linux, a scheduled task on Windows) that come back on their own. Everything else is remembered: after a restart Hallway lists what was lost, with one click to start each again.',
 	},
 ] as const;
 
@@ -132,7 +132,7 @@ export const FEATURES = [
 	{
 		ms: 'v1',
 		title: 'Agents start servers properly',
-		body: 'Instead of a bare npm run dev, an agent runs hallway run. The server is handed to launchd (or systemd on Linux) so it outlives the session, keeps a stable port, and the command prints the URL and exits, so it never hangs a tool call.',
+		body: 'Instead of a bare npm run dev, an agent runs hallway run. The server is handed to launchd (systemd on Linux, a scheduled task on Windows) so it outlives the session, keeps a stable port, and the command prints the URL and exits, so it never hangs a tool call.',
 		mock: 'run',
 		alt: 'Mock-up of a terminal: hallway run slides -- npx astro dev --port $PORT, followed by the app URL, the log path and a prompt',
 	},
@@ -169,7 +169,7 @@ export const AGENTS = {
 	points: [
 		{
 			title: 'One command instead of npm run dev',
-			body: '`hallway run <slug> -- <command>` starts the server as a launchd or systemd user service, waits for it to listen, prints the URL and exits.',
+			body: '`hallway run <slug> -- <command>` starts the server as a user service (launchd, systemd, or a scheduled task on Windows), waits for it to listen, prints the URL and exits.',
 		},
 		{
 			title: 'A guide written for agents',

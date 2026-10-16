@@ -8,6 +8,12 @@ description: How Hallway uses Caddy, running as you, to serve every app at https
 optional: turn it on with [`hallway setup`](/networking/setup-and-doctor/) and off with `hallway teardown`. For the
 overview, see [Direct and fronted mode](/concepts/modes/).
 
+:::note[Not on Windows]
+Fronted mode is macOS and Linux only. On Windows (best effort) its parts have no user-level equivalent, so
+`hallway setup` refuses before it looks for or changes anything, `hallway teardown` has nothing to undo, and apps keep
+their `http://localhost:<port>` addresses.
+:::
+
 ## Why Caddy
 
 Hallway generates Caddy's configuration; it never proxies app traffic itself. Caddy brings, out of the box:

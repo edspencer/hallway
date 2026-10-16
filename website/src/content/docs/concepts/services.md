@@ -1,16 +1,16 @@
 ---
 title: Services and reboots
-description: Keeping apps alive with native launchd jobs or systemd user units, the PATH trap, log rotation, and "lost at last reboot".
+description: Keeping apps alive with native launchd jobs, systemd user units or Windows scheduled tasks, the PATH trap, log rotation, and "lost at last reboot".
 ---
 
 Hallway keeps the apps you care about running with the OS's own service manager: **launchd jobs** on macOS, the
-mechanism macOS uses for its own background services, and **systemd user units** on Linux. There is no PM2 and no
-second process manager.
+mechanism macOS uses for its own background services, **systemd user units** on Linux, and, best effort,
+**per-user scheduled tasks** on Windows ([below](#windows)). There is no PM2 and no second process manager.
 
 ## Hallway itself
 
-<span class="ms ms--v0">v0</span> Hallway runs itself the same way, as a user LaunchAgent on macOS or a systemd user
-unit on Linux:
+<span class="ms ms--v0">v0</span> Hallway runs itself the same way, as a user LaunchAgent on macOS, a systemd user
+unit on Linux, or a scheduled task on Windows:
 
 ```sh
 hallway service install      # loaded now and at every login
@@ -20,19 +20,20 @@ hallway service uninstall
 ```
 
 On macOS the job is `~/Library/LaunchAgents/hallway.daemon.plist`; on Linux it is
-`~/.config/systemd/user/hallway-daemon.service`. Both start at **login**, not at boot, which is the right behaviour
+`~/.config/systemd/user/hallway-daemon.service`; on Windows it is the scheduled task `\hallway.daemon` (see
+[Windows](#windows)). All start at **login**, not at boot, which is the right behaviour
 for a laptop. On Linux, enabling lingering once (`loginctl enable-linger $USER`) keeps Hallway's units running
 without a login session and starts them at boot; Hallway never enables it itself, and `hallway doctor` warns while it
 is off.
 
-Installing, starting, stopping and restarting these jobs have run for real against launchd and systemd in CI.
-Coming back after a logout or a reboot has not been tested yet, on either OS.
+Installing, starting, stopping and restarting these jobs have run for real against launchd, systemd and Windows' Task
+Scheduler in CI. Coming back after a logout or a reboot has not been tested yet, on any OS.
 
 ## Managed services
 
 <span class="ms ms--shipped">v1</span> An app with a `service:` block is a **managed service**: Hallway generates a job for it,
-`~/Library/LaunchAgents/hallway.app.<slug>.plist` on macOS or `~/.config/systemd/user/hallway-app-<slug>.service` on
-Linux, and keeps it alive.
+`~/Library/LaunchAgents/hallway.app.<slug>.plist` on macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on
+Linux, or the scheduled task `\hallway.app.<slug>` on Windows, and keeps it alive.
 
 ```yaml
 # apps/slides.yaml
@@ -79,6 +80,30 @@ shell doesn't expand it first.
 `--strictPort` matters for Vite: without it, Vite quietly picks another port when its port is busy, and the app
 "moves" away from the address everything else expects.
 
+### Windows
+
+<span class="ms ms--shipped">v1</span> Since 0.5.0, best effort. Windows has no user-level launchd or systemd, so the
+daemon and each managed app are a **scheduled task** in Task Scheduler's root folder, named by its label
+(`\hallway.daemon`, `\hallway.app.<slug>`). Each is registered as you, with no administrator rights and no stored
+password, and starts when you **log on**.
+
+Task Scheduler restarts a task only when it fails to *start*, not when its program exits, so the task runs a small
+supervisor, `hallway supervise` (internal, not in `--help`), inside a headless console so no window opens. The
+supervisor runs the command in its directory, appends its output to the usual log files, starts it again 10 seconds
+after it exits, and records its state for `hallway service status`. The task's files are in
+`%LOCALAPPDATA%\hallway\tasks\`.
+
+`hallway stop` disables the task as well as ending it, so it stays stopped at the next logon, as on the other OSes.
+
+- **Commands are looked up as cmd.exe does** (`PATHEXT`), so `vite` finds npm's `vite.cmd`, never the `#!/bin/sh`
+  script npm puts beside it.
+- **Nothing runs while you're logged off.** That would need your password stored with the task, or a service account
+  and administrator rights; Hallway asks for neither, so lingering has no Windows equivalent.
+- **Checked on GitHub's Windows runners** (install, `hallway run`, stop, start, restart, `--persist` surviving a killed
+  process, log rotation, doctor and removal), **not yet on a real Windows desktop**: a real logon starting the tasks,
+  a logoff stopping them, no console window flashing, and a standard (non-administrator) user registering them are
+  all still unverified.
+
 ### The PATH trap
 
 launchd jobs and systemd units inherit no shell environment, so a job's `PATH` has to be written into it. Copying your current shell's
@@ -99,7 +124,7 @@ So Hallway's job generator:
 
 ### Logs
 
-Each service writes to `~/.hallway/logs/<slug>.out.log` and `.err.log`. Neither launchd nor systemd rotates those
+Each service writes to `~/.hallway/logs/<slug>.out.log` and `.err.log`. None of launchd, systemd or Task Scheduler rotates those
 files, and because they keep them open, renaming doesn't work either, so the daemon copies and truncates them in place once they
 pass a size limit (10 MB by default), keeping three generations.
 

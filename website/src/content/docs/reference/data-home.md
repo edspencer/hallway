@@ -84,10 +84,11 @@ dotfiles. Hallway generates a `.gitignore` inside it that excludes `state/`, `ca
 Hallway writes nowhere else, except:
 
 - <span class="ms ms--v0">v0</span> the daemon's service definition, when you run `hallway service install`:
-  `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux;
+  `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux,
+  the scheduled task `\hallway.daemon` and its files in `%LOCALAPPDATA%\hallway\tasks\` on Windows;
 - <span class="ms ms--shipped">v1</span> one per managed service: `~/Library/LaunchAgents/hallway.app.<slug>.plist`
-  on macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on Linux;
-- <span class="ms ms--shipped">v1</span> during `hallway setup` only: the user-level Caddy (and dnsmasq) jobs, and the
+  on macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on Linux, `\hallway.app.<slug>` on Windows;
+- <span class="ms ms--shipped">v1</span> during `hallway setup` only (macOS and Linux): the user-level Caddy (and dnsmasq) jobs, and the
   privileged pieces it prints and runs through `sudo`: the 443/80 redirect, the trusted root certificate and, for a
   custom domain, the resolver entry. The full list is in
   [Setup](/networking/setup-and-doctor/#what-it-changes-outside-the-data-home); `hallway teardown` removes them.

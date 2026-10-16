@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Installing Hallway from npm on macOS or Linux, and what it needs.
+description: Installing Hallway from npm on macOS, Linux or Windows, and what it needs.
 ---
 
 
@@ -25,7 +25,8 @@ always there without you starting anything:
 - **Windows** (best effort): a scheduled task, `\hallway.daemon`, that starts when you log on and runs
   `hallway supervise`, which keeps the daemon running and writes its logs. Its files are in
   `%LOCALAPPDATA%\hallway\tasks\`. It runs while you're logged on. No administrator rights are needed, and none
-  are asked for.
+  are asked for. This has run for real on GitHub's Windows runners, but a real logon starting it hasn't been tried on
+  a Windows desktop yet.
 
 It is idempotent: run it again any time. Undo it with `hallway service uninstall`; `hallway service status` says
 whether it is running.
@@ -52,10 +53,10 @@ hallway open         # open the dashboard in your browser
 
 | | |
 | --- | --- |
-| **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort (per-user scheduled tasks): everything but fronted mode works. |
+| **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort (per-user scheduled tasks): everything but fronted mode works; see [the roadmap](/roadmap/#windows) for what hasn't been checked on a real Windows desktop. |
 | **Node** | 22.13 or later (for the built-in `node:sqlite` that holds uptime history). |
 | **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`. |
-| **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and one guided sudo step. On Linux also systemd, `nft` and a system CA store. See [Setup](/networking/setup-and-doctor/). |
+| **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional, and macOS and Linux only. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and one guided sudo step. On Linux also systemd, `nft` and a system CA store. See [Setup](/networking/setup-and-doctor/). |
 | **For custom domains** <span class="ms ms--shipped">v1</span> | Optional. dnsmasq (Homebrew's on macOS, which setup installs; on Linux the `dnsmasq-base` package or similar) and, on Linux, `systemd-resolved`. |
 | **For screenshots** <span class="ms ms--shipped">v2</span> | Optional. About 300 MB of disk: `hallway thumbs enable` downloads a headless browser into the data home. See [Thumbnails](/concepts/thumbnails/). |
 
@@ -69,6 +70,6 @@ macOS's AirPlay Receiver on 5000 and 7000, and of the range Hallway assigns to n
 ## Where things go
 
 Everything Hallway knows lives in one directory, the **data home**: `~/.hallway`, or wherever `$HALLWAY_HOME` points.
-See [The data home](/reference/data-home/). Nothing is written outside it except the service definitions (launchd plists
-or systemd user units) for the daemon and any services you ask for, and, only during `hallway setup`, the files listed in
+See [The data home](/reference/data-home/). Nothing is written outside it except the service definitions (launchd plists,
+systemd user units, or on Windows scheduled tasks and their files in `%LOCALAPPDATA%\hallway\tasks\`) for the daemon and any services you ask for, and, only during `hallway setup`, the files listed in
 [Setup, teardown and doctor](/networking/setup-and-doctor/#what-it-changes-outside-the-data-home).

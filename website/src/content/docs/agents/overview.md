@@ -28,7 +28,7 @@ The tooling can't fix the real problem alone: agents will keep running `npm run 
 one of those becomes an orphan when the session ends. So Hallway gives agents:
 
 1. <span class="ms ms--shipped">v1</span> **One command instead of `npm run dev`**: [`hallway run`](/agents/hallway-run/). It hands
-   the server to launchd or systemd so it outlives the session, keeps a stable port, prints the URL and exits.
+   the server to launchd, systemd or (on Windows) Task Scheduler so it outlives the session, keeps a stable port, prints the URL and exits.
 2. <span class="ms ms--v0">v0</span> **A guide and a snippet**: [`hallway guide`](/agents/agent-guide/) explains the
    rules, and `hallway guide --snippet` prints a short paragraph for your `AGENTS.md` or `CLAUDE.md`.
 3. <span class="ms ms--shipped">v2</span> **An optional hook**, [`hallway hook check-command`](/agents/hook/), that catches

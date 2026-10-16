@@ -56,7 +56,8 @@ Plenty of dashboards show tiles and bookmarks. Hallway's differences:
 2. **It remembers.** It records what it saw while processes were alive, so after a reboot it can say what was lost
    (**Lost at last reboot**).
 3. **It fronts**, if you ask it to. Memorable HTTPS hostnames per app, with defaults that need no DNS server.
-4. **It keeps things alive.** Native launchd (macOS) or systemd user (Linux) services, no extra process manager.
+4. **It keeps things alive.** Native launchd (macOS), systemd user (Linux) or scheduled-task (Windows) services, no extra
+   process manager.
 5. **It is built for agent-spawned servers.** Plain YAML an agent can edit, an agent guide, an MCP server, and one command,
    `hallway run`, that starts a server so it never becomes an orphan.
 
@@ -77,11 +78,14 @@ Plenty of dashboards show tiles and bookmarks. Hallway's differences:
   [MCP server](/agents/mcp/), the optional [dev-server hook](/agents/hook/), opt-in screenshot
   [thumbnails](/concepts/thumbnails/), generated cards, and a fast 90-day uptime view with a latency chart. What's
   left is running every criterion on a real Mac.
+- **Windows, best effort**, released in 0.4.0 (the daemon, dashboard and port scanner) and 0.5.0 (managed services as
+  scheduled tasks). Everything but fronted mode, checked on CI's Windows runners but not yet on a real Windows
+  desktop. See [the roadmap](/roadmap/#windows).
 
 ## Who it's for
 
 One developer, on their own machine, running many small local web servers, especially one who leans on coding agents.
-On macOS or Linux. Comfortable with a CLI and with editing YAML; not interested in maintaining a hand-written
+On macOS or Linux, or on Windows without the HTTPS names. Comfortable with a CLI and with editing YAML; not interested in maintaining a hand-written
 dashboard config. Hallway is **not** for teams, remote access, production process management or containers.
 
 <CardGrid>
