@@ -147,11 +147,16 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
     return { ports: ig.ports, processes: ig.processes, dirs: ig.dirs.map((d) => expandHome(d, os.homedir())) };
   };
 
+  // health transitions and scans can tell that a lost item is back, once what that needs is in place (below)
+  let lostWired = false;
   const health: HealthService = await startHealth({
     home,
     targets: () => probeTargets(store),
     settings: () => ({ ...config().probe, startGraceSeconds: config().services.startGraceSeconds }),
-    onState: (slug, h) => bus.emit({ type: 'state', slug, state: h.state }),
+    onState: (slug, h) => {
+      bus.emit({ type: 'state', slug, state: h.state });
+      if (lostWired) lostMaybeBack();
+    },
   });
 
   let lastKey = '';
@@ -169,10 +174,7 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
           const key = listKey([...r.listeners, ...r.other]);
           if (key !== lastKey) bus.emit({ type: 'observed', reason: 'scan' });
           lastKey = key;
-          // a lost item came back (or went again): the banner's rows change
-          const back = backKey();
-          if (back !== lastBackKey && lostStore.get()) bus.emit({ type: 'reboot', lost: lostStore.get()!.items.map((i) => i.id) });
-          lastBackKey = back;
+          if (lostWired) lostMaybeBack();
         },
       })
     : null;
@@ -216,6 +218,13 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
     return now.some((o) => o.id === r.id || (slug !== null && o.port === r.port));
   }
   const backKey = () => (lostStore.get()?.items ?? []).filter(isBack).map((i) => i.id).join(',');
+  /** A lost item came back (or went again) after a scan or a health transition: the banner's rows change. */
+  function lostMaybeBack() {
+    const back = backKey();
+    if (back !== lastBackKey && lostStore.get()) bus.emit({ type: 'reboot', lost: lostStore.get()!.items.map((i) => i.id) });
+    lastBackKey = back;
+  }
+  lostWired = true;
 
   function lostItem(r: LostRecord, taken: ReadonlySet<string>): LostItem {
     const slug = appOnPort(r.port) ?? (r.slug && store.apps.has(r.slug) ? r.slug : null);
