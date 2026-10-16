@@ -1,0 +1,67 @@
+---
+/**
+ * Shot — a real capture of the dashboard, framed like the mock-ups (Mock.astro) so the two sit together.
+ *
+ * The captures in src/assets/shots/ were taken from a Hallway 0.3.0 daemon with a throwaway data home and staged
+ * demo data: made-up apps served by `python3 -m http.server`, `example.com` bookmarks and a seeded uptime history
+ * (the Lost at last reboot capture comes from a simulated reboot). The tag says so.
+ */
+import { Image } from 'astro:assets';
+import dashboard from '../../assets/shots/dashboard.png';
+import observed from '../../assets/shots/observed.png';
+import doors from '../../assets/shots/doors.png';
+import bookmarks from '../../assets/shots/bookmarks.png';
+import lost from '../../assets/shots/lost-at-last-reboot.png';
+import drawer from '../../assets/shots/drawer-90-days.png';
+
+const SHOTS = { dashboard, observed, doors, bookmarks, lost, drawer };
+type ShotName = keyof typeof SHOTS;
+
+interface Props {
+	name: ShotName;
+	alt: string;
+	/** Eager for the hero; lazy everywhere else. */
+	eager?: boolean;
+}
+const { name, alt, eager = false } = Astro.props;
+---
+
+<figure class="shot">
+	<span class="shot-tag" aria-hidden="true">Real capture · demo data</span>
+	<Image src={SHOTS[name]} alt={alt} widths={[640, 960, 1400]} sizes="(min-width: 940px) 700px, 100vw" loading={eager ? 'eager' : 'lazy'} />
+</figure>
+
+<style>
+	.shot {
+		position: relative;
+		margin: 0;
+		width: 100%;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-media);
+		background: var(--sunken);
+		box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.7);
+		overflow: hidden;
+	}
+
+	.shot img {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	.shot-tag {
+		position: absolute;
+		right: 0.7rem;
+		bottom: 0.55rem;
+		z-index: 2;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--text-subtle);
+		background: rgb(13 11 8 / 0.8);
+		border: 1px solid var(--border-subtle);
+		border-radius: 999px;
+		padding: 0.1rem 0.55rem;
+	}
+</style>

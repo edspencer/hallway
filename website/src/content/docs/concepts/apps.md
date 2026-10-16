@@ -11,7 +11,7 @@ Every app comes from exactly one of three sources, and the dashboard always show
 | Source | Where it comes from | Durable? | Editable in Hallway? |
 | --- | --- | --- | --- |
 | **Declared** <span class="ms ms--v0">v0</span> | A file, `apps/<slug>.yaml`, in the data home, written by you, your editor, an agent, the CLI, the API or MCP | Yes | Yes |
-| **Discovered** <span class="ms ms--v0">v0</span> | An adapter that reads another tool's registry | As durable as that registry | No, but it can be **adopted** into a declared app |
+| **Discovered** (no adapter ships yet) | An adapter that reads another tool's registry | As durable as that registry | No, but it can be **adopted** into a declared app |
 | **Observed** <span class="ms ms--v0">v0</span> | The port scanner: something is listening, and it is neither declared nor discovered | Remembered in `state/observed.json` | No, but it can be **claimed** or **ignored** |
 
 When an observed listener's port matches a declared or discovered app, it is not shown twice: it *enriches* that app
@@ -44,15 +44,14 @@ expected: running
 
 ## Discovered apps
 
-Some tools keep their own registry of servers and ports. A **discovery adapter** reads one, read-only, so those apps
-appear without being declared twice. Adapters switch themselves on only when their tool is present on the machine,
-and config can force them on or off.
+Some tools keep their own registry of servers and ports. A **discovery adapter** would read one, read-only, so those
+apps appear without being declared twice, switching itself on only when its tool is present on the machine. **Adopt**
+would turn a discovered app into a declared one you own.
 
-The first adapter reads the port registry of `pm`, the dev-server wrapper in the author's other project
-[Paddock](https://github.com/edspencer/paddock), mainly as a worked example of the interface. Candidates for later:
-plain PM2, Docker's published ports, and process-compose.
-
-**Adopt** a discovered app to turn it into a declared one you own.
+**Not built yet.** The daemon has the place for adapters to plug in, and the API and dashboard already know the
+`discovered` source, but no adapter ships in the current release. Candidates: the port registry of `pm`, the
+dev-server wrapper in the author's other project [Paddock](https://github.com/edspencer/paddock), plain PM2, Docker's
+published ports, and process-compose. Until then, every app on the dashboard is declared or observed.
 
 ## Observed listeners: the scanner
 
@@ -61,8 +60,8 @@ never named it. What is it?"*
 
 Every two minutes (and on demand, with `hallway scan`), the scanner:
 
-1. **Lists listening TCP sockets** with `lsof`. Without root it sees only your own processes, which is the intended
-   scope.
+1. **Lists listening TCP sockets** with `lsof` on macOS, or `ss` (falling back to `/proc`) on Linux. Without root it
+   sees only your own processes, which is the intended scope.
 2. **Filters out the noise.** On a typical development machine, IDE language servers and agent-tool helpers outnumber
    real dev servers about ten to one. Hallway skips ports below 1024, the ephemeral range 49152–65535 (where those
    helpers live), known non-web daemons (`postgres`, `redis-server`, `sshd` and the like), itself, Caddy, anything in

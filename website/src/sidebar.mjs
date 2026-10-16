@@ -32,6 +32,7 @@ export const SIDEBAR = [
 			{ label: 'Services and reboots', slug: 'concepts/services' },
 			{ label: 'Bookmarks', slug: 'concepts/bookmarks' },
 			{ label: 'The dashboard', slug: 'concepts/dashboard' },
+			{ label: 'Thumbnails', slug: 'concepts/thumbnails' },
 		],
 	},
 	{

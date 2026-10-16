@@ -33,6 +33,10 @@ as `CLAUDE.md` or `AGENTS.md`:
 hallway guide --snippet
 ```
 
+Optional extras, each on its own page: memorable HTTPS names such as `https://my-app.localhost` with
+[`hallway setup`](/networking/setup-and-doctor/), the [MCP server](/agents/mcp/) and the
+[dev-server hook](/agents/hook/) for coding agents, and [screenshot thumbnails](/concepts/thumbnails/).
+
 To try Hallway without installing it as a service, run the daemon in the foreground instead:
 
 ```sh
@@ -46,9 +50,10 @@ hallway open         # open the dashboard in your browser
 | --- | --- |
 | **OS** | macOS (launchd) or Linux (systemd user units). Windows is out of scope. |
 | **Node** | 22.13 or later (for the built-in `node:sqlite` that holds uptime history). |
-| **Privileges** | None. The daemon never runs as root, and v0 never asks for sudo. |
-| **For fronted mode** <span class="ms">v1</span> | [Caddy](https://caddyserver.com) (`hallway setup` offers to install it with Homebrew), and one guided sudo step. |
-| **For custom domains** <span class="ms">v1</span> | dnsmasq, also via `hallway setup`. |
+| **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`. |
+| **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and one guided sudo step. On Linux also systemd, `nft` and a system CA store. See [Setup](/networking/setup-and-doctor/). |
+| **For custom domains** <span class="ms ms--shipped">v1</span> | Optional. dnsmasq (Homebrew's on macOS, which setup installs; on Linux the `dnsmasq-base` package or similar) and, on Linux, `systemd-resolved`. |
+| **For screenshots** <span class="ms ms--shipped">v2</span> | Optional. About 300 MB of disk: `hallway thumbs enable` downloads a headless browser into the data home. See [Thumbnails](/concepts/thumbnails/). |
 
 ## Why port 4255?
 
@@ -62,4 +67,4 @@ macOS's AirPlay Receiver on 5000 and 7000, and of the range Hallway assigns to n
 Everything Hallway knows lives in one directory, the **data home**: `~/.hallway`, or wherever `$HALLWAY_HOME` points.
 See [The data home](/reference/data-home/). Nothing is written outside it except the service definitions (launchd plists
 or systemd user units) for the daemon and any services you ask for, and, only during `hallway setup`, the files listed in
-[Setup, teardown and doctor](/networking/setup-and-doctor/).
+[Setup, teardown and doctor](/networking/setup-and-doctor/#what-it-changes-outside-the-data-home).

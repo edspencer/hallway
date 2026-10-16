@@ -24,31 +24,41 @@ them (that is what Cloudflare's build does).
 
 ## Where it differs from Local Review's site, and why
 
-- **No screenshots, no demo video (yet).** The landing page's illustrations are drawn in HTML/CSS from the spec's
-  designs (`src/components/landing/Mock.astro`) and every one carries a "Mock-up · planned design" tag. Local Review's
-  `rehype-shots` plugin and capture pipeline were left out. The v0 dashboard now exists: switch to real captures the
-  way Local Review does.
+- **Hand-taken screenshots, no capture pipeline, no demo video (yet).** The landing page shows real captures on
+  staged demo data (`src/components/landing/Shot.astro`, `src/assets/shots/`, tagged "Real capture · demo data"; how
+  they were staged is in README.md, "Screenshots"), and HTML/CSS mock-ups (`Mock.astro`, tagged "Mock-up") for the
+  terminal and the address bar. Local Review's `rehype-shots` plugin and capture pipeline were left out.
 - **llms.txt is generated here** (`src/llms.ts`, `src/pages/llms.txt.ts`, `src/pages/llms-full.txt.ts`) from the docs
   pages in sidebar order, instead of being committed copies of what the app serves. When the app serves its own
   `/llms.txt`, consider Local Review's arrangement.
 - **The sidebar lives in `src/sidebar.mjs`**, so the llms.txt routes can read it too.
 - **The brand is a placeholder made here** (`brand/`, `npm run brand`), not copied from a repo-level brand kit.
 - **Fonts are self-hosted** from `@fontsource-variable` packages (all OFL) rather than loaded from Google Fonts.
-- **A release banner on every docs page** (v0 is out; what the milestone badges mean), by overriding Starlight's
+- **A release banner on every docs page** (what has shipped; what the milestone badges mean), by overriding Starlight's
   `Banner` (`src/components/Banner.astro`).
 
 ## Content rules
 
-**v0 is released** (Hallway 0.1.0 on npm, macOS and Linux); v1 and v2 are upcoming.
+**v0 and v1 are released, and so is v2's software** (Hallway 0.1.0–0.3.0 on npm, macOS and Linux; what shipped
+in which release is in `roadmap.md`). What is left of v2 is criterion 5: running every v0 and v1 criterion on a real
+Mac (browsers trusting the certificate, Safari and `*.localhost`, persistence across logout and reboot, pf across
+macOS updates). **Never claim those are verified.**
 
-- **Mark features with their milestone**: `<span class="ms ms--v0">v0</span>` (available now; this includes
-  `hallway run` and managed services, shipped early from v1, and the MCP server and
-  `hallway hook check-command`, shipped early from v2 in the first release after 0.1.0), `<span class="ms">v1</span>`,
-  `<span class="ms">v2</span>` (styled in `custom.css`). **Never write a v1 or v2 feature as if it has shipped**: say
-  "upcoming" or "coming in v1" in the words too. Keep badges **out of headings** (they end up in the anchor slugs):
-  put them at the start of the paragraph below.
+- **Mark features with the milestone they belong to** (`../docs/08-roadmap.md`), styled in `custom.css`: a lamplit
+  badge means available now, a grey one means not yet.
+  - `<span class="ms ms--v0">v0</span>` for v0 features;
+  - `<span class="ms ms--shipped">v1</span>` / `<span class="ms ms--shipped">v2</span>` for v1 and v2 features
+    that have shipped (all of v1: `hallway run`, managed services, fronted mode, custom domains, setup / teardown,
+    lost at last reboot; of v2: MCP, the hook, screenshot thumbnails, generated cards, the 90-day rollups);
+  - plain `<span class="ms">v1</span>` / `<span class="ms">v2</span>` only for something in a milestone that hasn't
+    shipped, and then say "not yet" in the words too.
+
+  Something that isn't built and has no milestone (discovery adapters, the drawer's service controls) gets no badge:
+  just say it isn't built yet. Keep badges **out of headings** (they end up in the anchor slugs): put them at the
+  start of the paragraph below.
 - **The install command** is `INSTALL_COMMAND` in `src/site.mjs`; `getting-started/installation.md` and
-  `quickstart.md` write it out in code blocks. When v1 ships, reword the banner, the roadmap and the badges.
+  `quickstart.md` write it out in code blocks. When a release changes what's available, update the banner
+  (`src/components/Banner.astro`), the roadmap's release table and the badges.
 - **The spec is the source of truth** (`../spec.md`, `../docs/`). Every claim should be checkable against it. Where
   the spec leaves something open, say so rather than inventing an answer.
 - **Keep it generic**: `example.com`, `myname.internal`, `~/Code/my-app`; no employer, machine or user names.

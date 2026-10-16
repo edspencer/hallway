@@ -34,7 +34,7 @@ health:                         # optional; without it, Hallway probes GET /
   path: /api/health
   expectStatus: 200             # optional; default: any 2xx when path is given
 
-proxy:                          # fronted mode only (v1)
+proxy:                          # fronted mode only
   preserveHost: false           # default false: Host is rewritten to the upstream
   aliases: []                   # extra hostnames, e.g. [deck] → deck.<base>
 
@@ -67,14 +67,14 @@ icon: auto                      # auto (favicon) | an emoji | a path to an image
 | `expected` | | `running`, `stopped` or `adhoc`: decides whether "not listening" is `down` or `stopped`. See [Health states](/concepts/health/#stopped-on-purpose-is-not-down). |
 | `health.path` | | Probe this path instead of `/`. |
 | `health.expectStatus` | | The status that means healthy; default any 2xx. |
-| `proxy.preserveHost` | | Pass the browser's `Host` through instead of rewriting it. See [Host-header rewriting](/networking/fronted-mode/#host-header-rewriting). <span class="ms">v1</span> |
-| `proxy.aliases` | | Extra hostnames for the app. <span class="ms">v1</span> |
-| `service` | | Makes the app a [managed service](/concepts/services/#managed-services). <span class="ms ms--v0">v0</span> |
+| `proxy.preserveHost` | | Pass the browser's `Host` through instead of rewriting it. See [Host-header rewriting](/networking/fronted-mode/#host-header-rewriting). <span class="ms ms--shipped">v1</span> |
+| `proxy.aliases` | | Extra hostname labels for the app: `[deck]` also serves it at `deck.<base>`. <span class="ms ms--shipped">v1</span> |
+| `service` | | Makes the app a [managed service](/concepts/services/#managed-services). Write it with `hallway run` or `hallway service add` rather than by hand. <span class="ms ms--shipped">v1</span> |
 | `service.command` | With `service` | The command as an argv array, not a shell string. |
 | `service.cwd` | | Working directory. |
 | `service.env` | | Extra environment variables. `PORT`, `HOST` and `HOSTNAME` are set for you. |
 | `service.runAtLoad`, `service.keepAlive` | | Start at login; restart if it exits. |
-| `links` | | Deep links on the card: `label` and `path`. |
+| `links` | | Deep links on the card: a `label`, and either a `path` on the app or a full `url`. |
 | `project.dir`, `project.repo` | | Where the code lives. |
 | `tags` | | Free-form tags, for filtering. |
 | `icon` | | `auto` uses the app's favicon. |
@@ -90,5 +90,5 @@ Fix the file and the error clears.
 ## Removing an app
 
 Delete it from the dashboard, with `hallway app rm`, through the API or MCP: the file is **moved to
-`backups/`, never deleted**, so a mistake (yours or an agent's) is recoverable. Deleting the file yourself works
+`backups/removed/`, never deleted**, so a mistake (yours or an agent's) is recoverable. Deleting the file yourself works
 too; the card disappears.

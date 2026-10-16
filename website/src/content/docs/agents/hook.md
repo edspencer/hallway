@@ -3,7 +3,7 @@ title: The dev-server hook
 description: "An optional Claude Code hook that stops an agent starting a dev server directly, and tells it the hallway run command to use instead."
 ---
 
-<span class="ms ms--v0">v0</span> Available now (shipped early from v2). Instruction files help, but agents still
+<span class="ms ms--shipped">v2</span> Available since 0.2.0. Instruction files help, but agents still
 reach for `npm run dev` out of habit, and every server started that way dies with the session. `hallway hook
 check-command` is an optional Claude Code `PreToolUse` hook for
 the Bash tool that catches those commands **before they run** and tells the agent the

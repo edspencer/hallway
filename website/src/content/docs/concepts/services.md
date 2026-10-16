@@ -25,9 +25,12 @@ for a laptop. On Linux, enabling lingering once (`loginctl enable-linger $USER`)
 without a login session and starts them at boot; Hallway never enables it itself, and `hallway doctor` warns while it
 is off.
 
+Installing, starting, stopping and restarting these jobs have run for real against launchd and systemd in CI.
+Coming back after a logout or a reboot has not been tested yet, on either OS.
+
 ## Managed services
 
-<span class="ms ms--v0">v0</span> An app with a `service:` block is a **managed service**: Hallway generates a job for it,
+<span class="ms ms--shipped">v1</span> An app with a `service:` block is a **managed service**: Hallway generates a job for it,
 `~/Library/LaunchAgents/hallway.app.<slug>.plist` on macOS or `~/.config/systemd/user/hallway-app-<slug>.service` on
 Linux, and keeps it alive.
 
@@ -50,9 +53,10 @@ hallway logs slides --follow
 hallway service rm slides      # stop managing it; the app stays declared
 ```
 
-Every Hallway job has a `hallway.` label (`hallway.daemon`, `hallway.app.<slug>`, and in v1 `hallway.caddy`); on Linux
-the units are named the same way with hyphens (`hallway-daemon.service`, `hallway-app-<slug>.service`). So they are
-easy to find, audit and remove, and can't be confused with jobs you made yourself.
+Every Hallway job has a `hallway.` label (`hallway.daemon`, `hallway.app.<slug>`, and in
+[fronted mode](/networking/fronted-mode/) `hallway.caddy` and, for a custom domain, `hallway.dnsmasq`); on Linux the
+units are named the same way with hyphens (`hallway-daemon.service`, `hallway-app-<slug>.service`). So they are easy
+to find, audit and remove, and can't be confused with jobs you made yourself.
 
 Starting a server for the first time is usually done with [`hallway run`](/agents/hallway-run/), which declares the
 app and creates its job in one step.
@@ -130,6 +134,17 @@ hallway lost restart <id|port>    # start one again, once
 hallway lost service <id|port>    # start it again, as a service
 hallway lost dismiss <id|port>    # or --all
 ```
+
+Services that start at login get their start-up grace period (`services.startGraceSeconds`, 30 seconds by default)
+before anything is called lost, so a slow starter isn't listed by mistake. A server started by one of these actions
+shows as <span class="state state--starting">◐ starting</span> while it comes up. The notice is kept in
+`state/lost.json` and is also in `/api/state` and [`GET /api/lost`](/reference/http-api/), in `llms.txt`, and in the
+[MCP server](/agents/mcp/)'s `get_status`; MCP can read it but can't restart anything.
+
+:::note[Checked by simulation]
+"Lost at last reboot" has been checked on Linux with a simulated reboot (the recorded boot time moved back, the servers
+killed, the daemon restarted). It has not yet been seen after a real reboot, on Linux or on a Mac.
+:::
 
 This only works because Hallway [records what it observes](/concepts/apps/#observed-listeners-the-scanner) while the
 processes are alive. Once a process is gone, its working directory can't be recovered by any means, so a tool that

@@ -2,8 +2,8 @@
 /**
  * ValueProps — the six-card grid.
  *
- * Each card carries its milestone (docs/08-roadmap.md): v0 is available now
- * (lamplight badge); v1 and v2 are upcoming (quiet badges) and say so.
+ * Each card carries its milestone (docs/08-roadmap.md). Every one has shipped,
+ * so every badge is the lamplit `ms--shipped`.
  */
 import Icon from './Icon.astro';
 import { VALUE_PROPS } from './copy';
@@ -28,7 +28,7 @@ import { VALUE_PROPS } from './copy';
 							<span class="prop-icon">
 								<Icon name={p.icon} />
 							</span>
-							<span class={`ms ms--${p.ms}`} title={p.ms === 'v0' ? 'Available now, in v0' : `Coming in ${p.ms}`}>
+							<span class="ms ms--shipped" title={`Available now (${p.ms})`}>
 								{p.ms}
 							</span>
 						</div>

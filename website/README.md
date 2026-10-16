@@ -23,8 +23,9 @@ npm run check-links                 # after a build: every internal link and #fr
 ## Structure
 
 - `src/pages/index.astro` and `src/components/landing/`: the marketing landing page at `/` (outside Starlight). Its
-  copy is all in `src/components/landing/copy.ts`; its illustrations are HTML/CSS mock-ups of the dashboard's design
-  (`Mock.astro`), tagged as such, because no real captures have been made yet.
+  copy is all in `src/components/landing/copy.ts`; its illustrations are real captures of the dashboard on staged demo data
+  (`Shot.astro`, `src/assets/shots/`; see "Screenshots" below), and HTML/CSS mock-ups (`Mock.astro`) for the two a
+  dashboard capture can't show (a terminal and an address bar). Each is tagged as which it is.
 - `src/content/docs/`: the documentation pages (`.md` / `.mdx`, Starlight frontmatter).
 - `src/sidebar.mjs`: the hand-maintained sidebar (read by `astro.config.mjs` and by the llms.txt routes).
 - `astro.config.mjs`: site config.
@@ -32,13 +33,31 @@ npm run check-links                 # after a build: every internal link and #fr
   snippet.
 - `src/styles/tokens.css`: **every colour and font**, in one place. To try a different palette or typeface, edit only
   this file.
-- `src/components/Banner.astro`: the banner on every docs page (v0 is out; what the v0 / v1 / v2 badges mean).
+- `src/components/Banner.astro`: the banner on every docs page (what has shipped; what the v0 / v1 / v2 badges mean).
 - `src/pages/llms.txt.ts`, `src/pages/llms-full.txt.ts`, `src/pages/[...slug].md.ts`: `/llms.txt`, `/llms-full.txt`
   and every page as Markdown, for coding agents, generated from the pages at build time.
 - `brand/`: the hand-authored placeholder mark and social card; `public/`, `src/assets/`: their rendered copies.
 - `functions/ingest/[[path]].ts`: the Cloudflare Pages Function that proxies analytics (idle unless analytics is on).
 
 `npm run build` writes the static site to `dist/`, including the Pagefind search index and the sitemap.
+
+## Screenshots
+
+`src/assets/shots/` holds real captures of the dashboard (and `../docs/media/dashboard.png`, the root README's), all
+taken from a built Hallway 0.3.0 with staged data, never from anyone's real machine:
+
+- a throwaway `HOME` and `HALLWAY_HOME`, with `dashboard.title: my-laptop`;
+- demo apps served by `python3 -m http.server` from `~/Code/<name>` directories with generic names (one git repo
+  with a second worktree, for `repo @ branch`), two declared apps deliberately not running (one `down`, one
+  `stopped`), and `example.com` bookmarks;
+- every other listener on the capturing machine in `ignore.yaml` by port, so the observed tray shows only the demo;
+- `hallway thumbs enable` for the screenshots on the doors, and an uptime history seeded through `UptimeStore.add`
+  (90 days of five-minute samples) so the bars and the 90-day view aren't empty;
+- for "Lost at last reboot", a simulated reboot: the daemon stopped, three demo servers killed, `state/boot.json`'s
+  boot time and every `lastSeen` in `state/observed.json` moved before the machine's boot time, the daemon started.
+
+Captured with Playwright at 2× (`deviceScaleFactor: 2`) in the dark theme (the landing page is always dark). Check
+every pixel for host names, paths and user names before committing one: the repository is public.
 
 ## Brand assets (placeholder)
 

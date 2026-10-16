@@ -1,9 +1,9 @@
 ---
 title: Quickstart
-description: The first five minutes with Hallway v0.
+description: The first five minutes with Hallway.
 ---
 
-<span class="ms ms--v0">v0</span> Everything on this page works in the current release, on macOS and Linux. For
+Everything on this page works in the current release, on macOS and Linux, with no sudo. For
 the details of installing (Node version, lingering on Linux), see [Installation](/getting-started/installation/).
 
 ## 1. Start it
@@ -102,9 +102,11 @@ See [Working with agents](/agents/overview/).
 
 ## Next
 
-- <span class="ms ms--v0">v0</span> [hallway run](/agents/hallway-run/): start a dev server that outlives the session,
-  on a stable port.
-- <span class="ms ms--v0">v0</span> [Services and reboots](/concepts/services/): keep apps running across restarts.
-- <span class="ms">v1</span> Upcoming: [fronted mode](/networking/fronted-mode/), `https://slides.localhost` instead
-  of a port.
+- [hallway run](/agents/hallway-run/): start a dev server that outlives the session, on a stable port.
+- [Services and reboots](/concepts/services/): keep apps running across restarts, and see what the last reboot took
+  down.
+- [Fronted mode](/networking/fronted-mode/): `https://slides.localhost` instead of a port, after one
+  `hallway setup`.
+- [Thumbnails](/concepts/thumbnails/): screenshots of your apps on their doors, or generated cards.
+- The [MCP server](/agents/mcp/) and the [dev-server hook](/agents/hook/), for coding agents.
 - The [CLI reference](/reference/cli/) and the [file formats](/reference/app-yaml/).

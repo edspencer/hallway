@@ -4,8 +4,8 @@ description: The home screen, app cards, the observed tray, keyboard shortcuts a
 ---
 
 The dashboard is meant to be **good enough to set as your browser's home page**. That is a requirement, not polish.
-This page describes the design the <span class="ms ms--v0">v0</span> dashboard follows; the sketches are drawn in text
-from that design, not screenshots.
+This page describes the design the dashboard follows (<span class="ms ms--v0">v0</span>, with later additions marked);
+the sketches are drawn in text from that design, not screenshots.
 
 ## Principles
 
@@ -23,7 +23,7 @@ from that design, not screenshots.
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ HALLWAY · my-laptop                        [ / filter…    ]  ● 9 up · 1 down │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ ⚠ Lost at last reboot (Mon 28 Sep 20:05): 6 apps   [Review] [Dismiss]   v1   │
+│ ⚠ Lost at last reboot (Mon 28 Sep 20:05): 6 apps   [Review] [Dismiss]        │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ APPS                                                                         │
 │ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐          │
@@ -51,13 +51,15 @@ observed tray hides itself when empty, and so do bookmarks.
 
 Top to bottom:
 
-- **A thumbnail**: the app's favicon on a tile of its own dominant colour, or a monogram when it has none. Opt in to
-  real screenshots (<span class="ms ms--v0">v0</span>, `hallway thumbs enable`) and each healthy app's door gets a pane of glass showing the app
-  itself, re-shot when the app restarts and every six hours. Or set `thumbnails.mode: card` and every door is drawn
-  as a generated card with its name, address, framework and `repo @ branch`.
+- **A thumbnail**: the app's favicon on a tile of its own dominant colour, or a monogram when it has none.
+  <span class="ms ms--shipped">v2</span> Opt in to real screenshots (`hallway thumbs enable`) and each healthy app's
+  door gets a pane of glass showing the app itself, re-shot when the app restarts and every six hours. Or set
+  `thumbnails.mode: card` and every door is drawn as a generated card with its name, address, framework and
+  `repo @ branch`. See [Thumbnails](/concepts/thumbnails/).
 - **The name**, and for worktree siblings `repo @ branch` in smaller type.
-- **The address**, the main click target: `localhost:4321` in direct mode, `slides.localhost` in fronted mode, with a
-  copy button on hover.
+- **The address**, the main click target: `localhost:4321` in direct mode, `slides.localhost` in
+  [fronted mode](/concepts/modes/) (with the port beside it as a direct link that skips the proxy), with a copy button
+  on hover.
 - **The uptime bar** for the last 24 hours, with the uptime percentage and median latency.
 - **The state**, as colour, shape and word: <span class="state state--healthy">● healthy</span>,
   <span class="state state--unhealthy">▲ unhealthy</span>, <span class="state state--down">■ down</span>,
@@ -67,9 +69,13 @@ Top to bottom:
 
 Click or Enter opens the app; ⌘/Ctrl-click opens a new tab. A secondary button opens the **detail drawer**: full
 identity (directory, git branch and last commit, framework, PID, start time, the command that started it), uptime and
-latency history, the YAML file with an "open in editor" link, deep links, any config error, and for managed services
-(upcoming, <span class="ms">v1</span>) start, stop, restart and a live log tail. Until then, use `hallway stop`,
-`start`, `restart` and `logs`.
+latency history over 24 hours, 7 days or 90 days, a larger screenshot when there is one, the YAML file with an "open
+in editor" link, deep links and any config error. Start, stop and restart buttons and a live log tail for managed
+services are not built yet: use `hallway stop`, `start`, `restart` and `logs`.
+
+After a reboot, a **Lost at last reboot** banner sits above the apps, listing what was running before and didn't come
+back, with Restart once, Make it a service and Dismiss. See
+[Services and reboots](/concepts/services/#lost-at-last-reboot).
 
 ## Keyboard
 

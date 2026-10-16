@@ -5,12 +5,14 @@
  * through the components, so the words can be worked on without touching markup.
  * (Same arrangement as Local Review's and Paddock's sites.)
  *
- * Hallway 0.1.0 (milestone v0) is released; v1 and v2 are still to come. Every
- * claim here must be checkable against the spec (spec.md and docs/ at the repo
- * root) and the code, and must say which milestone it belongs to: v0 means
- * "available now", v1 and v2 mean "upcoming" and must never read as shipped.
- * The illustrations are mock-ups of the design, drawn in HTML and CSS
- * (Mock.astro), and are captioned as such.
+ * Hallway 0.3.0 is released: all of v0 and v1, and v2's software (what is left
+ * of v2 is checking everything on a real Mac). Every claim here must be
+ * checkable against the spec (spec.md and docs/ at the repo root) and the code,
+ * and says which milestone it belongs to; everything on this page has shipped,
+ * so every badge is the lamplit "available" one. Something not yet shipped
+ * would need the plain badge and "coming" in the words. The illustrations are
+ * real captures on staged demo data (Shot.astro) where a dashboard capture can
+ * show the feature, and drawn mock-ups (Mock.astro) otherwise; each is tagged.
  */
 
 import { REPO_URL, TAGLINE, INSTALL_COMMAND } from '../../site.mjs';
@@ -19,11 +21,11 @@ export { REPO_URL };
 
 export const hero = {
 	/** Small line above the H1. */
-	eyebrow: 'v0 out now · open source · local-only',
+	eyebrow: '0.3.0 out now · open source · local-only',
 	/** The H1. */
 	title: `${TAGLINE}.`,
 	lede: 'Hallway keeps a live list of every web server running on your machine: the ones you installed on purpose, the ones a coding agent started and forgot, and the ones nobody remembers starting at all.',
-	body: 'It shows them on one calm page, with what each one is, whether it is healthy and how to reach it, and it can start a server as a native service that outlives the session. Next, it gives each app a memorable HTTPS name.',
+	body: 'It shows them on one calm page, with what each one is, whether it is healthy and how to reach it, it can start a server as a native service that outlives the session, and it gives each app a memorable HTTPS name if you want one.',
 };
 
 /** The one command worth pasting. */
@@ -41,7 +43,7 @@ export const QUICKSTART = {
 export const SECONDARY_LINK = {
 	label: 'Roadmap',
 	href: '/roadmap/',
-	title: 'What ships in v0, v1 and v2',
+	title: 'What shipped in v0, v1 and v2, and what is left',
 } as const;
 
 /** The hero buttons, repeated in the closing section. */
@@ -94,11 +96,11 @@ export const VALUE_PROPS = [
 		icon: 'lock',
 		ms: 'v1',
 		title: 'Memorable HTTPS names',
-		body: 'Coming in v1: turn on fronted mode and every app gets https://<slug>.localhost with a locally trusted certificate, through Caddy. No DNS server needed; .internal domains are there if you want your own.',
+		body: 'Turn on fronted mode with hallway setup and every app gets https://<slug>.localhost with a locally trusted certificate, through Caddy running as you. No DNS server needed; your own domain, such as myname.internal, if you want one.',
 	},
 	{
 		icon: 'refresh',
-		ms: 'v0',
+		ms: 'v1',
 		title: 'Survives the reboot',
 		body: 'hallway run --persist makes the apps you care about native services (launchd on macOS, systemd on Linux) that come back on their own. Everything else is remembered: after a restart Hallway lists what was lost, with one click to start each again.',
 	},
@@ -106,9 +108,9 @@ export const VALUE_PROPS = [
 
 /**
  * The scroll-swap "how it works" section: each entry is one step and the
- * illustration that goes with it. `mock` names a panel in Mock.astro; they are
- * drawn in HTML/CSS from the spec's designs (docs/05-ui.md), not captured from
- * the software (no real captures have been made yet).
+ * illustration that goes with it. `shot` names a real capture (Shot.astro,
+ * src/assets/shots/); without one, `mock` names a panel drawn in HTML/CSS
+ * (Mock.astro).
  */
 export const FEATURES = [
 	{
@@ -116,14 +118,16 @@ export const FEATURES = [
 		title: 'Found running, not yet named',
 		body: 'The scanner turns “something has been listening on :4666 for nine days” into a row with a name, a directory, a branch and an age, flagged as orphaned when its session is gone. Claim it and it becomes an app, on the port it already uses. Or ignore it for good.',
 		mock: 'observed',
-		alt: 'Mock-up of the observed tray: two unnamed servers, each with its port, the directory and branch it runs from, how long it has been up, and Claim and Ignore buttons',
+		shot: 'observed',
+		alt: 'The observed tray, Found running, not yet named: two unnamed servers on ports 6404 and 6405, one labelled notes-search from ~/Code/notes-search @ feature-search, the other scratch-photos, each with how long it has been up, its framework, its page title, and Claim, Ignore and Open buttons',
 	},
 	{
 		ms: 'v0',
 		title: 'A door for every app',
-		body: 'Each app is a door with a number plate: its port. Healthy apps stand ajar with a sliver of lamplight; stopped ones are simply closed; down ones go dark. Every state is also a shape and a word, so the picture is never the only clue.',
+		body: 'Each app is a door with a number plate: its port. Healthy apps stand ajar with a sliver of lamplight, and with hallway thumbs enable a screenshot of the app as the glass; stopped ones are simply closed; down ones go dark. Every state is also a shape and a word, so the picture is never the only clue.',
 		mock: 'doors',
-		alt: 'Mock-up of three app cards: a healthy one with a warm edge and a full uptime bar, a stopped one drawn quietly, and a down one marked with a red square and the word down',
+		shot: 'doors',
+		alt: 'Five app cards drawn as doors: Local Review, Notes and Slides healthy, each with a screenshot of the app in the door and a green uptime bar; Metrics down, boarded up, with a red square, the word down and red at the end of its bar; Storybook stopped, a closed grey door with a monogram',
 	},
 	{
 		ms: 'v0',
@@ -134,8 +138,16 @@ export const FEATURES = [
 	},
 	{
 		ms: 'v1',
+		title: 'Lost at last reboot',
+		body: 'After a restart, Hallway lists the servers that were running before it and didn’t come back, with where each ran from and the command that started it. Restart one once, make it a service that comes back at every login, or dismiss it.',
+		mock: 'observed',
+		shot: 'lost',
+		alt: 'The Lost at last reboot banner, reviewed: three servers that were running before the reboot and are not now, each with its port, directory and branch, the command that started it, and Restart once, Make it a service and Dismiss buttons',
+	},
+	{
+		ms: 'v1',
 		title: 'Names instead of numbers',
-		body: 'Coming in v1: in fronted mode, Caddy serves each app at https://<slug>.localhost with a certificate your machine trusts. Adding an app never needs sudo; the one privileged step is a guided hallway setup that prints every command before it runs.',
+		body: 'In fronted mode, Caddy serves each app at https://<slug>.localhost with a certificate your machine trusts. Adding an app never needs sudo; the privileged steps are one guided hallway setup that prints every command before it runs.',
 		mock: 'address',
 		alt: 'Mock-up of a browser address bar showing a padlock and https://slides.localhost',
 	},
@@ -144,7 +156,8 @@ export const FEATURES = [
 		title: 'Bookmarks by the front door',
 		body: 'The remote things you always forget the URL of, such as admin consoles, BI dashboards and status pages, hang by the door as favicon chips in groups. They are inert: nothing is launched or checked.',
 		mock: 'bookmarks',
-		alt: 'Mock-up of two bookmark groups, Production and Docs, each a row of small chips with a monogram and a title',
+		shot: 'bookmarks',
+		alt: 'Two bookmark groups, Production (Admin console, Status page, BI dashboards) and Docs (Team wiki, API reference), each a row of chips with a monogram and a title',
 	},
 ] as const;
 
@@ -164,7 +177,7 @@ export const AGENTS = {
 		},
 		{
 			title: 'MCP, without the risk',
-			body: 'An MCP server on the same port describes apps and edits bookmarks, through the same write path as everything else. It never starts a process.',
+			body: 'An MCP server on the same port (/mcp, or hallway mcp on stdio) describes apps and edits bookmarks, through the same write path as everything else. It never starts a process.',
 		},
 	],
 	link: { text: 'Read about agents', href: '/agents/overview/' },

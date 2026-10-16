@@ -1,12 +1,11 @@
 ---
 /**
- * Mock — illustrations of the PLANNED dashboard, drawn in HTML and CSS.
+ * Mock — illustrations drawn in HTML and CSS, for what a dashboard capture can't show.
  *
- * Local Review's landing page shows captures from its demo test bed. Hallway has
- * no capture pipeline yet, so these panels are drawn from the spec's designs
- * (docs/05-ui.md: the layout, the app card's anatomy, the observed tray, the
- * hallway visual direction) and every one carries a "Mock-up" tag. The v0
- * dashboard now exists: replace them with real captures, as Local Review does.
+ * The dashboard panels are now real captures (Shot.astro); copy.ts still names
+ * a mock for every step as the fallback, but only `run` (a terminal) and
+ * `address` (a browser's address bar) are shown. Drawn from the spec's designs
+ * (docs/05-ui.md), and every one carries a "Mock-up" tag.
  *
  * All names, ports, directories and branches are invented placeholders.
  */
@@ -44,7 +43,7 @@ const FEATURE_DOORS = [DOORS[0], DOORS[5], DOORS[4]];
 ---
 
 <figure class={`mock mock--${name}`} role="img" aria-label={alt}>
-	<span class="mock-tag" aria-hidden="true">Mock-up · planned design</span>
+	<span class="mock-tag" aria-hidden="true">Mock-up</span>
 
 	{
 		name === 'dashboard' && (

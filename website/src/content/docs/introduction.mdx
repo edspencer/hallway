@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: What Hallway is, the problem it solves, and what ships when.
+description: What Hallway is, the problem it solves, and what shipped when.
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
@@ -15,13 +15,14 @@ service for your own machine. It keeps a live directory of every web server you 
 
 It shows them on one calm dashboard with their health, uptime history and a thumbnail, and doubles as a personal
 jumping-off page of bookmarks to the remote things you always forget the URL of, and it can start a dev server as a
-native OS service so it outlives the session (and, if you ask, comes back after a reboot). The next release gives each
-app a memorable HTTPS hostname (`slides.localhost` instead of a port number nobody remembers).
+native OS service so it outlives the session (and, if you ask, comes back after a reboot). If you want, it gives each
+app a memorable HTTPS hostname too (`slides.localhost` instead of a port number nobody remembers).
 
 :::note[What's released]
-**v0 is out**, as Hallway 0.1.0 on npm: see [Installation](/getting-started/installation/). Each feature on this site
-is marked with its milestone: <span class="ms ms--v0">v0</span> is available now; <span class="ms">v1</span> and
-<span class="ms">v2</span> are upcoming. See the [roadmap](/roadmap/).
+**Hallway is on npm**: see [Installation](/getting-started/installation/). Each feature on this site is marked with
+the milestone it belongs to (<span class="ms ms--v0">v0</span>, <span class="ms ms--shipped">v1</span>,
+<span class="ms ms--shipped">v2</span>), and all three have shipped. What's left is checking everything on a real
+Mac: see the [roadmap](/roadmap/).
 :::
 
 ## The problem
@@ -53,27 +54,29 @@ Plenty of dashboards show tiles and bookmarks. Hallway's differences:
 1. **It populates itself.** It reads registries and *scans for listeners*, so the page reflects reality without anyone
    maintaining a config. Every hand-maintained dashboard recreates the original problem.
 2. **It remembers.** It records what it saw while processes were alive, so after a reboot it can say what was lost
-   (that list arrives in v1).
-3. **It fronts** (coming in v1). Memorable HTTPS hostnames per app, with defaults that need no DNS server.
+   (**Lost at last reboot**).
+3. **It fronts**, if you ask it to. Memorable HTTPS hostnames per app, with defaults that need no DNS server.
 4. **It keeps things alive.** Native launchd (macOS) or systemd user (Linux) services, no extra process manager.
 5. **It is built for agent-spawned servers.** Plain YAML an agent can edit, an agent guide, an MCP server, and one command,
    `hallway run`, that starts a server so it never becomes an orphan.
 
-## What ships when
+## What shipped when
 
 - <span class="ms ms--v0">v0</span> **The front page**, released in 0.1.0 for macOS and Linux. The daemon, the
   dashboard at <code>{`http://localhost:${DEFAULT_PORT}`}</code>, YAML config with live updates, health checks with
   24-hour uptime bars (7- and 90-day views in the drawer), the port scanner with claim and ignore, bookmarks, favicon
   tiles, the agent guide, `hallway doctor` for the daemon and data, and running Hallway itself as a login service.
-  Shipped early from v1: `hallway run`, `stop`, `start`, `restart` and `logs`, managed services for apps (launchd or
-  systemd user units) and log rotation. Shipped early from v2, in the first release after 0.1.0: the [MCP server](/agents/mcp/) and the optional
-  [dev-server hook](/agents/hook/), `hallway hook check-command`. Links go to `http://localhost:<port>`. No sudo, no DNS, no proxy.
-- <span class="ms">v1</span> **Fronting** (upcoming). Caddy with HTTPS on `*.localhost`, `hallway setup` and
-  `teardown`, networking checks in `hallway doctor`, custom `.internal` domains, the fallback page, and "lost at last
-  reboot".
-- <span class="ms">v2</span> **Agents and polish**, mostly shipped: the MCP server and the hook, opt-in screenshot
-  thumbnails, generated-card thumbnails, and latency charts over the 7- and 90-day views. What's left is running every
-  criterion on a real Mac.
+  Links go to `http://localhost:<port>`. No sudo, no DNS, no proxy.
+- <span class="ms ms--shipped">v1</span> **Fronting and services**, released in 0.1.0 to 0.3.0.
+  [`hallway run`](/agents/hallway-run/), `stop`, `start`, `restart` and `logs`, managed services for apps (launchd or
+  systemd user units) and log rotation; [fronted mode](/networking/fronted-mode/) (Caddy with HTTPS on `*.localhost`,
+  `hallway setup` and `teardown`, networking checks in `hallway doctor`, the fallback page);
+  [custom domains](/networking/custom-domains/) such as `myname.internal`; and
+  [Lost at last reboot](/concepts/services/#lost-at-last-reboot).
+- <span class="ms ms--shipped">v2</span> **Agents and polish**, released in 0.2.0 and 0.3.0: the
+  [MCP server](/agents/mcp/), the optional [dev-server hook](/agents/hook/), opt-in screenshot
+  [thumbnails](/concepts/thumbnails/), generated cards, and a fast 90-day uptime view with a latency chart. What's
+  left is running every criterion on a real Mac.
 
 ## Who it's for
 
