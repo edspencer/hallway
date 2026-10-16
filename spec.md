@@ -2,8 +2,8 @@
 
 > The front door for everything you vibe-coded on a random port.
 
-**Status:** pre-release. The implementation has started (package, CI, release machinery, a daemon skeleton and a
-dashboard: see `AGENTS.md`); the domain logic is still to be built. This document set is written to be
+**Status:** released: 0.3.0 on npm (2026-10-16), with all of v0 and v1 and most of v2 built (section 6, and
+`AGENTS.md` for what is where). What remains is v2's real-Mac verification. This document set is written to be
 handed to an implementing agent (or person) who was not present for any of the design discussion. Anything not written down here is lost, so
 the spec errs heavily on the side of detail, rationale, and recording what was considered and rejected.
 
@@ -134,9 +134,13 @@ Full scope and acceptance criteria: [docs/08-roadmap.md](docs/08-roadmap.md).
   Links use `http://localhost:<port>`. No sudo. macOS and Linux (D26). **Done: released as 0.1.0**, with v1's
   managed services (`hallway run`, `hallway service add`) brought forward into it.
 - **v1 — Fronting and services.** `hallway run` and `hallway service add` (launchd jobs for apps), Caddy integration, HTTPS on
-  `*.localhost`, `hallway setup` / `hallway doctor`, custom-domain mode (dnsmasq), "lost since reboot" (**built**, D54).
+  `*.localhost`, `hallway setup` / `hallway doctor`, custom-domain mode (dnsmasq), "lost since reboot". **Built:**
+  fronted mode released in 0.2.0 (D47, D48), "Lost at last reboot" in 0.3.0 (D54). Browsers on a real Mac and
+  behaviour across a real reboot are not yet checked.
 - **v2 — Agents and polish.** MCP server (HTTP + stdio), screenshot thumbnails, generated cards, 90-day uptime
-  history with rollups and sparklines; everything verified on a real Mac.
+  history with rollups and sparklines; everything verified on a real Mac. **Mostly built:** MCP and the dev-server
+  hook released in 0.2.0, screenshot thumbnails, generated cards and the fast 90-day view in 0.3.0 (D55–D57). Still
+  open: criterion 5, every v0 and v1 criterion run on a real Mac.
 
 ## 7. How to maintain this spec
 

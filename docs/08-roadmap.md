@@ -53,15 +53,24 @@ address indicator; "Lost at last reboot"; log rotation. On Linux (D26): systemd 
 resolution check, an nftables redirect from 443/80 to the user's Caddy (D47; `setcap` was considered and rejected),
 and custom-domain DNS via a `systemd-resolved` drop-in pointing at Hallway's user-level dnsmasq.
 
-**Status (2026-10-16):** fronted mode is built (D47, D48). Criteria 1–4 and 7–11 are checked for real on Linux and
-macOS by CI's "Fronted mode (real …)" jobs (`scripts/fronted-real.mjs`), and by hand on Linux without a redirect
-(`11-research-notes.md`); browsers on a real Mac (criterion 2's Safari and Firefox) are not yet checked.
-
-**"Lost at last reboot" is built** (D54): `server/lost/`, the banner (`src/components/Lost.tsx`), `/api/lost…` and
-`hallway lost`. Checked on Linux by a simulated reboot (`state/boot.json` and `state/observed.json` moved before the
-machine's boot time, demo servers killed, the daemon restarted under fake systemd): the banner, Review, Restart once,
-Make it a service, Dismiss and a moved project directory (`11-research-notes.md`, 2026-10-16). Not yet seen after a
-real reboot, on either OS; criterion 5's "listed under Lost at last reboot" is therefore checked in simulation only.
+> **Status: built.** Fronted mode was released in 0.2.0 (D47, D48), "Lost at last reboot" in 0.3.0 (D54); managed
+> services and log rotation shipped early, in 0.1.0. What is not yet checked: browsers on a real Mac, and anything
+> across a real logout or reboot. Criterion by criterion (sections are in `11-research-notes.md`):
+>
+> | # | Result | Evidence |
+> |---|--------|----------|
+> | 1 | Met | CI's "Fronted mode (real …)" jobs run `setup` for real on Linux and macOS; re-running it reported the parts already done ("Fronted mode in CI"). `--print`'s plans are golden files in `test/setup.test.ts`. |
+> | 2 | Partly | The certificate is trusted system-wide on both CI runners (`curl` with no `--cacert`; `security verify-cert` on macOS). **No browser has been driven on a Mac**: Chrome, Safari and Firefox are unchecked (Q-SAFARI-LOCALHOST). |
+> | 3 | Met | `https://review.localhost` reached a strict app with Host rewritten, and an app declared while running was routed with no restart (CI, both OSes; by hand on Linux, "Fronted mode experiments"). |
+> | 4 | Met on Linux | Vite 8 behind `https://vite.localhost:4443` in Chromium: hot update with no reload ("Fronted mode experiments"). Not tried on a Mac. |
+> | 5 | Partly | `hallway run` and `--persist` (KeepAlive / `Restart=always` bringing a killed app back) on real launchd and systemd ("Managed services on real launchd and systemd"). "After a reboot … listed under Lost at last reboot" only in simulation ("Lost at last reboot, simulated"); no real reboot on either OS. |
+> | 6 | Partly | The generated `PATH`: `test/services.test.ts` and `test/cli-services.test.ts` (a fake fnm layout; no `fnm_multishells` entry). `doctor`'s `job-path` check is built (`server/commands/doctor.ts`) but has no test feeding it a bad job. Not run on a Mac with fnm. |
+> | 7 | Met | With the daemon stopped, the fallback page listed every app (CI, both OSes). |
+> | 8 | Met | A squatter on 443 named by `doctor` with PID; `setup` stopped (CI, both OSes; by hand on Linux). |
+> | 9 | Met | `https://myname.internal` and `https://review.myname.internal` through Hallway's dnsmasq (CI: `systemd-resolved` drop-in, `/etc/resolver`); the made-up-TLD warning against IANA's list: `test/setup.test.ts`. |
+> | 10 | Met | `.local` refused (CI, both OSes; `test/setup.test.ts`). |
+> | 11 | Met | Teardown left no anchor, LaunchDaemon, nftables table, resolver file, trusted root or job behind (CI run 38944433673, both OSes). |
+> | 12 | Met | Copy-then-truncate rotation against real launchd and systemd log files, with a small limit (CI). |
 
 Acceptance criteria:
 
@@ -94,12 +103,16 @@ Acceptance criteria:
 thumbnails; 7 d / 90 d uptime from hourly rollups with latency charts; `hallway hook check-command`. (Linux support
 moved forward to v0/v1: D26.)
 
-Acceptance criteria (1 and 2 met on 2026-10-16: `11-research-notes.md`, "The v2 MCP acceptance run"; 3 and 4 met on
-2026-10-16: "Thumbnails and the 90-day view"):
+> **Status: mostly built.** MCP and the dev-server hook were released in 0.2.0, screenshot thumbnails, generated cards
+> and the fast 90-day view in 0.3.0 (D55–D57). Criteria 1–4 are met (1 and 2 on 2026-10-16: `11-research-notes.md`,
+> "The v2 MCP acceptance run"; 3 and 4 the same day: "Thumbnails and the 90-day view"). Criterion 5, a real Mac, is
+> what's left.
 
-1. An MCP client can `add_bookmark` and the dashboard shows it live; it appears in the YAML file with comments in that
+Acceptance criteria:
+
+1. ✅ An MCP client can `add_bookmark` and the dashboard shows it live; it appears in the YAML file with comments in that
    file preserved.
-2. `declare_app` with a `service` block is rejected; no MCP tool can start a process.
+2. ✅ `declare_app` with a `service` block is rejected; no MCP tool can start a process.
 3. ✅ `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots; `hallway thumbs disable`
    removes it; the base install never depends on it. (D56; `smoke:pack` checks the last part.)
 4. ✅ The 90-day view renders from rollups only and stays fast with 30 apps. (D57; `test/uptime-perf.test.ts`.)
