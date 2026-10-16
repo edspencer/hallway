@@ -3,8 +3,8 @@
  * CommandTabs — the terminal card, plus a link out to the other install options.
  *
  * From Local Review's (and Paddock's) site: one real tab carrying the command,
- * and one LINK in the same strip. Hallway is not on npm yet, so the terminal
- * bar carries a "Coming soon" pill and the blurb says so in words.
+ * and one LINK in the same strip. The terminal bar carries a small pill
+ * (QUICKSTART.tag: "On npm") so the command reads as real and published.
  *
  * The link is deliberately NOT `role="tab"`: it carries an arrow,
  * underlines on hover and is an anchor, so it reads as somewhere to go rather
@@ -51,7 +51,7 @@ const { idPrefix, class: className } = Astro.props;
 				<span class="dot dot--r" />
 				<span class="dot dot--y" />
 				<span class="dot dot--g" />
-				<span class="soon">{QUICKSTART.soon}</span>
+				<span class="tag">{QUICKSTART.tag}</span>
 				<button type="button" class="copy" data-copy={QUICKSTART.command}>
 					<Icon name="copy" class="i-copy" />
 					<Icon name="check" class="i-check" />
@@ -184,7 +184,7 @@ const { idPrefix, class: className } = Astro.props;
 		background: #61c554;
 	}
 
-	.soon {
+	.tag {
 		margin-inline-start: 0.6rem;
 		padding: 0.05rem 0.55rem;
 		border-radius: 999px;

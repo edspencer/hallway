@@ -1,11 +1,11 @@
 ---
 title: The dashboard
-description: The planned home screen, app cards, the observed tray, keyboard shortcuts and the hallway design.
+description: The home screen, app cards, the observed tray, keyboard shortcuts and the hallway design.
 ---
 
 The dashboard is meant to be **good enough to set as your browser's home page**. That is a requirement, not polish.
-This page describes the design for <span class="ms ms--v0">v0</span>; real screenshots will replace the sketches as
-it is built.
+This page describes the design the <span class="ms ms--v0">v0</span> dashboard follows; the sketches are drawn in text
+from that design, not screenshots.
 
 ## Principles
 
@@ -61,12 +61,13 @@ Top to bottom:
   <span class="state state--unhealthy">▲ unhealthy</span>, <span class="state state--down">■ down</span>,
   <span class="state state--stopped">○ stopped</span>, <span class="state state--unknown">◌ unknown</span>.
 - **Badges, only when relevant**: `orphaned` (the session that started it has gone), `exposed` (bound to `0.0.0.0`,
-  so reachable from your network), `managed` (a launchd service), its source, or a config error.
+  so reachable from your network), `managed` (a launchd or systemd service), its source, or a config error.
 
 Click or Enter opens the app; ⌘/Ctrl-click opens a new tab. A secondary button opens the **detail drawer**: full
 identity (directory, git branch and last commit, framework, PID, start time, the command that started it), uptime and
 latency history, the YAML file with an "open in editor" link, deep links, any config error, and for managed services
-<span class="ms">v1</span> start, stop, restart and a live log tail.
+(upcoming, <span class="ms">v1</span>) start, stop, restart and a live log tail. Until then, use `hallway stop`,
+`start`, `restart` and `logs`.
 
 ## Keyboard
 

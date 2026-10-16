@@ -24,28 +24,30 @@ them (that is what Cloudflare's build does).
 
 ## Where it differs from Local Review's site, and why
 
-- **No screenshots, no demo video.** Hallway has no software yet. The landing page's illustrations are drawn in
-  HTML/CSS from the spec's designs (`src/components/landing/Mock.astro`) and every one carries a "Mock-up · planned
-  design" tag. Local Review's `rehype-shots` plugin and capture pipeline were left out. When the dashboard exists,
-  switch to real captures the way Local Review does.
+- **No screenshots, no demo video (yet).** The landing page's illustrations are drawn in HTML/CSS from the spec's
+  designs (`src/components/landing/Mock.astro`) and every one carries a "Mock-up · planned design" tag. Local Review's
+  `rehype-shots` plugin and capture pipeline were left out. The v0 dashboard now exists: switch to real captures the
+  way Local Review does.
 - **llms.txt is generated here** (`src/llms.ts`, `src/pages/llms.txt.ts`, `src/pages/llms-full.txt.ts`) from the docs
   pages in sidebar order, instead of being committed copies of what the app serves. When the app serves its own
   `/llms.txt`, consider Local Review's arrangement.
 - **The sidebar lives in `src/sidebar.mjs`**, so the llms.txt routes can read it too.
 - **The brand is a placeholder made here** (`brand/`, `npm run brand`), not copied from a repo-level brand kit.
 - **Fonts are self-hosted** from `@fontsource-variable` packages (all OFL) rather than loaded from Google Fonts.
-- **A pre-release banner on every docs page**, by overriding Starlight's `Banner` (`src/components/Banner.astro`).
+- **A release banner on every docs page** (v0 is out; what the milestone badges mean), by overriding Starlight's
+  `Banner` (`src/components/Banner.astro`).
 
 ## Content rules
 
-Hallway is **pre-release**. Until a feature ships:
+**v0 is released** (Hallway 0.1.0 on npm, macOS and Linux); v1 and v2 are upcoming.
 
-- **Never write as if it has shipped.** Mark features with the milestone they are planned for:
-  `<span class="ms ms--v0">v0</span>`, `<span class="ms">v1</span>`, `<span class="ms">v2</span>` (styled in
-  `custom.css`). Keep badges **out of headings** (they end up in the anchor slugs): put them at the start of the
-  paragraph below.
-- **The install command is "coming soon".** The npm name is reserved by a placeholder; `INSTALL_COMMAND` is in
-  `src/site.mjs`. When v0 ships, reword `getting-started/installation.md`, the landing copy (`copy.ts`) and the banner.
+- **Mark features with their milestone**: `<span class="ms ms--v0">v0</span>` (available now; this includes
+  `hallway run` and managed services, shipped early from v1), `<span class="ms">v1</span>`,
+  `<span class="ms">v2</span>` (styled in `custom.css`). **Never write a v1 or v2 feature as if it has shipped**: say
+  "upcoming" or "coming in v1" in the words too. Keep badges **out of headings** (they end up in the anchor slugs):
+  put them at the start of the paragraph below.
+- **The install command** is `INSTALL_COMMAND` in `src/site.mjs`; `getting-started/installation.md` and
+  `quickstart.md` write it out in code blocks. When v1 ships, reword the banner, the roadmap and the badges.
 - **The spec is the source of truth** (`../spec.md`, `../docs/`). Every claim should be checkable against it. Where
   the spec leaves something open, say so rather than inventing an answer.
 - **Keep it generic**: `example.com`, `myname.internal`, `~/Code/my-app`; no employer, machine or user names.

@@ -17,7 +17,7 @@ door.
 
 A [managed service](/concepts/services/) that has just been started shows a short-lived
 <span class="state state--starting">◐ starting</span> for a grace period (30 seconds by default) before "not
-listening" counts as down. <span class="ms">v1</span>
+listening" counts as down.
 
 ## Stopped on purpose is not down
 
