@@ -955,6 +955,57 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   `Win32_Process.ExecutablePath` alone as the identity (it names the runtime, `node.exe`, never the project); asking
   for administrator rights to read every process (never: D58).
 
+### D60 — Managed services on Windows: a per-user scheduled task at logon, running `hallway supervise` (2026-10-16)
+
+- **The daemon and each managed app are a scheduled task** in Task Scheduler's root folder, named by its label
+  (`\hallway.daemon`, `\hallway.app.<slug>`, D19), registered with `schtasks /Create /XML` as the user, with no
+  administrator rights and no stored password: `LogonType` `InteractiveToken` and `RunLevel` `LeastPrivilege`.
+  RunAtLoad is a `LogonTrigger` for that user; there's no time limit (`PT0S`), and battery and idle conditions are off.
+- **Task Scheduler can't do the rest of what launchd and systemd do,** so the task runs a small supervisor,
+  `hallway supervise <job.json>` (`server/platform/supervise.ts`), and the supervisor does it:
+  - it runs the job's argv in its directory, with the user's environment plus the job's (PATH first, merged
+    case-insensitively, since Windows spells it `Path`);
+  - it appends stdout and stderr to the job's log files, which keeps the copy-then-truncate rotation of D43 working
+    (append mode writes at the end of the file, so after a truncation they land at the start);
+  - with KeepAlive, it starts the job again 10 s after it exits (launchd's ThrottleInterval, systemd's
+    `RestartSec`). Task Scheduler's own `RestartOnFailure` restarts only a task that failed to *start*, not one whose
+    program exited;
+  - it writes `<label>.state.json` with its PID, the job's PID and the last exit code. That is how `status` knows
+    what's running without parsing `schtasks /Query`, whose words are localised;
+  - it re-reads the job file at every start, so a regenerated job takes effect at the next restart, the way systemd's
+    `daemon-reload` works.
+- **The action is `conhost.exe --headless`** running the supervisor (`node <cli.js> supervise <job.json>`), so no
+  console window opens at logon. A `.cmd` or `.bat` program (npm's shims: `npx`, `vite`) runs through `cmd.exe /d
+  /s /c`, since Node refuses to spawn one without a shell.
+- **Files** live in `%LOCALAPPDATA%\hallway\tasks\`: `<label>.json` (the job; what `hallway service` and doctor read
+  back), `<label>.xml` (the task as registered, UTF-16) and `<label>.state.json`.
+- **The lifecycle verbs:**
+  - `start` is `/Change /ENABLE`, then `/Run`;
+  - `stop` kills the supervisor's process tree (`taskkill /T /F`), then runs `/End` and `/Change /DISABLE`, so the next
+    logon doesn't start it (D41: a stop is durable);
+  - `restart` is a kill and a `/Run`;
+  - `remove` is a kill and a `/Delete`, and deletes the three files.
+- **The PATH trap on Windows:** a bare command is looked up with `PATHEXT`'s extensions, as cmd.exe does, so `vite`
+  finds `vite.cmd`, never the extensionless `#!/bin/sh` script npm puts beside it. Real paths come from
+  `fs.realpathSync.native`, which resolves junctions such as fnm's per-shell links; `fnm_multishells` directories are
+  dropped from PATH as on the other OSes.
+- **What it doesn't do:** run while the user is logged off. A task that does that needs the user's password stored
+  with it, or a service account and administrator rights (D58 rules out both). Lingering's Windows equivalent is
+  therefore absent, and `hallway service install` says so.
+- **Checked for real** on `windows-latest` by CI's "Services (real Task Scheduler)" job (`scripts/services-real.mjs`,
+  like the launchd and systemd jobs): install, restart, run, stop, start, `--persist` surviving a killed process, log
+  rotation while the job writes, regenerate, doctor, and removal leaving nothing behind. Unverified on a real Windows
+  desktop: a real logon starting the tasks, and a logoff stopping them.
+- **Rejected:**
+  - a Windows service (needs administrator rights to install, and runs outside the user's session);
+  - the Startup folder (no restart, no stop, a console window, nothing to query);
+  - the `HKCU\...\Run` key (the same, plus registry edits);
+  - NSSM or WinSW (a third-party binary to download, and they install services);
+  - PM2 (a dependency with its own daemon, D3);
+  - Task Scheduler's `RestartOnFailure` alone (it doesn't restart a program that exits);
+  - `schtasks /Create /TR` without XML (no way to remove the time limit or the battery conditions);
+  - wscript or a VBS launcher for the hidden window (`conhost --headless` ships with Windows 10 1809 and later).
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |
