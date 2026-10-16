@@ -132,6 +132,7 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
     case 'install': {
       check('service install', flags, [], args, 0, rest);
       const svc = services();
+      svc.refuseTransient(DAEMON_LABEL);
       const port = svc.store.currentConfig().port;
       const before = await svc.status(DAEMON_LABEL);
       if (!before.running && (await isListening(port)))
@@ -197,6 +198,7 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
       const slug = args[0];
       const svc = services();
       const c = svc.app(slug);
+      svc.refuseTransient(); // before the service: block is written
       if (rest?.length) await svc.store.patchApp(slug, { service: { command: rest, cwd: show(ctx.cwd), runAtLoad: true, keepAlive: true } });
       else if (!c.service) throw new UsageError(`apps/${slug}.yaml has no service: block; give the command: hallway service add ${slug} -- <command…>`);
       const r = await svc.startApp(slug);

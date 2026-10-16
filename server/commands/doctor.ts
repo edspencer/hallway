@@ -11,6 +11,7 @@ import { type Runner, defaultRunner } from '../platform/index.js';
 import { DAEMON_LABEL, slugOfLabel } from '../services/index.js';
 import { isListening } from '../services/ports.js';
 import { pathProblem } from '../services/resolve.js';
+import { transientInstall } from '../services/transient.js';
 import { type Ctx, json, show } from './context.js';
 
 export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
@@ -109,10 +110,27 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
           message: `${label} runs ${gone.join(' and ')}, which ${gone.length === 1 ? 'no longer exists' : 'no longer exist'}${m?.node && gone.includes(m.node.path) ? ` (was Node ${m.node.version} uninstalled?)` : ''}`,
           fix: `\`hallway service regenerate${slugOfLabel(label) ? ` ${slugOfLabel(label)}` : ''}\` points it at the current Node`,
         });
+      // a job that runs Hallway from npx's cache (or the like) breaks whenever npm prunes it (D61). Its program is in
+      // the manifest (not its PATH: that's job-path's business); on Windows the CLI is in the task (<label>.xml),
+      // which runs `hallway supervise` on the job file
+      let task = '';
+      try {
+        if (kind === 'schtasks') task = fs.readFileSync(file.replace(/\.json$/, '.xml'), 'utf8');
+      } catch {
+        /* no task file: the job file is all there is */
+      }
+      const transient = transientInstall([task, ...(m?.program ?? [])].join('\n'));
+      if (transient)
+        add({
+          id: 'job-transient',
+          status: 'warn',
+          message: `${label} runs Hallway from ${transient.where}, which ${transient.owner} can delete at any time (the job would then fail to start)`,
+          fix: '`npm i -g hallway && hallway service regenerate`',
+        });
       const slug = slugOfLabel(label);
       if (slug && !store.apps.get(slug)?.value?.service)
         add({ id: 'job-orphan', status: 'warn', message: `${show(file)} has no app with a service: block behind it (apps/${slug}.yaml)`, fix: `\`hallway service rm ${slug}\` if it's left over, or restore the app` });
-      if (!bad.length && PATH !== null && !gone.length && (!slug || store.apps.get(slug)?.value?.service)) add({ id: 'job', status: 'pass', message: `${label}: PATH and program look right` });
+      if (!bad.length && PATH !== null && !gone.length && !transient && (!slug || store.apps.get(slug)?.value?.service)) add({ id: 'job', status: 'pass', message: `${label}: PATH and program look right` });
     }
     for (const slug of services.managedSlugs())
       if (!labels.includes(`hallway.app.${slug}`)) add({ id: 'job-missing', status: 'warn', message: `${slug} has a service: block but no generated job yet`, fix: `\`hallway start ${slug}\`` });
