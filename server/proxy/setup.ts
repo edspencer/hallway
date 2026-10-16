@@ -17,6 +17,7 @@ import { type Cmd, type FrontingEnv, FrontingUnsupported, type Platform, type Re
 import { findTool } from '../platform/fronting.js';
 import type { Services } from '../services/index.js';
 import type { Store } from '../store/index.js';
+import { isListening } from '../services/ports.js';
 import { atomicWrite } from '../store/safefs.js';
 import { CaddyUnreachable, runningConfig } from './admin.js';
 import { CA_NAME, caddyConfig, caddyPaths, caddyText } from './caddy.js';
@@ -180,9 +181,10 @@ const safe = (f: () => boolean) => {
 
 /** Does 127.0.0.1:443 answer with a certificate from Hallway's CA (the redirect works), something else, or nothing? */
 export async function probe443(dashboard: string): Promise<'ours' | 'other' | 'none'> {
+  // something that accepts the connection but doesn't speak TLS (a plain HTTP server) is still in the way
+  if (!(await isListening(443, '127.0.0.1', 1000))) return 'none';
   const t = await tlsProbe(443, dashboard, null, 1500);
-  if (!t) return 'none';
-  return t.issuer?.startsWith(CA_NAME) ? 'ours' : 'other';
+  return t?.issuer?.startsWith(CA_NAME) ? 'ours' : 'other';
 }
 const probe443Cached = (deps: SetupDeps, dashboard: string) => (deps.probe443 ?? (() => probe443(dashboard)))();
 

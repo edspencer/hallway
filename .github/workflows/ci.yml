@@ -90,6 +90,60 @@ jobs:
         run: node scripts/services-real.mjs
 
   # ---------------------------------------------------------------------------------------------------------------
+  # Fronted mode for real (D47): `hallway setup` with the runner's passwordless sudo installs the 443/80 redirect (pf
+  # on macOS, nftables on Linux), trusts Hallway's CA system-wide and runs Caddy (and, for a custom domain, dnsmasq)
+  # as user-level jobs; scripts/fronted-real.mjs then checks v1's acceptance criteria with curl and the system trust
+  # store, and that `hallway teardown` leaves nothing behind. It changes the runner's firewall, trust store and
+  # resolver, which is why it runs only here. On macOS, setup installs Caddy and dnsmasq itself, with Homebrew.
+  # ---------------------------------------------------------------------------------------------------------------
+  fronted:
+    name: Fronted mode (real ${{ matrix.os == 'macos-latest' && 'pf, keychain' || 'nftables, resolved' }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Start a systemd user instance (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          for i in $(seq 1 20); do [ -S "/run/user/$(id -u)/bus" ] && break; sleep 0.5; done
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+      # Distribution packages of Caddy are older than the 2.7 Hallway needs (and start a system Caddy on :80), so a
+      # release binary, as Hallway's own docs tell Linux users to do.
+      - name: Caddy, nftables and dnsmasq (Linux)
+        if: runner.os == 'Linux'
+        env:
+          CADDY_VERSION: 2.11.7
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nftables dnsmasq-base
+          curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" | tar xz caddy
+          sudo install -m 0755 caddy /usr/local/bin/caddy
+          caddy version
+      - name: The generated config, checked by the real Caddy (Linux)
+        if: runner.os == 'Linux'
+        run: node --import tsx --test test/proxy.test.ts
+      - name: Setup, the criteria, teardown, for real
+        env:
+          HALLWAY_REAL_FRONTED: '1'
+        run: node scripts/fronted-real.mjs
+      - name: Logs
+        if: always()
+        run: |
+          for f in "$(ls -d ${TMPDIR:-/tmp}/hw-fr-* 2>/dev/null | head -1)"/data/logs/*.log; do [ -f "$f" ] && { echo "== $f"; tail -50 "$f"; }; done; true
+
+  # ---------------------------------------------------------------------------------------------------------------
   # Docs site (website/). The site is its own npm project, with its own package.json and lockfile; the root
   # typecheck, tests and package never include it. Until website/ exists, the filter never matches and this job
   # passes with its build steps skipped. When the site lands, adjust the steps below to its scripts (e.g. a link
@@ -132,7 +186,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [test, services, website]
+    needs: [test, services, fronted, website]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to have passed

@@ -7,6 +7,7 @@ import type { HallwayConfig } from '../../shared/api.js';
 import { dataPaths, tildify } from '../config.js';
 import { type FrontingEnv, type Platform, type Runner } from '../platform/index.js';
 import { findTool } from '../platform/fronting.js';
+import { isListening } from '../services/ports.js';
 import { CADDY_LABEL, DNSMASQ_LABEL } from '../services/spec.js';
 import type { Services } from '../services/index.js';
 import type { Store } from '../store/index.js';
@@ -106,7 +107,9 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   }
   const t = await tlsProbe(https, dashboard, root?.pem ?? null);
   const url = httpsUrl(dashboard, https);
-  if (!t) add({ id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${https}${noRedirect ? '' : `: the redirect from 443 to ${cfg.proxy.httpsPort} isn't in place`}`, fix: SETUP });
+  if (!t && (await isListening(https, '127.0.0.1', 1000)))
+    add({ id: 'redirect', status: 'fail', message: `something answers on 127.0.0.1:${https}, but not with TLS: it isn't Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
+  else if (!t) add({ id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${https}${noRedirect ? '' : `: the redirect from 443 to ${cfg.proxy.httpsPort} isn't in place`}`, fix: SETUP });
   else if (!t.issuer?.startsWith(CA_NAME)) add({ id: 'redirect', status: 'fail', message: `127.0.0.1:${https} answers with a certificate from ${t.issuer ?? 'someone else'}, not Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
   else if (!t.ours) add({ id: 'redirect', status: 'fail', message: `${url} answers with Hallway's CA, but its certificate doesn't verify (${t.error})`, fix: 'restart Caddy: `hallway setup`' });
   else add({ id: 'redirect', status: 'pass', message: `${url} reaches Hallway's Caddy${noRedirect ? '' : ' through the redirect from 443'}` });
