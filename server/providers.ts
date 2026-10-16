@@ -43,6 +43,8 @@ export interface StateProvider {
   discovered?(): DiscoveredApp[];
   /** A thumbnail for an app (`GET /api/apps/:slug/thumb`). */
   thumb?(slug: string): { body: Uint8Array; contentType: string; etag: string } | null;
+  /** A managed service is being started by the daemon: give it the start grace period (`◐ starting`, not down). */
+  serviceStarting?(slug: string): boolean;
   /** "Lost at last reboot": the notice, with each item's `back` worked out now (server/live.ts). Null: nothing lost. */
   lost?(): LostNotice | null;
   /** One lost item as recorded (with the observation it came from), for the actions. */

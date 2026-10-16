@@ -40,7 +40,7 @@ export function LostBanner({ lost, home, notify }: LostProps) {
           {count.lost ? <span className="hw-lost-warn" aria-hidden="true">⚠</span> : null}
           <ClosedDoor />
           <span>
-            Lost at last reboot <span className="hw-lost-when">({bootLabel(lost.bootTime)})</span>: <span className="hw-num">{count.text}</span>
+            Lost at last reboot <span className="hw-lost-when">({bootLabel(lost.bootTime)})</span>: {count.text}
           </span>
         </h2>
         <span className="hw-lost-sub">{count.lost ? 'Doors that closed while you were away.' : 'Everything that closed at the reboot is open again.'}</span>
@@ -105,7 +105,7 @@ function LostRow({ item: i, home, notify }: { item: LostItem; home: string | nul
               <span className="hw-state-word">not running</span>
             </span>
           )}
-          {i.managed && <span className="hw-badge">service</span>}
+          {i.managed && <span className="hw-badge">managed</span>}
         </div>
         <div className="hw-lost-meta">
           {where ? <span className="hw-lost-where">{where}</span> : <span className="hw-quiet-inline">directory not recorded</span>}

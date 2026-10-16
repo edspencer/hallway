@@ -324,6 +324,10 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
       const o = onPort(port);
       return o ? toIdentity(o) : null;
     },
+    serviceStarting: (slug: string) => {
+      health.prober.markStarting(slug);
+      return true;
+    },
     lost: lostNotice,
     lostRecord: (id: string) => lostStore.item(id),
     dismissLost: (id?: string) => {

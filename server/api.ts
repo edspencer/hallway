@@ -231,6 +231,7 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
       const action = c.req.param('action');
       if (!store.apps.has(slug)) return fail(c, 404, { error: `no app '${slug}'` });
       const s = getServices();
+      if (action === 'start' || action === 'restart') providers.first('serviceStarting', slug);
       if (action === 'start') await s.startApp(slug);
       else if (action === 'stop') await s.stopApp(slug);
       else if (action === 'restart') await s.restartApp(slug);

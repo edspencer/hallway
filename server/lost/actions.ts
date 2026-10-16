@@ -56,6 +56,7 @@ export async function reviveLost({ services, providers, run }: LostActionDeps, i
     );
   }
 
+  providers.first('serviceStarting', slug);
   const o = await runApp(services, { slug, ...(command ? { command } : {}), ...(cwd ? { cwd } : {}), persist }, { cwd: cwd ?? store.home, ...run });
   await providers.first('lostChanged', id, slug);
   return { ok: o.ok, slug: o.slug, url: o.url, port: o.port, persist: o.persist, ...(o.reason ? { reason: o.reason } : {}), ...(o.tail ? { tail: o.tail } : {}), lost: providers.first('lost') };
