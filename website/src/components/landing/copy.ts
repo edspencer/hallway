@@ -5,7 +5,7 @@
  * through the components, so the words can be worked on without touching markup.
  * (Same arrangement as Local Review's and Paddock's sites.)
  *
- * Hallway 0.3.0 is released: all of v0 and v1, and v2's software (what is left
+ * Hallway is released (0.3.x): all of v0 and v1, and v2's software (what is left
  * of v2 is checking everything on a real Mac). Every claim here must be
  * checkable against the spec (spec.md and docs/ at the repo root) and the code,
  * and says which milestone it belongs to; everything on this page has shipped,
@@ -21,7 +21,7 @@ export { REPO_URL };
 
 export const hero = {
 	/** Small line above the H1. */
-	eyebrow: '0.3.0 out now · open source · local-only',
+	eyebrow: 'Out now · open source · local-only',
 	/** The H1. */
 	title: `${TAGLINE}.`,
 	lede: 'Hallway keeps a live list of every web server running on your machine: the ones you installed on purpose, the ones a coding agent started and forgot, and the ones nobody remembers starting at all.',

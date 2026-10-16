@@ -20,6 +20,7 @@ browser has been driven on a Mac yet, and nothing has been checked across a real
 | **0.1.0** | All of v0: the daemon, the dashboard, health and uptime, the scanner, bookmarks, the agent guide, `hallway doctor`. From v1, early: [`hallway run`](/agents/hallway-run/), `stop`, `start`, `restart` and `logs`, managed services for apps and log rotation. |
 | **0.2.0** | The rest of v1's networking: [fronted mode](/networking/fronted-mode/) (`hallway setup` and `teardown`, Caddy, `https://<app>.localhost`), [custom domains](/networking/custom-domains/), the fallback page and doctor's networking checks. From v2: the [MCP server](/agents/mcp/) and the [dev-server hook](/agents/hook/). |
 | **0.3.0** | The last of v1: [Lost at last reboot](/concepts/services/#lost-at-last-reboot). From v2: [screenshot thumbnails and generated cards](/concepts/thumbnails/), and a fast 90-day uptime view. |
+| **0.3.1** | A fix: `hallway lost dismiss --all` was refused as an unknown option. |
 
 ## v0: The front page
 

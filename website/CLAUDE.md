@@ -39,7 +39,7 @@ them (that is what Cloudflare's build does).
 
 ## Content rules
 
-**v0 and v1 are released, and so is v2's software** (Hallway 0.1.0–0.3.0 on npm, macOS and Linux; what shipped
+**v0 and v1 are released, and so is v2's software** (Hallway 0.1.0–0.3.1 on npm, macOS and Linux; what shipped
 in which release is in `roadmap.md`). What is left of v2 is criterion 5: running every v0 and v1 criterion on a real
 Mac (browsers trusting the certificate, Safari and `*.localhost`, persistence across logout and reboot, pf across
 macOS updates). **Never claim those are verified.**

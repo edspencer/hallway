@@ -2,7 +2,7 @@
 
 > The front door for everything you vibe-coded on a random port.
 
-**Status:** released: 0.3.0 on npm (2026-10-16), with all of v0 and v1 and most of v2 built (section 6, and
+**Status:** released on npm since 2026-10-16 (0.3.1 at the time of writing), with all of v0 and v1 and most of v2 built (section 6, and
 `AGENTS.md` for what is where). What remains is v2's real-Mac verification. This document set is written to be
 handed to an implementing agent (or person) who was not present for any of the design discussion. Anything not written down here is lost, so
 the spec errs heavily on the side of detail, rationale, and recording what was considered and rejected.

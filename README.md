@@ -75,13 +75,14 @@ domain, a resolver entry for that domain only. It needs Caddy 2.7 or later.
 
 ## Status
 
-**Released: 0.3.0.** All of v0 and v1 and most of v2 are built ([docs/08-roadmap.md](docs/08-roadmap.md)):
+**Released** (0.3.1 is the latest). All of v0 and v1 and most of v2 are built ([docs/08-roadmap.md](docs/08-roadmap.md)):
 
 - **0.1.0 (v0):** the dashboard, live YAML files, health checks with uptime history, the port scanner with claim and
   ignore, bookmarks, the agent guide, `hallway service install` and `hallway doctor`, plus v1's managed servers
   (`hallway run`, `stop`, `start`, `restart`, `logs`, `service add`).
 - **0.2.0:** v1's fronted mode (`hallway setup`, HTTPS names, custom domains), and v2's MCP server and agent hook.
 - **0.3.0:** v1's "Lost at last reboot", and v2's screenshot thumbnails, generated cards and a fast 90-day view.
+- **0.3.1:** a fix: `hallway lost dismiss --all`.
 
 What's left is v2's last criterion: running everything on a real Mac. Everything has been run end to end on Linux;
 on macOS it's tested on CI (including real launchd jobs, `hallway setup` with its pf redirect and trusted
@@ -104,7 +105,7 @@ Or build and run it the way an installed copy runs, with a throwaway data home:
 
 ```sh
 HALLWAY_HOME=$(mktemp -d) npm start            # http://localhost:4255
-curl http://localhost:4255/api/health          # {"ok":true,"version":"0.3.0"}
+curl http://localhost:4255/api/health          # {"ok":true,"version":"<package.json version>"}
 ```
 
 Checks, conventions and how to send a pull request: [CONTRIBUTING.md](CONTRIBUTING.md). Agents working on this repo:

@@ -5,7 +5,7 @@ GitHub Actions (`.github/workflows/release.yml`), with npm trusted publishing an
 publishes from a laptop, and no npm token exists. This is the same pipeline as the author's sibling project
 [Local Review](https://github.com/edspencer/local-review/blob/main/RELEASING.md).
 
-> **Status: released.** 0.1.0, 0.2.0 and 0.3.0 all went out through this pipeline on 2026-10-16. The
+> **Status: released.** 0.1.0, 0.2.0, 0.3.0 and 0.3.1 all went out through this pipeline on 2026-10-16. The
 > hand-published placeholder `hallway@0.0.1` (see "How the package was bootstrapped") is still on npm and not yet
 > deprecated, as is a `hallway@0.0.0-stage` published a minute before it.
 

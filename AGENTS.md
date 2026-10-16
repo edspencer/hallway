@@ -2,7 +2,7 @@
 
 ## Where things stand
 
-Hallway is **released** (0.3.0 on npm; the history is in `CHANGELOG.md`). Milestones **v0 and v1 are built**, and
+Hallway is **released** (0.3.1 on npm at the time of writing; the history is in `CHANGELOG.md`). Milestones **v0 and v1 are built**, and
 **v2 is built except its last criterion**, running everything on a real Mac (`docs/08-roadmap.md` has each
 criterion's status and evidence; the acceptance runs are in `docs/11-research-notes.md`). The repository holds a
 complete **specification** and the implementation: the package, build, CI and release machinery, the daemon core
