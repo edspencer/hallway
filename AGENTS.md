@@ -5,8 +5,9 @@
 Hallway is **pre-release**. The repository holds a complete **specification** and the **start of the
 implementation**: the package, build, CI and release machinery, the daemon core (`hallway serve` and `guide`, the data
 home and its store, the watcher, event bus and SSE, the HTTP API, the agent guide and `llms.txt`, the security
-middleware, the platform abstraction) and a placeholder dashboard. The prober, scanner, services and proxy are still
-to be built, milestone by milestone; they plug into the core as providers (`server/providers.ts`, D35).
+middleware, the platform abstraction) and a placeholder dashboard. The scanner, prober and uptime history are built and
+plug into the core as a provider (`server/live.ts`, D35); services and the proxy are still to be built, milestone by
+milestone.
 
 Nobody who took part in the design discussion will be available to answer questions, so the spec is deliberately
 exhaustive: it records decisions, their rationale, the alternatives that were rejected, verified facts, and open
@@ -66,11 +67,15 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   security.ts      loopback-only Host/Origin/Content-Type middleware
   config.ts        package root, data home ($HALLWAY_HOME, ~/.hallway) and its layout, ports, dev overrides
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
-  platform/        macOS (launchd, lsof) / Linux (systemd user units, ss) behind one interface
+  live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events (D35, D38)
+  platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) behind one interface; the
+                   listener/process parsers are pure functions tested against test/fixtures/platform/
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
-  scanner/         observed listeners: list, filter, identify, record      (v0, not built yet)
-  prober/          health probes, states, uptime samples                   (v0, not built yet)
+  scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
+                   (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
+  prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
+  health/          uptime.ts (samples + hourly rollups in state/health.sqlite, node:sqlite), index.ts (startHealth)
 shared/            types used by both server/ and src/ (no imports, no Node or DOM APIs): api.ts is the API contract
 AGENT-GUIDE.md     the guide for coding agents (shipped; its file reference is generated: npm run sync:guide)
 src/               the dashboard (React, built by Vite into dist/web)

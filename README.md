@@ -26,7 +26,7 @@ features above arrive milestone by milestone ([docs/08-roadmap.md](docs/08-roadm
 
 ## Development quick start
 
-You need Node.js 22 or later and git.
+You need Node.js 22.13 or later and git.
 
 ```sh
 git clone https://github.com/edspencer/hallway.git

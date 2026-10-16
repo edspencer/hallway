@@ -19,3 +19,19 @@ export async function tmpStore(prefix = 'hw-test-home-') {
   const store = new Store(home, { bus }).init();
   return { home, bus, store, cleanup: () => fs.rmSync(home, { recursive: true, force: true }) };
 }
+
+/**
+ * For test files that open real sockets, child processes or timers: once the file's tests are done, the process should
+ * exit by itself. If something is still holding it open 10 s later, name what it is and fail, rather than leaving
+ * `node --test` waiting for ever (on CI, until the job times out). Call once, at the top level of the file.
+ */
+export function exitWatchdog(ms = 10_000) {
+  return import('node:test').then(({ after }) =>
+    after(() => {
+      setTimeout(() => {
+        process.stderr.write(`test file still running ${ms} ms after its tests ended; open: ${process.getActiveResourcesInfo().join(', ')}\n`);
+        process.exit(1);
+      }, ms).unref();
+    }),
+  );
+}

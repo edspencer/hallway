@@ -7,7 +7,9 @@ import net from 'node:net';
 import path from 'node:path';
 import { createApp, startServer } from '../server/index.ts';
 import { isLocalHost, isLocalOrigin } from '../server/security.ts';
-import { ROOT, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, tmpStore } from './fixture.ts';
+
+await exitWatchdog();
 
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 

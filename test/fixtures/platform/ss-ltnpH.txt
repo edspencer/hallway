@@ -1,0 +1,7 @@
+LISTEN 0      511          0.0.0.0:4567       0.0.0.0:*    users:(("python3",pid=2210,fd=3))
+LISTEN 0      511        127.0.0.1:4666       0.0.0.0:*    users:(("node",pid=1201,fd=23))
+LISTEN 0      511            [::1]:4666          [::]:*    users:(("node",pid=1201,fd=24))
+LISTEN 0      4096   127.0.0.53%lo:53         0.0.0.0:*
+LISTEN 0      128             [::]:22            [::]:*    users:(("sshd",pid=801,fd=4))
+LISTEN 0      511                *:4670             *:*    users:(("node",pid=1388,fd=21))
+LISTEN 0      1024 [::ffff:127.0.0.1]:8080          *:*    users:(("gunicorn",pid=900,fd=5),("gunicorn",pid=901,fd=5))
