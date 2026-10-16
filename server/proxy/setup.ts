@@ -19,7 +19,7 @@ import type { Services } from '../services/index.js';
 import type { Store } from '../store/index.js';
 import { isListening } from '../services/ports.js';
 import { atomicWrite } from '../store/safefs.js';
-import { CaddyUnreachable, runningConfig } from './admin.js';
+import { CaddyUnreachable, loadConfig, runningConfig } from './admin.js';
 import { CA_NAME, caddyConfig, caddyPaths, caddyText } from './caddy.js';
 import { fallbackHtml } from './fallback.js';
 import { ipv6Loopback, proxyApps } from './index.js';
@@ -143,7 +143,7 @@ export async function gatherFacts(deps: SetupDeps, opts: { domain?: string } = {
   ]);
   // macOS's lsof shows only your own processes: a root listener on 443 is invisible to it, but not to a connection
   if (!noRedirect && !seen.has(443)) {
-    const p = await (deps.probe443 ?? (() => probe443(dashboard)))();
+    const p = await probe443Cached(deps, dashboard, cfg.domain.dashboard);
     if (p === 'other') conflicts.push("port 443 answers, but not with Hallway's certificate, and its owner isn't visible to you (perhaps root's); `sudo lsof -nP -iTCP:443 -sTCP:LISTEN` names it");
   }
   const { conflicts: admin } = await portConflicts(platform, [{ port: 2019, what: "a Caddy admin API's default port" }]);
@@ -164,7 +164,7 @@ export async function gatherFacts(deps: SetupDeps, opts: { domain?: string } = {
   };
   const done = {
     trust: root ? await isTrusted(deps, fenv) : false,
-    redirect: noRedirect || (safe(() => installedAsStaged(f.redirect(fenv).files)) && (await probe443Cached(deps, dashboard)) === 'ours'),
+    redirect: noRedirect || (safe(() => installedAsStaged(f.redirect(fenv).files)) && (await probe443Cached(deps, dashboard, cfg.domain.dashboard)) === 'ours'),
     resolver: custom ? safe(() => installedAsStaged(f.resolver(fenv).files)) : true,
     config: cfg.mode === 'fronted' && cfg.domain.base === base && cfg.domain.dashboard === dashboard,
   };
@@ -180,13 +180,17 @@ const safe = (f: () => boolean) => {
 };
 
 /** Does 127.0.0.1:443 answer with a certificate from Hallway's CA (the redirect works), something else, or nothing? */
-export async function probe443(dashboard: string): Promise<'ours' | 'other' | 'none'> {
+export async function probe443(...names: string[]): Promise<'ours' | 'other' | 'none'> {
   // something that accepts the connection but doesn't speak TLS (a plain HTTP server) is still in the way
   if (!(await isListening(443, '127.0.0.1', 1000))) return 'none';
-  const t = await tlsProbe(443, dashboard, null, 1500);
-  return t?.issuer?.startsWith(CA_NAME) ? 'ours' : 'other';
+  // Caddy only completes a handshake for a name it serves: when the domain is changing, that's the old dashboard
+  for (const name of [...new Set(names)]) {
+    const t = await tlsProbe(443, name, null, 1500);
+    if (t?.issuer?.startsWith(CA_NAME)) return 'ours';
+  }
+  return 'other';
 }
-const probe443Cached = (deps: SetupDeps, dashboard: string) => (deps.probe443 ?? (() => probe443(dashboard)))();
+const probe443Cached = (deps: SetupDeps, ...names: string[]) => (deps.probe443 ?? (() => probe443(...names)))();
 
 /** Is Hallway's root in the system trust store? */
 export async function isTrusted(deps: Pick<SetupDeps, 'platform' | 'query'>, env: FrontingEnv): Promise<boolean> {
@@ -414,6 +418,9 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
         }
       }, 20_000);
       if (!ok) throw new SetupError(`Caddy didn't come up within 20 s; its log is ${tildify(path.join(dataPaths(store.home).logs, 'caddy.err.log'))}`);
+      // a Caddy that was already running keeps its old routes until told (its job didn't change, so it wasn't
+      // restarted): give it the config just written, as the daemon would
+      await loadConfig(paths.socket, fs.readFileSync(paths.config, 'utf8'));
       // the trust step needs the root's fingerprint, which exists only now
       facts.env.rootSha1 = readRoot(paths.rootCert)?.sha1 ?? null;
       deps.out(`   Caddy is running; its certificate authority is ${tildify(paths.rootCert)}\n`);
