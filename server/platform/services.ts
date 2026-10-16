@@ -66,7 +66,9 @@ export const defaultRunner: Runner = (cmd, args) =>
 export class ServiceManagerError extends Error {}
 
 export interface ServiceManager {
-  kind: 'launchd' | 'systemd';
+  kind: 'launchd' | 'systemd' | 'schtasks';
+  /** Set where this OS has no managed services yet (D58): why, so callers refuse before writing anything. */
+  unsupported?: string;
   /** Where a label's definition lives. */
   file(label: string): string;
   /** The definition's text. Pure. */

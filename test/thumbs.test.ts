@@ -134,11 +134,11 @@ describe('findFavicon', () => {
 });
 
 describe('icon sources', () => {
-  const home = '/home/me/.hallway';
+  const home = path.resolve('/home/me/.hallway'); // D:\home\me\.hallway on Windows
   test('auto, an image URL, a file inside the data home, or text', () => {
     assert.deepEqual(iconSource('auto', 'http://127.0.0.1:4000/', home), { key: 'page:http://127.0.0.1:4000/', kind: 'page', target: 'http://127.0.0.1:4000/' });
     assert.equal(iconSource('https://cdn.example.com/logo.png', null, home)?.kind, 'image');
-    assert.deepEqual(iconSource('icons/app.png', null, home), { key: `file:${home}/icons/app.png`, kind: 'file', target: `${home}/icons/app.png` });
+    assert.deepEqual(iconSource('icons/app.png', null, home), { key: `file:${path.join(home, 'icons', 'app.png')}`, kind: 'file', target: path.join(home, 'icons', 'app.png') });
     assert.equal(iconSource('🍲', 'http://x/', home), null);
   });
 

@@ -397,6 +397,44 @@ Mac:*
   squatter refused, idempotent re-run, doctor, the fallback, the custom domain, `.local` refused, and teardown leaving
   nothing behind (no anchor, LaunchDaemon, resolver file, keychain certificate or LaunchAgent).
 
+## Windows (D58), GitHub's hosted runners, 2026-10-16
+
+Everything here was seen on `windows-latest` (Windows Server 2025, an administrator account, no interactive desktop),
+Node 22.13, 22 and 24. **Nothing has been run on a real Windows desktop**; each item says what that leaves open.
+
+**Stage A, the baseline (PR "Windows: decision, CI baseline"):**
+
+- The first unmodified run: 60-odd failures in four families. (1) `UnsupportedPlatformError` wherever the scanner,
+  services or CLI asked for the platform. (2) CRLF: Git for Windows checks out with `core.autocrlf=true`, so every
+  golden file, fixture and `AGENT-GUIDE.md` read back with `\r\n` (the guide's section finder failed, and the lsof
+  fixture's process names ended in `\r`). Fixed for every checkout with `.gitattributes` (`* text=auto eol=lf`), not
+  by tolerating CR in the parsers. (3) Paths: tests that wrote POSIX expectations (`/home/someone/.hallway`), and code
+  that built POSIX-only things with the native `path` (launchd and systemd files, the fronting recipes). (4) The PATH
+  trap and service specs: POSIX exec bits and `#!` lines, which Windows doesn't have.
+- `fs.accessSync(p, X_OK)` is `F_OK` on Windows, and an executable is `.exe`/`.cmd` by `PATHEXT`, not by mode bits:
+  `server/services/resolve.ts` is POSIX-only as written. Its tests are skipped on Windows until managed services
+  exist there (stage C).
+- `os.tmpdir()` is under the home directory on Windows (`C:\Users\<user>\AppData\Local\Temp`), and it's an 8.3 short
+  name (`RUNNER~1`) where git and the OS report the long one. Two consequences: tests that assumed a temp path is
+  never shown as `~\…` were wrong; and **a real bug**: `hallway run` wrote `cwd: ~/…` with this process's home but the
+  job's spec expanded it with the `Services` home, which differ in tests (and could with `$HOME` overrides). Fixed:
+  both use `Services.homeDir`. The test fixture now uses `fs.realpathSync.native`, which expands short names.
+- git prints `C:/Users/…` (forward slashes) from `rev-parse --show-toplevel`; `identify.ts` now `path.resolve`s it.
+- The watcher's event keys were `file:bookmarks\g.yaml` on Windows; the store's names use `/`. Keys use `/` now.
+- `npm` is `npm.cmd`, which `execFile` refuses without a shell (Node's 2024 fix for CVE-2024-27980). `smoke:pack`
+  runs npm's own script (`$npm_execpath`) with the running Node instead. A global install with `--prefix` puts the
+  shim at `<prefix>\hallway.cmd` and the package at `<prefix>\node_modules\hallway` (no `bin\` or `lib\`).
+- Killing a process started through a `.cmd` shim kills `cmd.exe` and leaves Node running; `smoke:pack` starts the
+  daemon with `node …\dist\server\cli.js` there.
+- Unix sockets: `net.Server.listen(<path>)` on Windows wants a named pipe (`\\.\pipe\…`); a path in the data home
+  fails with `EACCES`. Caddy's admin socket is therefore one more reason fronted mode is out of scope (D58).
+- Result: 428 tests pass on Windows, 13 are skipped with their reason (`onWindows()`), and `smoke:pack` packs,
+  installs, runs `--version`, `--help`, `guide`, serves (health, state, the watcher, `llms.txt`, the dashboard and its
+  assets, the Host check), and checks that `run`, `service install` and `setup` refuse with the reason.
+- Unverified on a real Windows desktop: `hallway open` (`rundll32 url.dll,FileProtocolHandler <url>`; there's no
+  browser on the runner); boot time from `os.uptime()` across sleep and Fast Startup (a "shutdown" with Fast Startup on
+  is a hibernation, so the boot time doesn't move and nothing would be reported lost).
+
 ## Prior art status (checked 2026-09-16 via GitHub API / npm)
 
 | Project | Last push | Stars | Notes |

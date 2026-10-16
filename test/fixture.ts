@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function tmpDir(prefix: string) {
-  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  // .native: on Windows it also expands 8.3 short names (C:\Users\RUNNER~1), which git and the OS report in full
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 }
 
 /** A Store on a fresh throwaway data home, with its own event bus (never the daemon's), initialised. */
@@ -35,3 +36,9 @@ export function exitWatchdog(ms = 10_000) {
     }),
   );
 }
+
+/**
+ * For `{ skip }` on tests of something Windows doesn't have (D58), with the reason node:test prints: false elsewhere.
+ * Only for what is genuinely POSIX-only; everything else runs on every OS.
+ */
+export const onWindows = (reason: string): false | string => (process.platform === 'win32' ? `not on Windows: ${reason}` : false);

@@ -90,7 +90,9 @@ Each goal should be testable. Milestone mapping is in `08-roadmap.md`.
   containers.
 - **A general monitoring / alerting system.** Health is for "is my thing up?" at a glance. Notifications are a
   possible later feature, not a core one.
-- **Windows.** Out of scope. WSL2 may work incidentally; not a target.
+- **Windows parity.** Windows is supported where feasible, best effort (D58): the daemon, dashboard and CLI run
+  natively, without administrator rights, but fronted mode is out of scope there and it is checked only on CI's hosted
+  Windows runners. WSL2 is a Linux install and sees only its own servers.
 - **Launching arbitrary commands via MCP.** See D10 in `09-decisions.md`.
 
 ## Positioning

@@ -53,6 +53,8 @@ export interface RunOptions {
 export async function runApp(services: Services, req: RunRequest, opts: RunOptions = {}): Promise<RunOutcome> {
   const { store } = services;
   const { slug } = req;
+  // before anything is written: an app file left behind with a service: block nothing can start would mislead
+  if (services.manager.unsupported) throw new ServiceError(services.manager.unsupported);
   if (!SLUG.test(slug)) throw new ServiceError(`"${slug}" is not a valid slug: lower-case letters, digits and hyphens, starting and ending with a letter or digit`);
   if (slug === RESERVED_SERVICE_SLUG) throw new ServiceError(DAEMON_SLUG_MESSAGE);
   const entry = store.apps.get(slug);
@@ -69,14 +71,16 @@ export async function runApp(services: Services, req: RunRequest, opts: RunOptio
   } else port = req.port ?? (await assignPort(store, { isFree: opts.isFree }));
 
   const here = opts.cwd ?? process.cwd();
-  const cwd = req.cwd ? path.resolve(here, expandHome(req.cwd)) : given || !existing?.service?.cwd ? here : path.resolve(expandHome(existing.service.cwd));
+  // `~` both ways with the home the job's spec expands it with (spec.ts), not necessarily this process's
+  const home = services.homeDir;
+  const cwd = req.cwd ? path.resolve(here, expandHome(req.cwd, home)) : given || !existing?.service?.cwd ? here : path.resolve(expandHome(existing.service.cwd, home));
   if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new ServiceError(`the directory ${cwd} doesn't exist`);
 
   // --persist (or the recorded choice, re-running without a command) means a real service: at login, and restarted
   const keep = !given && existing?.service && !req.persist;
   const runAtLoad = keep ? existing!.service!.runAtLoad : !!req.persist;
   const keepAlive = keep ? existing!.service!.keepAlive : !!req.persist;
-  const service = { command, cwd: tildify(cwd), runAtLoad, keepAlive };
+  const service = { command, cwd: tildify(cwd, home), runAtLoad, keepAlive };
   const expected = runAtLoad || keepAlive ? 'running' : 'adhoc';
 
   // something else on the port would make the job fail to bind, or (worse) look as if it had come up

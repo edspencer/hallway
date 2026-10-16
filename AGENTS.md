@@ -41,9 +41,11 @@ The human-facing version of the development conventions, with setup, CI and pull
 - **Localhost only.** The daemon binds 127.0.0.1 and rejects non-local `Host`/`Origin` headers
   (`server/security.ts`). Don't add a `--host` flag. The only escape hatch is the development-only
   `HALLWAY_DEV_BIND` / `HALLWAY_DEV_ALLOWED_HOSTS` pair (D31): environment only, never in `--help`, never in user docs.
-- **macOS and Linux.** Everything OS-specific goes behind `server/platform/` (`darwin.ts`, `linux.ts`; D26); the rest
-  of the server never branches on `process.platform`. Test both platforms' logic on every OS. Anything you can't run
-  on macOS from where you are goes in `docs/11-research-notes.md` as "unverified on macOS".
+- **macOS and Linux, and Windows best effort.** Everything OS-specific goes behind `server/platform/` (`darwin.ts`,
+  `linux.ts`, `win32.ts`; D26, D58); the rest of the server never branches on `process.platform`. Each platform's
+  module uses `path.posix` or `path.win32` explicitly, so every platform's logic is tested on every OS. Anything you
+  can't run on macOS from where you are goes in `docs/11-research-notes.md` as "unverified on macOS" (and on Windows,
+  "unverified on a real Windows desktop"). Tests skip only what an OS genuinely lacks, with `onWindows(reason)`.
 - **Keep it generic.** Examples, defaults and docs must not assume any particular employer, machine, username or
   network. Use `example.com`, `myname.internal`, `~/Code/my-app` and similar placeholders.
 - Follow the conventions of the author's sibling project Local Review (https://github.com/edspencer/local-review):
@@ -74,7 +76,7 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   config.ts        package root, data home ($HALLWAY_HOME, ~/.hallway) and its layout, ports, dev overrides
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
   live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events (D35, D38)
-  platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) behind one interface; the
+  platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) / Windows (win32.ts, D58) behind one interface; the
                    listener/process parsers are pure functions tested against test/fixtures/platform/; launchd.ts and
                    systemd.ts render the job definitions (pure) and run the lifecycle verbs through a mockable runner
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),

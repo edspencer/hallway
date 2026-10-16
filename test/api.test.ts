@@ -10,6 +10,7 @@ import { ProviderRegistry } from '../server/providers.ts';
 import { appUrl } from '../server/views.ts';
 import { defaultConfig } from '../server/store/schema.ts';
 import { tmpStore } from './fixture.ts';
+import { expandHome, tildify } from '../server/config.ts';
 
 const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));
@@ -165,8 +166,9 @@ describe('apps over HTTP', () => {
     assert.equal(del.status, 200);
     const d = (await del.json()) as { ok: boolean; movedTo: string };
     assert.ok(d.ok);
-    assert.ok(d.movedTo.startsWith(path.join(home, 'backups', 'removed') + path.sep), d.movedTo);
-    assert.ok(fs.existsSync(d.movedTo));
+    // shown with ~ when it's under the home directory (where the temp directory is, on Windows)
+    assert.ok(d.movedTo.startsWith(tildify(path.join(home, 'backups', 'removed')) + path.sep), d.movedTo);
+    assert.ok(fs.existsSync(expandHome(d.movedTo)));
     assert.equal((await req('/api/apps/foo')).status, 404);
   });
 

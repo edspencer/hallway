@@ -10,6 +10,7 @@
 // Each job generated also leaves a manifest in generated/services/<label>.json: the resolved program, PATH and Node,
 // so doctor can tell when a recorded Node has gone and `service regenerate` can fix it.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { AppConfig, Expected } from '../../shared/api.js';
 import { ROOT, VERSION, dataPaths } from '../config.js';
@@ -63,6 +64,10 @@ export class Services {
   private node?: ResolvedNode;
   private now: () => Date;
   private cliScript: string;
+  /** The home `~` means in a service: block's cwd (the user's, unless a test gives another). */
+  get homeDir(): string {
+    return this.userHome ?? os.homedir();
+  }
 
   constructor(opts: ServicesOptions) {
     this.store = opts.store;

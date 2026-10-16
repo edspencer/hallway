@@ -887,6 +887,43 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   responses (invalidated by every probe, for no measurable gain); a daily rollup table (90 rows instead of 2,160, but a
   second table to keep consistent for a 6 ms read).
 
+### D58 — Windows: supported where feasible, best effort (approved by the author, 2026-10-16; updates the non-goal in `01-background.md` and D26)
+
+- The author asked on 2026-10-16 for Windows support to be explored and built as far as is sensible. Windows moves
+  from **non-goal** to **supported where feasible, best effort**: macOS stays primary and Linux sits alongside it
+  (D26); Windows comes third. It runs natively (not through WSL) and, like everything else, **never needs
+  administrator rights** (the Windows twin of "never require root in the daemon").
+- **Verified only on GitHub's hosted Windows runners** (`windows-latest`: Windows Server, an administrator account,
+  no interactive desktop). Nobody building it has a Windows desktop, so anything that depends on one (a logged-in
+  user's session, a real browser, behaviour without administrator rights) is listed as **"unverified on a real
+  Windows desktop"** in `11-research-notes.md`.
+- **Built in stages, each useful alone:**
+  - **A (this decision):** a `win32` platform behind the same interface (`server/platform/win32.ts`). The daemon,
+    dashboard, store, watcher, prober, uptime history, HTTP API, MCP, agent guide and the CLI's file commands run on
+    Windows. Unit tests run on `windows-latest` (Node 22.13 and 24) and `smoke:pack` installs and runs the packed
+    tarball there. Until stage B the scanner sees nothing, and until stage C `hallway run` and `hallway service`
+    refuse with a message saying so; the platform says what it can't do rather than guessing.
+  - **B:** the scanner on Windows (listeners, process info, boot time, the ephemeral range).
+  - **C, if feasible:** managed services as per-user scheduled tasks.
+- **Out of scope: fronted mode on Windows.** Its parts have no user-level equivalent: a 443/80 redirect means
+  `netsh interface portproxy` (administrator, and it runs inside the IP Helper service), trusting a root means the
+  machine certificate store, custom domains mean the hosts file or a DNS client policy, and Caddy's admin API is a Unix
+  socket in the data home. `hallway setup` refuses before it looks for or writes anything (exit 1, with the reason);
+  `hallway teardown` says there is nothing to undo. Apps keep their `http://localhost:<port>` addresses.
+- **WSL2:** a Hallway installed inside a WSL distribution is a Linux install and sees that distribution's servers, not
+  Windows'. That stays incidental, as before.
+- **How the code stays honest:** `win32.ts` uses `path.win32`, and `darwin.ts`, `linux.ts`, `launchd.ts`, `systemd.ts`
+  and the fronting recipes now use `path.posix`, so each platform's logic is tested on every OS (D26's rule), Windows
+  included. The repository is checked out with LF line endings everywhere (`.gitattributes`): golden files, fixtures and
+  `AGENT-GUIDE.md` are compared byte for byte, and the parsers split on `\n`. Data-home-relative names (the store's
+  `file`, the watcher's event keys) are written with `/` on every OS. Tests that exercise something Windows genuinely
+  lacks (POSIX exec bits and `#!` lines, Caddy's Unix socket) are skipped there with the reason (`onWindows()` in
+  `test/fixture.ts`); nothing else is.
+- **Rejected:** WSL-only support (a Hallway inside WSL can't see the Windows-side servers, which is the point; and it
+  is just the Linux build); keeping Windows a non-goal (the platform layer already isolates the OS-specific parts, and
+  most of the daemon is portable Node); `process.platform` checks scattered through the server (D26); fronted mode
+  through an elevated helper service (a second, privileged component to install and keep secure, for one OS).
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |

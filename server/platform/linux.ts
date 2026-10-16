@@ -3,7 +3,8 @@
 // are pure functions over captured output, unit-tested on every OS.
 import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
+// POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
+import { posix as path } from 'node:path';
 import type { Platform, PortRange } from './index.js';
 import { systemdManager, unitName } from './systemd.js';
 import { type ProcessInfo, type RawListener, run, splitHostPort } from './listeners.js';
