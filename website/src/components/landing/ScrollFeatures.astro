@@ -1,0 +1,186 @@
+---
+/**
+ * ScrollFeatures — the sticky illustration that swaps as you read past it.
+ *
+ * The mechanism is Local Review's, unchanged (and documented at length there):
+ * a stack of text blocks on the left, one `position: sticky` stage on the
+ * right, all items stacked in one grid cell so the stage never resizes, and an
+ * observer in scripts/landing.ts deciding which block is current. No
+ * scroll-jacking. Below the breakpoint each block carries its own copy of the
+ * media inline.
+ *
+ * The one difference: the media are drawn mock-ups of the planned design
+ * (Mock.astro), not captures, because Hallway has no software to capture yet.
+ * Each is tagged "Mock-up" and each step carries its milestone.
+ */
+import Mock from './Mock.astro';
+import { FEATURES } from './copy';
+---
+
+<section class="feat section" data-features>
+	<div class="container">
+		<header class="feat-head" data-reveal>
+			<p class="eyebrow">How it will work</p>
+			<h2 class="h2">From a pile of forgotten ports<br />to a hallway of labelled doors.</h2>
+		</header>
+
+		<div class="feat-grid">
+			<div class="feat-blocks">
+				{
+					FEATURES.map((f, i) => (
+						<article
+							class:list={['feat-block', { 'is-current': i === 0 }]}
+							data-feature-block
+							aria-current={i === 0 ? 'true' : undefined}
+						>
+							<h3>
+								{f.title} <span class={`ms ms--${f.ms}`}>{f.ms}</span>
+							</h3>
+							<p>{f.body}</p>
+
+							{/* Shown only below the breakpoint, where there is no sticky column. */}
+							<div class="feat-inline">
+								<Mock name={f.mock} alt={f.alt} />
+							</div>
+						</article>
+					))
+				}
+			</div>
+
+			<div class="feat-sticky-col" aria-hidden="true">
+				<div class="feat-sticky">
+					<div class="feat-stage">
+						{
+							FEATURES.map((f, i) => (
+								<div class:list={['feat-shot', { 'is-current': i === 0 }]} data-feature-shot>
+									<Mock name={f.mock} alt={f.alt} />
+								</div>
+							))
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>
+
+<style>
+	/* Wider than the rest of the page so the media column is ~700px. */
+	.feat .container {
+		max-width: 1320px;
+	}
+
+	.feat-head {
+		margin-bottom: clamp(2rem, 5vw, 3.5rem);
+	}
+
+	.feat-grid {
+		display: grid;
+		/* minmax(0, …): the mock-ups have no-wrap rows, which would otherwise widen the column past the screen. */
+		grid-template-columns: minmax(0, 1fr);
+		gap: 2rem;
+	}
+
+	.feat-block {
+		cursor: default;
+	}
+
+	.feat-block + .feat-block {
+		margin-top: 3rem;
+	}
+
+	.feat-block h3 {
+		font-size: 1.35rem;
+		font-weight: 600;
+		letter-spacing: -0.015em;
+		margin: 0 0 0.7rem;
+	}
+
+	.feat-block p {
+		margin: 0;
+		color: var(--text-muted);
+		line-height: 1.7;
+		max-width: 46ch;
+	}
+
+	.feat-inline {
+		margin-top: 1.5rem;
+	}
+
+	.feat-sticky-col {
+		display: none;
+	}
+
+	/* ---- desktop: sticky media, dimmed inactive blocks --------------------- */
+
+	@media (min-width: 940px) {
+		.feat-grid {
+			grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+			gap: clamp(2.5rem, 5vw, 4.5rem);
+			align-items: start;
+		}
+
+		.feat-block {
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			min-height: 30vh;
+			padding-block: 7vh;
+			cursor: pointer;
+			opacity: 0.45;
+			transition: opacity 0.5s ease;
+		}
+
+		.feat-block + .feat-block {
+			margin-top: 0;
+		}
+
+		.feat-block.is-current {
+			opacity: 1;
+		}
+
+		.feat-inline {
+			display: none;
+		}
+
+		.feat-sticky-col {
+			display: block;
+			height: 100%;
+		}
+
+		.feat-sticky {
+			position: sticky;
+			/* Clears the fixed 4.25rem nav with room to breathe. */
+			top: 8.5rem;
+		}
+	}
+
+	/* ---- the cross-fading stage -------------------------------------------- */
+
+	.feat-stage {
+		display: grid;
+		place-items: center;
+	}
+
+	.feat-shot {
+		grid-area: 1 / 1;
+		width: 100%;
+		display: flex;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity 0.45s ease;
+		pointer-events: none;
+	}
+
+	.feat-shot.is-current {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.feat-block,
+		.feat-shot {
+			transition: none;
+		}
+	}
+</style>

@@ -1,0 +1,784 @@
+---
+/**
+ * Mock — illustrations of the PLANNED dashboard, drawn in HTML and CSS.
+ *
+ * Local Review's landing page shows captures from its demo test bed. Hallway has
+ * no software to capture yet, so these panels are drawn from the spec's designs
+ * (docs/05-ui.md: the layout, the app card's anatomy, the observed tray, the
+ * hallway visual direction) and every one carries a "Mock-up" tag. When the
+ * dashboard exists, replace them with real captures, as Local Review does.
+ *
+ * All names, ports, directories and branches are invented placeholders.
+ */
+interface Props {
+	name: 'dashboard' | 'observed' | 'doors' | 'run' | 'address' | 'bookmarks';
+	alt: string;
+}
+const { name, alt } = Astro.props;
+
+type State = 'healthy' | 'unhealthy' | 'down' | 'stopped' | 'unknown';
+interface Door {
+	name: string;
+	sub?: string;
+	port: number;
+	addr?: string;
+	paint: string;
+	state: State;
+	/** 48 half-hour bars, oldest first: h healthy, u unhealthy, d down, s stopped, n no data. */
+	bars: string;
+	stat: string;
+}
+
+const MARK: Record<State, string> = { healthy: '●', unhealthy: '▲', down: '■', stopped: '○', unknown: '◌' };
+
+const rep = (s: string, n: number) => s.repeat(n);
+const DOORS: Door[] = [
+	{ name: 'Slides', port: 4321, paint: '#4f6b8a', state: 'healthy', bars: rep('h', 48), stat: '100%' },
+	{ name: 'Log viewer', port: 7333, paint: '#7a5a8c', state: 'healthy', bars: rep('h', 30) + 'uu' + rep('h', 16), stat: '99.1%' },
+	{ name: 'dashboard', sub: 'main', port: 4666, paint: '#3f7a6e', state: 'healthy', bars: rep('n', 6) + rep('h', 42), stat: '100%' },
+	{ name: 'dashboard', sub: 'new-chart', port: 4670, paint: '#3f7a6e', state: 'stopped', bars: rep('s', 20) + rep('h', 12) + rep('s', 16), stat: 'adhoc' },
+	{ name: 'Data API', port: 5100, paint: '#8a5a3c', state: 'down', bars: rep('h', 40) + rep('d', 8), stat: '4 h' },
+	{ name: 'Docs site', port: 4455, paint: '#6b7a3f', state: 'stopped', bars: rep('s', 48), stat: '' },
+];
+const FEATURE_DOORS = [DOORS[0], DOORS[5], DOORS[4]];
+---
+
+<figure class={`mock mock--${name}`} role="img" aria-label={alt}>
+	<span class="mock-tag" aria-hidden="true">Mock-up · planned design</span>
+
+	{
+		name === 'dashboard' && (
+			<div class="dash" aria-hidden="true">
+				<div class="dash-head">
+					<span class="dash-title">
+						HALLWAY <span class="dim">· my-laptop</span>
+					</span>
+					<span class="dash-filter">/ filter…</span>
+					<span class="dash-count">
+						<span class="s-healthy">●</span> 3 up · <span class="s-down">■</span> 1 down
+					</span>
+				</div>
+				<div class="dash-label">Apps</div>
+				<div class="doors doors--grid">
+					{DOORS.map((d) => (
+						<div class={`door door--${d.state}`}>
+							<div class="door-paint" style={`--paint:${d.paint}`}>
+								<span class="plate">{d.port}</span>
+							</div>
+							<div class="door-name">
+								{d.name}
+								{d.sub && <span class="door-sub"> @ {d.sub}</span>}
+							</div>
+							<div class="door-addr">localhost:{d.port}</div>
+							<div class="bars">
+								{[...d.bars].map((b) => (
+									<i class={`b b--${b}`} />
+								))}
+							</div>
+							<div class="door-foot">
+								<span class={`s-${d.state}`}>
+									{MARK[d.state]} {d.state}
+								</span>
+								<span class="dim">{d.stat}</span>
+							</div>
+						</div>
+					))}
+				</div>
+			</div>
+		)
+	}
+
+	{
+		name === 'doors' && (
+			<div class="doors doors--big" aria-hidden="true">
+				{FEATURE_DOORS.map((d) => (
+					<div class={`door door--${d.state}`}>
+						<div class="door-paint" style={`--paint:${d.paint}`}>
+							<span class="plate">{d.port}</span>
+						</div>
+						<div class="door-name">{d.name}</div>
+						<div class="door-addr">localhost:{d.port}</div>
+						<div class="bars">
+							{[...d.bars].map((b) => (
+								<i class={`b b--${b}`} />
+							))}
+						</div>
+						<div class="door-foot">
+							<span class={`s-${d.state}`}>
+								{MARK[d.state]} {d.state}
+							</span>
+						</div>
+					</div>
+				))}
+			</div>
+		)
+	}
+
+	{
+		name === 'observed' && (
+			<div class="tray" aria-hidden="true">
+				<div class="dash-label">Found running — not yet named</div>
+				<div class="row">
+					<span class="plate">4666</span>
+					<div class="row-main">
+						<div class="row-name">
+							dashboard <span class="dim">· ~/Code/dashboard-wt-b @ feature/new-chart</span>
+						</div>
+						<div class="row-meta">
+							up 9 days · <span class="badge">orphaned</span> · “Team metrics”
+						</div>
+					</div>
+					<div class="row-actions">
+						<span class="mbtn mbtn--primary">Claim</span>
+						<span class="mbtn">Ignore ▾</span>
+					</div>
+				</div>
+				<div class="row">
+					<span class="plate">4455</span>
+					<div class="row-main">
+						<div class="row-name">
+							docs-site <span class="dim">· ~/Code/docs-site @ main</span>
+						</div>
+						<div class="row-meta">
+							up 13 days · <span class="badge">orphaned</span> · “Docs”
+						</div>
+					</div>
+					<div class="row-actions">
+						<span class="mbtn mbtn--primary">Claim</span>
+						<span class="mbtn">Ignore ▾</span>
+					</div>
+				</div>
+				<div class="tray-more">▸ 3 other listeners (not HTTP)</div>
+			</div>
+		)
+	}
+
+	{
+		name === 'run' && (
+			<div class="term" aria-hidden="true">
+				<div class="term-bar">
+					<span class="dot dot--r" />
+					<span class="dot dot--y" />
+					<span class="dot dot--g" />
+					<span class="term-title">~/Code/slides</span>
+				</div>
+				<pre class="term-body"><span class="p">$</span> hallway run slides -- npx astro dev --port $PORT
+<span class="dim">registered  apps/slides.yaml (port 4321, kept)
+started     hallway.app.slides under launchd
+listening   after 2.4 s</span>
+
+  <span class="ok">●</span> Slides is up
+    <span class="url">http://localhost:4321</span>
+    logs  ~/.hallway/logs/slides.out.log
+
+<span class="p">$</span> <span class="cursor" /></pre>
+			</div>
+		)
+	}
+
+	{
+		name === 'address' && (
+			<div class="browser" aria-hidden="true">
+				<div class="browser-bar">
+					<span class="dot dot--r" />
+					<span class="dot dot--y" />
+					<span class="dot dot--g" />
+					<span class="omni">
+						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+							<rect x="5" y="10.5" width="14" height="10" rx="2" />
+							<path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" />
+						</svg>
+						<span>
+							https://<b>slides</b>.localhost
+						</span>
+					</span>
+				</div>
+				<div class="browser-page">
+					<div class="hosts">
+						<div>
+							<span class="h">slides.localhost</span>
+							<span class="arrow">→</span>
+							<span class="dim">127.0.0.1:</span>
+							<span class="plate">4321</span>
+						</div>
+						<div>
+							<span class="h">logs.localhost</span>
+							<span class="arrow">→</span>
+							<span class="dim">127.0.0.1:</span>
+							<span class="plate">7333</span>
+						</div>
+						<div>
+							<span class="h">hallway.localhost</span>
+							<span class="arrow">→</span>
+							<span class="dim">127.0.0.1:</span>
+							<span class="plate">4255</span>
+						</div>
+					</div>
+					<p class="browser-note">Caddy terminates TLS with its local CA and rewrites Host for the app.</p>
+				</div>
+			</div>
+		)
+	}
+
+	{
+		name === 'bookmarks' && (
+			<div class="hooks" aria-hidden="true">
+				{[
+					{ title: 'Production', links: ['Admin console', 'BI dashboards', 'Status page'] },
+					{ title: 'Docs', links: ['API reference', 'Runbooks', 'Design system'] },
+				].map((g) => (
+					<div class="hook-group">
+						<div class="dash-label">{g.title}</div>
+						<div class="chips">
+							{g.links.map((l, i) => (
+								<span class="chip">
+									<span class="chip-ico" style={`--c:${['#4f6b8a', '#8a5a3c', '#3f7a6e', '#7a5a8c', '#6b7a3f', '#8a4f5a'][(i + g.title.length) % 6]}`}>
+										{l[0]}
+									</span>
+									{l}
+								</span>
+							))}
+						</div>
+					</div>
+				))}
+			</div>
+		)
+	}
+</figure>
+
+<style>
+	.mock {
+		position: relative;
+		margin: 0;
+		width: 100%;
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-media);
+		background: linear-gradient(180deg, #1a1611 0%, var(--sunken) 100%);
+		box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.7);
+		overflow: hidden;
+		font-family: var(--font-sans);
+		color: var(--text);
+		font-size: 0.82rem;
+		line-height: 1.45;
+	}
+
+	.mock-tag {
+		position: absolute;
+		top: 0.55rem;
+		right: 0.7rem;
+		z-index: 2;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--text-subtle);
+		background: rgb(13 11 8 / 0.75);
+		border: 1px solid var(--border-subtle);
+		border-radius: 999px;
+		padding: 0.1rem 0.55rem;
+	}
+
+	/* Panels with a window bar on top carry the tag at the bottom instead, clear of the bar. */
+	.mock--run .mock-tag,
+	.mock--address .mock-tag {
+		top: auto;
+		bottom: 0.55rem;
+	}
+
+	.mock--run .term-body,
+	.mock--address .browser-page {
+		padding-bottom: 2.6rem;
+	}
+
+	.dim {
+		color: var(--text-subtle);
+	}
+
+	.plate {
+		font-size: 0.72rem;
+	}
+
+	.dash-label {
+		font-family: var(--font-display);
+		font-size: 0.82rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		color: var(--text-muted);
+		margin: 0 0 0.6rem;
+	}
+
+	/* state colours: always next to a shape and a word */
+	.s-healthy {
+		color: var(--hw-state-healthy);
+	}
+	.s-unhealthy {
+		color: var(--hw-state-unhealthy);
+	}
+	.s-down {
+		color: var(--hw-state-down);
+	}
+	.s-stopped {
+		color: var(--hw-state-stopped);
+	}
+	.s-unknown {
+		color: var(--hw-state-unknown);
+	}
+
+	/* ---- the dashboard -------------------------------------------------------- */
+
+	.dash {
+		padding: 2.2rem 1rem 1.1rem;
+	}
+
+	.dash-head {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding-bottom: 0.75rem;
+		margin-bottom: 0.9rem;
+		border-bottom: 1px solid var(--border-subtle);
+	}
+
+	.dash-title {
+		font-family: var(--font-display);
+		font-weight: 600;
+		letter-spacing: 0.06em;
+	}
+
+	.dash-filter {
+		margin-inline-start: auto;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--text-subtle);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 0.15rem 0.5rem;
+		min-width: 6.5rem;
+	}
+
+	.dash-count {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		white-space: nowrap;
+	}
+
+	@media (max-width: 520px) {
+		.dash-filter {
+			display: none;
+		}
+		.dash-count {
+			margin-inline-start: auto;
+		}
+	}
+
+	/* ---- doors ---------------------------------------------------------------- */
+
+	.doors {
+		display: grid;
+		gap: 0.7rem;
+	}
+
+	.doors--grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	@media (min-width: 560px) {
+		.doors--grid {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	.doors--big {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		padding: 2.6rem 1.2rem 1.4rem;
+		gap: 1rem;
+		font-size: 0.9rem;
+	}
+
+	.door {
+		position: relative;
+		padding: 0.55rem 0.6rem 0.6rem;
+		border-radius: 10px;
+		background: var(--raised);
+		border: 1px solid var(--border-subtle);
+		min-width: 0;
+	}
+
+	/* The light-spill cue: the one gradient that carries meaning (docs/05-ui.md). */
+	.door--healthy {
+		box-shadow:
+			inset 3px 0 0 rgb(var(--accent) / 0.55),
+			-8px 0 22px -12px rgb(var(--accent) / 0.55);
+	}
+
+	.door--down {
+		border-color: color-mix(in oklab, var(--hw-state-down) 55%, transparent);
+	}
+
+	.door-paint {
+		position: relative;
+		display: grid;
+		place-items: center;
+		height: 3.4rem;
+		/* An arched door top */
+		border-radius: 48% 48% 4px 4px / 60% 60% 4px 4px;
+		background: linear-gradient(160deg, color-mix(in oklab, var(--paint) 92%, white 8%), color-mix(in oklab, var(--paint) 70%, black));
+		margin-bottom: 0.5rem;
+		overflow: hidden;
+	}
+
+	.doors--big .door-paint {
+		height: 6rem;
+	}
+
+	/* ajar: a sliver of lamplight down the latch side */
+	.door--healthy .door-paint::after {
+		content: '';
+		position: absolute;
+		inset: 0 0 0 auto;
+		width: 12%;
+		background: linear-gradient(180deg, var(--hw-amber-bright), var(--hw-amber));
+	}
+
+	/* closed: calm, desaturated, no light */
+	.door--stopped .door-paint {
+		filter: saturate(0.35) brightness(0.8);
+	}
+
+	/* dark, boarded */
+	.door--down .door-paint {
+		filter: saturate(0.2) brightness(0.45);
+	}
+	.door--down .door-paint::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background:
+			linear-gradient(12deg, transparent 44%, #6b5a45 44% 54%, transparent 54%),
+			linear-gradient(-14deg, transparent 58%, #6b5a45 58% 67%, transparent 67%);
+	}
+
+	/* The door number: the port, on a brass plate at eye level. */
+	.door-paint .plate {
+		position: relative;
+		z-index: 1;
+		margin-top: 0.6rem;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+	}
+
+	.doors--big .door-paint .plate {
+		font-size: 0.85rem;
+	}
+
+	.door-name {
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.door-sub {
+		font-weight: 400;
+		color: var(--text-subtle);
+	}
+
+	.door-addr {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--text-muted);
+		margin-top: 0.1rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.bars {
+		display: grid;
+		grid-template-columns: repeat(48, 1fr);
+		gap: 1px;
+		height: 0.8rem;
+		margin: 0.45rem 0 0.35rem;
+	}
+
+	.b {
+		border-radius: 1px;
+		background: var(--hw-state-healthy);
+		opacity: 0.85;
+	}
+	.b--u {
+		background: var(--hw-state-unhealthy);
+	}
+	.b--d {
+		background: var(--hw-state-down);
+	}
+	.b--s {
+		background: repeating-linear-gradient(135deg, #3d3328 0 2px, #2a231b 2px 4px);
+	}
+	.b--n {
+		background: transparent;
+		box-shadow: inset 0 0 0 1px var(--border);
+	}
+
+	.door-foot {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.4rem;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		white-space: nowrap;
+	}
+
+	.doors--big .door-foot {
+		font-size: 0.78rem;
+	}
+
+	/* ---- observed tray -------------------------------------------------------- */
+
+	.tray {
+		padding: 2.4rem 1.1rem 1.1rem;
+	}
+
+	.row {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+		padding: 0.75rem 0.8rem;
+		border: 1px dashed var(--border);
+		border-radius: 10px;
+		background: color-mix(in oklab, var(--raised) 70%, transparent);
+	}
+
+	.row + .row {
+		margin-top: 0.6rem;
+	}
+
+	.row-main {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.row-name {
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.row-name .dim {
+		font-weight: 400;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+	}
+
+	.row-meta {
+		font-size: 0.74rem;
+		color: var(--text-muted);
+		margin-top: 0.15rem;
+	}
+
+	.badge {
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		padding: 0 0.4em;
+		border-radius: 999px;
+		border: 1px solid var(--border-strong);
+		color: var(--text-muted);
+	}
+
+	.row-actions {
+		display: flex;
+		gap: 0.4rem;
+		flex: none;
+	}
+
+	.mbtn {
+		font-size: 0.72rem;
+		padding: 0.25rem 0.6rem;
+		border-radius: 999px;
+		border: 1px solid var(--border);
+		color: var(--text-muted);
+	}
+
+	.mbtn--primary {
+		background: var(--accent-color);
+		border-color: var(--accent-color);
+		color: var(--ink);
+		font-weight: 600;
+	}
+
+	@media (max-width: 520px) {
+		.row {
+			flex-wrap: wrap;
+		}
+		.row-actions {
+			width: 100%;
+		}
+	}
+
+	.tray-more {
+		margin-top: 0.8rem;
+		font-size: 0.74rem;
+		color: var(--text-subtle);
+	}
+
+	/* ---- terminal ------------------------------------------------------------- */
+
+	.term-bar,
+	.browser-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.6rem 0.75rem;
+		border-bottom: 1px solid var(--border-subtle);
+		background: #110e0b;
+	}
+
+	.term-title {
+		margin-inline-start: 0.6rem;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--text-subtle);
+	}
+
+	.dot {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		flex: none;
+	}
+	.dot--r {
+		background: #ef5f56;
+	}
+	.dot--y {
+		background: #f5bd4f;
+	}
+	.dot--g {
+		background: #61c554;
+	}
+
+	.term-body {
+		margin: 0;
+		padding: 1.1rem 1.2rem 1.3rem;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.7;
+		white-space: pre-wrap;
+		word-break: break-word;
+		color: var(--text);
+	}
+
+	.term-body .p {
+		color: var(--accent-color);
+	}
+	.term-body .ok {
+		color: var(--hw-state-healthy);
+	}
+	.term-body .url {
+		color: var(--hw-amber-bright);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
+	.cursor {
+		display: inline-block;
+		width: 0.55em;
+		height: 1.1em;
+		vertical-align: -0.2em;
+		background: var(--text-muted);
+	}
+
+	/* ---- browser -------------------------------------------------------------- */
+
+	.omni {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin-inline: 0.6rem 4.5rem;
+		flex: 1;
+		min-width: 0;
+		padding: 0.3rem 0.8rem;
+		border-radius: 999px;
+		background: #1f1a14;
+		border: 1px solid var(--border);
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+	}
+
+	.omni svg {
+		color: var(--hw-state-healthy);
+		flex: none;
+	}
+
+	.omni b {
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.browser-page {
+		padding: 1.4rem 1.3rem 1.3rem;
+	}
+
+	.hosts {
+		display: grid;
+		gap: 0.65rem;
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+	}
+
+	.hosts .h {
+		color: var(--text);
+		display: inline-block;
+		min-width: 11.5em;
+	}
+
+	.hosts .arrow {
+		color: var(--accent-color);
+		margin-inline: 0.4rem;
+	}
+
+	.browser-note {
+		margin: 1.1rem 0 0;
+		color: var(--text-subtle);
+		font-size: 0.76rem;
+	}
+
+	/* ---- bookmarks ------------------------------------------------------------ */
+
+	.hooks {
+		padding: 2.4rem 1.1rem 1.2rem;
+		display: grid;
+		gap: 1.1rem;
+	}
+
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.3rem 0.75rem 0.3rem 0.35rem;
+		border-radius: 999px;
+		background: color-mix(in oklab, var(--raised) 85%, transparent);
+		border: 1px solid var(--border);
+		font-size: 0.78rem;
+	}
+
+	.chip-ico {
+		display: grid;
+		place-items: center;
+		width: 1.35rem;
+		height: 1.35rem;
+		border-radius: 50%;
+		background: var(--c);
+		color: #fff;
+		font-size: 0.68rem;
+		font-weight: 600;
+	}
+</style>

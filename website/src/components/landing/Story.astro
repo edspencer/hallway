@@ -1,0 +1,76 @@
+---
+/**
+ * Story — the problem, told once.
+ *
+ * Local Review's page goes from the hero straight to its value props. Hallway's
+ * pitch rests on a recognisable story (docs/01-background.md, "The motivating
+ * incident", anonymised), so it gets a short section of its own first. Ports in
+ * the copy are written [4666] and drawn as door-number plates.
+ */
+import { STORY } from './copy';
+
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const render = (t: string) =>
+	esc(t)
+		.replace(/`([^`]+)`/g, '<code>$1</code>')
+		.replace(/\[(\d+)\]/g, '<span class="plate">$1</span>');
+---
+
+<section class="story section">
+	<div class="container story-inner">
+		<header data-reveal>
+			<p class="eyebrow">{STORY.eyebrow}</p>
+			<h2 class="h2">{STORY.title}</h2>
+		</header>
+		<div class="story-body" data-reveal>
+			{STORY.paragraphs.map((p) => <p set:html={render(p)} />)}
+			<p class="kicker">{STORY.kicker}</p>
+		</div>
+	</div>
+</section>
+
+<style>
+	.story {
+		border-top: 1px solid var(--border-subtle);
+	}
+
+	.story-inner {
+		display: grid;
+		gap: clamp(1.5rem, 4vw, 4rem);
+	}
+
+	@media (min-width: 940px) {
+		.story-inner {
+			grid-template-columns: 2fr 3fr;
+			align-items: start;
+		}
+	}
+
+	.story-body p {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 1.05rem;
+		line-height: 1.75;
+		max-width: 62ch;
+	}
+
+	.story-body p + p {
+		margin-top: 1.1rem;
+	}
+
+	.story-body :global(code) {
+		font-family: var(--font-mono);
+		font-size: 0.85em;
+		padding: 0.1em 0.35em;
+		border-radius: 5px;
+		background: var(--raised);
+		color: var(--text);
+	}
+
+	.story-body .kicker {
+		margin-top: 1.6rem;
+		font-family: var(--font-display);
+		font-size: 1.35rem;
+		color: var(--text);
+	}
+</style>

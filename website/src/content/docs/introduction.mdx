@@ -1,0 +1,83 @@
+---
+title: Introduction
+description: What Hallway is, the problem it solves, and what ships when.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { DEFAULT_PORT } from '../../site.mjs';
+
+**Hallway is the front door for everything you vibe-coded on a random port.** It is a small, always-on, local-only
+service for your own machine. It keeps a live directory of every web server you run locally:
+
+- the long-lived ones you installed on purpose,
+- the ad-hoc ones a coding agent started in a session that has since ended,
+- and the unidentified ones it finds simply by looking at what is listening.
+
+It shows them on one calm dashboard with their health, uptime history and a thumbnail, and doubles as a personal
+jumping-off page of bookmarks to the remote things you always forget the URL of. Later releases give each app a
+memorable HTTPS hostname (`slides.localhost` instead of a port number nobody remembers) and keep the important ones
+running as native OS services across reboots.
+
+:::caution[Pre-release]
+Hallway is being built in the open from a detailed specification, and **nothing described on this site is shipped
+yet**. Each feature is marked with the milestone it is planned for: <span class="ms ms--v0">v0</span>,
+<span class="ms">v1</span> or <span class="ms">v2</span>. See the [roadmap](/roadmap/).
+:::
+
+## The problem
+
+Coding agents have made small web apps nearly free to build: a dashboard for some data, a slide deck, a log viewer, an
+internal tool. Each is an HTTP server on some port, and the way it gets started is the root of the mess:
+
+1. A coding-agent session (or a terminal tab) runs `npm run dev`, `vite`, `astro dev`, `next dev`,
+   `python -m http.server` or similar.
+2. The server keeps running after the session ends. It is now parented to nothing you can see.
+3. Days later you can't remember that it exists, which port it is on, which project it belongs to, or what started it.
+4. A reboot kills it. Nothing restarts it. You find out when you next go looking.
+
+This is not hypothetical. One developer found six dev servers on ports <span class="plate">4321</span>,
+<span class="plate">4455</span>, <span class="plate">4666</span>, <span class="plate">4670</span>,
+<span class="plate">4671</span> and <span class="plate">7333</span>, one to two weeks old. Three had command lines
+like `node dist/index.js` that said nothing; three were the same dashboard running from three git worktrees, two of
+them pushed off its hardcoded port by hand. Then a reboot killed all six, and nobody noticed for two days. By then
+there was no record of what had been running, so nothing could say what was lost.
+
+There is a second, related need: one page that links to the remote things you visit but never remember the URL of,
+such as production admin consoles, BI dashboards and status pages. On a home network a home-lab dashboard does that.
+There is no equivalent for "my laptop".
+
+## What makes it different
+
+Plenty of dashboards show tiles and bookmarks. Hallway's differences:
+
+1. **It populates itself.** It reads registries and *scans for listeners*, so the page reflects reality without anyone
+   maintaining a config. Every hand-maintained dashboard recreates the original problem.
+2. **It remembers.** It records what it saw while processes were alive, so after a reboot it can say what was lost.
+3. **It fronts.** Memorable HTTPS hostnames per app, with defaults that need no DNS server.
+4. **It keeps things alive.** Native launchd services, no extra process manager.
+5. **It is built for agent-spawned servers.** Plain YAML an agent can edit, an agent guide, MCP, and one command,
+   `hallway run`, that starts a server so it never becomes an orphan.
+
+## What ships when
+
+- <span class="ms ms--v0">v0</span> **The front page.** The daemon, the dashboard at <code>{`http://localhost:${DEFAULT_PORT}`}</code>,
+  YAML config with live updates, health checks, the port scanner with claim and ignore, bookmarks, favicon tiles, the
+  agent guide, and running Hallway itself as a login service. Links go to `http://localhost:<port>`. No sudo, no DNS,
+  no proxy.
+- <span class="ms">v1</span> **Fronting and services.** `hallway run`, managed launchd services for apps, Caddy with
+  HTTPS on `*.localhost`, `hallway setup` and `hallway doctor`, custom `.internal` domains, and "lost at last reboot".
+- <span class="ms">v2</span> **Agents and polish.** The MCP server, screenshot thumbnails, 90-day uptime history, and
+  Linux (systemd) support.
+
+## Who it's for
+
+One developer, on their own machine, running many small local web servers, especially one who leans on coding agents.
+macOS first; Linux later. Comfortable with a CLI and with editing YAML; not interested in maintaining a hand-written
+dashboard config. Hallway is **not** for teams, remote access, production process management or containers.
+
+<CardGrid>
+	<LinkCard title="Quickstart" description="What the first five minutes will look like." href="/getting-started/quickstart/" />
+	<LinkCard title="Apps" description="Declared, discovered and observed: where apps come from." href="/concepts/apps/" />
+	<LinkCard title="For agents" description="Files first, hallway run, and MCP." href="/agents/overview/" />
+	<LinkCard title="Why the name" description="From Spaghetti Junction to a calm, well-lit hallway." href="/why-the-name/" />
+</CardGrid>
