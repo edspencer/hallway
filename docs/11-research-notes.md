@@ -280,8 +280,29 @@ passwordless sudo. **ubuntu-latest** (first run, PR #8): setup installed the nft
 system-wide (curl with no `--cacert` accepted `https://hallway.localhost`), started Caddy as a systemd user unit; the
 strict app answered through `https://review.localhost` with Host rewritten; a newly declared app was routed with no
 restart; re-running setup reported the parts already done; doctor's networking checks passed; with the daemon
-stopped the fallback listed every app. Results of later runs (custom domain, teardown, macOS) are recorded below as
-they come in.
+stopped the fallback listed every app. A later run (38939015729) also passed the custom domain (`systemd-resolved`
+drop-in to Hallway's dnsmasq; `https://review.myname.internal` with the system trust store), `.local` refused, and
+teardown leaving no file, nftables table, trusted root or job behind.
+
+**macos-latest** (Apple silicon, macOS 26 "Tahoe" bottles), run 38939015729, 2026-10-16. *Verified on a real (CI)
+Mac:*
+- setup installed Caddy 2.11.7 itself with `brew install caddy` (and later `brew install dnsmasq`, 2.93);
+- `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain <root.crt>` ran headless,
+  with no authorisation prompt, and `/usr/bin/curl` then accepted `https://hallway.localhost` with no `--cacert`;
+- the pf anchor `com.apple/hallway`, loaded by `launchctl bootstrap system /Library/LaunchDaemons/hallway.pf.plist`
+  (`pfctl -E -a com.apple/hallway -f …`), **redirects locally originated connections to 127.0.0.1:443 and :80** to
+  Caddy on 4443/4480: the dashboard, a strict app with Host rewritten, and an app declared afterwards all answered
+  through `https://<name>.localhost`;
+- Caddy and dnsmasq ran as LaunchAgents; doctor's checks all passed; with the daemon stopped the fallback listed every
+  app;
+- **`/etc/resolver/myname.internal` with `nameserver 127.0.0.1` and `port 4253` works**: `https://myname.internal`
+  and `https://review.myname.internal` resolved and answered, and other names still resolved. (Homebrew's dnsmasq
+  caveat says resolver overrides to 127.0.0.1 on a non-53 port don't work on current macOS; on this runner they did.
+  Worth re-checking on a desktop Mac, where mDNSResponder may behave differently.)
+- `.local` was refused.
+- It then **hung in teardown**: the untrust step ran `security remove-trusted-cert -d`, which edits the admin trust
+  settings and can wait for an authorisation prompt even as root. Teardown now only runs `security delete-certificate
+  -Z <sha1>`, every command setup and teardown run has a 5-minute timeout, and the CI script times out each call.
 
 ## Prior art status (checked 2026-09-16 via GitHub API / npm)
 

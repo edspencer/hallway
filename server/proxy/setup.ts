@@ -455,8 +455,12 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
     },
     async verify() {
       const [https, http] = facts.noRedirect ? [facts.httpsPort, facts.httpPort] : [443, 80];
-      const t = await tlsProbe(https, facts.dashboard, readRoot(paths.rootCert)?.pem ?? null, 3000);
-      const h = await httpProbe(http, facts.dashboard);
+      // launchctl bootstrap (and a systemd restart) can return before the redirect is in place: give it a moment
+      const pem = readRoot(paths.rootCert)?.pem ?? null;
+      let t = null as Awaited<ReturnType<typeof tlsProbe>>;
+      await until(async () => !!(t = await tlsProbe(https, facts.dashboard, pem, 3000))?.ours, 15_000);
+      let h = null as Awaited<ReturnType<typeof httpProbe>>;
+      await until(async () => (h = await httpProbe(http, facts.dashboard))?.status === 308, 5_000);
       const plain = `http://${facts.dashboard}${http === 80 ? '' : `:${http}`}`;
       const lines: string[] = [];
       if (t?.ours) lines.push(`   ✓ ${httpsUrl(facts.dashboard, https)} answers with Hallway's certificate`);

@@ -108,7 +108,8 @@ try {
   step('criterion 8: something else on 443 → setup and doctor name it and stop');
   // root's, so on macOS lsof (as the user) can't see it: setup has to notice it by connecting. An absolute Node, since
   // sudo's secure_path may not have python3 or node on it.
-  const squatter = spawn('sudo', ['-n', process.execPath, '-e', "require('node:net').createServer(s => s.end()).listen(443, '127.0.0.1')"], { stdio: 'inherit' });
+  const pidFile = path.join(tmp, 'squatter.pid');
+  const squatter = spawn('sudo', ['-n', process.execPath, '-e', `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); require('node:net').createServer(s => s.end()).listen(443, '127.0.0.1')`], { stdio: 'inherit' });
   await until('the squatter on 443', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0, 10000);
   await sleep(1500);
   await check('setup refuses, before doing anything', async () => {
@@ -118,8 +119,9 @@ try {
     assert.match(r.out, /Setup stopped before doing anything/);
     assert.deepEqual(leftovers(), []);
   });
-  sh('sudo', ['-n', 'pkill', '-f', 'listen\\(443']);
+  sh('sudo', ['-n', 'kill', fs.readFileSync(pidFile, 'utf8').trim()]);
   squatter.kill();
+  await until('443 to be free again', async () => sh('nc', ['-z', '127.0.0.1', '443']).code !== 0, 10000);
   await sleep(500);
 
   step('criterion 1: setup --print prints the plan and runs nothing');
