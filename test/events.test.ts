@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Hono } from 'hono';
 import type { ServerEvent } from '../shared/api.ts';
-import { EventBus, sseHandler } from '../server/events.ts';
+import { DEBOUNCE_MS, EventBus, sseHandler } from '../server/events.ts';
 import { startWatcher } from '../server/watcher.ts';
 import { tmpStore } from './fixture.ts';
 
@@ -116,14 +116,17 @@ describe('the watcher', () => {
     for (const c of cleanups.reverse()) await c();
   });
 
-  async function watched() {
+  async function watched(debounceMs = 60) {
     const s = await tmpStore();
-    const w = startWatcher(s.store, s.bus, 60);
+    const w = startWatcher(s.store, s.bus, debounceMs);
     cleanups.push(s.cleanup, () => w.close());
     await w.ready;
+    // macOS's FSEvents can drop a write made the instant the watch reports ready; CI runners are slow to settle
+    await sleep(100);
     const got: { e: ServerEvent; at: number }[] = [];
     s.bus.subscribe((e) => got.push({ e, at: Date.now() }));
-    const until = async (pred: (e: ServerEvent) => boolean, ms = 1000) => {
+    // "it arrives at all" on a loaded CI runner; the 1 s product requirement is checked by the timing test below
+    const until = async (pred: (e: ServerEvent) => boolean, ms = 3000) => {
       const start = Date.now();
       while (Date.now() - start < ms) {
         const hit = got.find((g) => pred(g.e));
@@ -155,14 +158,13 @@ describe('the watcher', () => {
   });
 
   test('a burst of writes to one file is one event', async () => {
-    const { home, until, got } = await watched();
+    // the daemon's own debounce, and writes back to back: a timer between writes can stretch past a short debounce
+    // on a loaded runner, which would test the scheduler rather than the watcher
+    const { home, until, got } = await watched(DEBOUNCE_MS);
     const f = path.join(home, 'bookmarks', 'g.yaml');
-    for (let i = 0; i < 5; i++) {
-      fs.writeFileSync(f, `title: G${i}\nlinks: []\n`);
-      await sleep(5);
-    }
+    for (let i = 0; i < 5; i++) fs.writeFileSync(f, `title: G${i}\nlinks: []\n`);
     await until((e) => e.type === 'bookmarks');
-    await sleep(150);
+    await sleep(400);
     assert.equal(got.filter((g) => g.e.type === 'bookmarks').length, 1);
   });
 
