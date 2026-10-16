@@ -1,4 +1,4 @@
-// Linux: the privileged parts of fronted mode (fronting.ts, D43).
+// Linux: the privileged parts of fronted mode (fronting.ts, D46).
 //   redirect   an nftables table, `inet hallway`, with a nat output chain, applied at boot by a oneshot system unit.
 //              Its own table: nothing else's rules are touched, and teardown deletes the table whole.
 //   trust      the system CA store (Debian/Ubuntu: /usr/local/share/ca-certificates; Fedora/RHEL/Arch:
@@ -6,7 +6,8 @@
 //              Linux (no sudo; only when `certutil` and ~/.pki/nssdb exist).
 //   resolver   a systemd-resolved drop-in routing `~<base>` to Hallway's dnsmasq.
 import path from 'node:path';
-import { type Cmd, type Fronting, type FrontingEnv, FrontingUnsupported, MARK, type Recipe } from './fronting.js';
+import fs from 'node:fs';
+import { type Cmd, type Fronting, type FrontingEnv, FrontingUnsupported, MARK, type Recipe, findTool } from './fronting.js';
 
 export const NFT_FILE = '/etc/hallway/redirect.nft';
 export const REDIRECT_UNIT = 'hallway-redirect.service';
@@ -68,8 +69,26 @@ Domains=~${base}
 const root = { sudo: true } as const;
 const nssDb = (home: string) => `sql:${path.join(home, '.pki', 'nssdb')}`;
 
+const SBIN = ['/usr/local/sbin', '/usr/sbin', '/sbin', '/usr/local/bin', '/usr/bin'];
+const exists = (p: string) => fs.existsSync(p);
+
 export const linuxFronting: Fronting = {
   userServiceNoun: 'systemd user unit',
+  detect: (env) => ({
+    nft: findTool('nft', env.PATH, SBIN),
+    certutil: exists(`${env.HOME ?? ''}/.pki/nssdb`) ? findTool('certutil', env.PATH, SBIN) : null,
+    systemctl: exists('/run/systemd/system') ? findTool('systemctl', env.PATH, SBIN) : null,
+    // resolved is in charge when it's running and /etc/resolv.conf points at its stub (or at its own file)
+    resolved: exists('/run/systemd/resolve/stub-resolv.conf') && /127\.0\.0\.53|systemd-resolved|stub-resolv/.test(safeRead('/etc/resolv.conf') + safeLink('/etc/resolv.conf')),
+    caStore: findTool('update-ca-certificates', env.PATH, SBIN) && exists('/usr/local/share/ca-certificates') ? 'debian' : findTool('update-ca-trust', env.PATH, SBIN) ? 'fedora' : null,
+  }),
+  helperDirs: SBIN,
+  installHelper: (tool) => ({
+    advice:
+      tool === 'caddy'
+        ? 'install Caddy 2.8 or later: a release binary from https://caddyserver.com/download (or https://github.com/caddyserver/caddy/releases) on your PATH, or set proxy.caddy in config.yaml to where it is. Distribution packages may be older, and start a system Caddy on port 80 that you would need to disable'
+        : 'install dnsmasq (on Debian and Ubuntu the `dnsmasq-base` package, which starts no system service: `sudo apt install dnsmasq-base`), then run `hallway setup` again',
+  }),
 
   redirect(env): Recipe {
     if (!env.tools.systemctl) throw new FrontingUnsupported("the redirect from ports 443 and 80 is applied at boot by a systemd unit, and this machine doesn't run systemd. Use fronted mode without it: set proxy.publicPort to proxy.httpsPort in config.yaml (links then carry the port)");
@@ -161,3 +180,18 @@ export const linuxFronting: Fronting = {
     resolver: [RESOLVED_DROPIN],
   }),
 };
+
+function safeRead(f: string) {
+  try {
+    return fs.readFileSync(f, 'utf8');
+  } catch {
+    return '';
+  }
+}
+function safeLink(f: string) {
+  try {
+    return fs.readlinkSync(f);
+  } catch {
+    return '';
+  }
+}

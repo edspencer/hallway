@@ -42,8 +42,15 @@ Bookmarks
   bookmark add <group> <url> [--title T] [--description D]
   bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
 
+Fronted mode (https://<app>.localhost, or your own domain)
+  setup [--domain BASE] [--print]   Run Caddy for your apps, redirect ports 443 and 80 to it and trust its
+                                    certificates. Prints each step first; the privileged ones run through sudo.
+                                    --print shows the plan and runs nothing.
+  teardown [--uninstall-packages] [--print]
+                                    Undo setup and go back to http://localhost:<port> links.
+
 Other
-  doctor [--json]                   Check the daemon, the data home and the services, with fixes.
+  doctor [--json]                   Check the daemon, the data home, the services and fronted mode, with fixes.
   guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph
                                     for an agent instruction file (CLAUDE.md, AGENTS.md).
   --version | --help

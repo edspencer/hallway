@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { Platform } from './index.js';
 import { systemdManager, unitName } from './systemd.js';
 import { type ProcessInfo, type RawListener, run, splitHostPort } from './listeners.js';
+import { linuxFronting } from './fronting-linux.js';
 
 /**
  * `ss -ltnpH`: `LISTEN 0 511 127.0.0.1:4567 0.0.0.0:* users:(("python3",pid=1234,fd=3))`. The users list is missing
@@ -174,6 +175,7 @@ export const linux: Platform = {
   serviceFileName: unitName,
   services: ({ run, env = process.env, home = os.homedir() } = {}) => systemdManager({ dir: linux.userServiceDir(env, home), run }),
   openCommand: (url) => ['xdg-open', [url]],
+  fronting: linuxFronting,
 
   async listListeners() {
     if (hasSs !== false) {

@@ -1,4 +1,4 @@
-// The Caddy configuration for fronted mode (D4, D9, D43): a pure function from the apps and config.yaml to Caddy's
+// The Caddy configuration for fronted mode (D4, D9, D46): a pure function from the apps and config.yaml to Caddy's
 // JSON, which the daemon pushes to Caddy's admin API and writes to generated/caddy.json (the file Caddy starts from).
 //
 //   https://<dashboard host>      → the daemon (Host kept: the daemon accepts its dashboard host in fronted mode)
@@ -8,7 +8,7 @@
 //
 // Caddy runs as the user, on loopback ports above 1024 (proxy.httpsPort/httpPort); `hallway setup` redirects 443 and
 // 80 to them. Its admin API is a Unix socket in the data home with mode 0600, never a TCP port, so only the user's own
-// processes can reconfigure it, and it holds no privilege they don't already have (D43).
+// processes can reconfigure it, and it holds no privilege they don't already have (D46).
 import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';

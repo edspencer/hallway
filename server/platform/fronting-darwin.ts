@@ -1,4 +1,4 @@
-// macOS: the privileged parts of fronted mode (fronting.ts, D43). Unverified on macOS except where CI's macOS job
+// macOS: the privileged parts of fronted mode (fronting.ts, D46). Unverified on macOS except where CI's macOS job
 // runs them (docs/11-research-notes.md).
 //   redirect   a pf anchor, com.apple/hallway, loaded at boot by a LaunchDaemon that runs one fixed pfctl command.
 //              macOS's /etc/pf.conf already evaluates `rdr-anchor "com.apple/*"`, so pf.conf (which OS updates
@@ -6,7 +6,7 @@
 //   trust      the System keychain (`security add-trusted-cert`).
 //   resolver   /etc/resolver/<base>, `nameserver 127.0.0.1` with a `port` line (resolver(5)).
 import path from 'node:path';
-import { type Fronting, type FrontingEnv, MARK, type Recipe } from './fronting.js';
+import { type Fronting, type FrontingEnv, MARK, type Recipe, findTool } from './fronting.js';
 
 export const PF_ANCHOR_NAME = 'com.apple/hallway';
 export const PF_ANCHOR = '/etc/pf.anchors/hallway';
@@ -60,8 +60,17 @@ port ${dnsPort}
 
 const root = { sudo: true } as const;
 
+const BREW_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin'];
+
 export const darwinFronting: Fronting = {
   userServiceNoun: 'LaunchAgent',
+  // everything the macOS recipes run ships with macOS
+  detect: () => ({ nft: null, certutil: null, systemctl: null, resolved: false, caStore: null }),
+  helperDirs: BREW_DIRS,
+  installHelper(tool, env) {
+    const brew = findTool('brew', env.PATH, BREW_DIRS);
+    return brew ? { cmd: [brew, 'install', tool] } : { advice: `install ${tool} (with Homebrew: \`brew install ${tool}\`, see https://brew.sh), then run \`hallway setup\` again` };
+  },
 
   redirect(env): Recipe {
     const anchor = { src: path.join(env.setupDir, 'pf.anchor'), dest: PF_ANCHOR, text: pfAnchor(env) };

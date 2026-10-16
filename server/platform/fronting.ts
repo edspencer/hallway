@@ -1,4 +1,4 @@
-// The privileged half of fronted mode (D43), per platform: the only things `hallway setup` runs as root, and
+// The privileged half of fronted mode (D46), per platform: the only things `hallway setup` runs as root, and
 // `hallway teardown` undoes. Each is a fixed job that takes no configuration from anything a user-level process can
 // write later:
 //   redirect   loopback 443 → proxy.httpsPort and 80 → proxy.httpPort (pf on macOS, nftables on Linux)
@@ -6,6 +6,8 @@
 //   resolver   custom domains only: `<base>` and everything under it → Hallway's dnsmasq on 127.0.0.1:<dnsPort>
 // Pure: each recipe is the files Hallway writes (into generated/setup/, as the user) and the commands that install
 // them, so `hallway setup --print` shows exactly what would run and the tests pin it on every OS.
+import fs from 'node:fs';
+import path from 'node:path';
 
 export interface Cmd {
   argv: string[];
@@ -68,6 +70,29 @@ export interface Fronting {
   trustedQuery?(env: FrontingEnv): Cmd;
   /** Hallway's own service manager words for people (`LaunchAgent` / `systemd user unit`). */
   userServiceNoun: string;
+  /** Find the tools the recipes need. */
+  detect(env: NodeJS.ProcessEnv): FrontingEnv['tools'];
+  /** Where to look for `caddy` and `dnsmasq` besides PATH (Homebrew's prefixes; sbin, which a user's PATH may lack). */
+  helperDirs: string[];
+  /** How to get a missing helper: a command Hallway can run for you (as you, no sudo), or advice. */
+  installHelper(tool: 'caddy' | 'dnsmasq', env: NodeJS.ProcessEnv): { cmd: string[] } | { advice: string };
+}
+
+/** `which` over PATH and some extra directories; the first executable found, or null. */
+export function findTool(name: string, pathVar: string | undefined, extraDirs: readonly string[] = []): string | null {
+  for (const dir of [...(pathVar ?? '').split(path.delimiter), ...extraDirs]) {
+    if (!dir || !path.isAbsolute(dir)) continue;
+    const p = path.join(dir, name);
+    try {
+      if (fs.statSync(p).isFile()) {
+        fs.accessSync(p, fs.constants.X_OK);
+        return p;
+      }
+    } catch {
+      /* not here */
+    }
+  }
+  return null;
 }
 
 /** The header every file Hallway installs as root starts with, so a person (and teardown) can tell whose it is. */

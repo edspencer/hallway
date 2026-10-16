@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { Platform } from './index.js';
 import { launchdManager } from './launchd.js';
 import { type ProcessInfo, type RawListener, run, splitHostPort } from './listeners.js';
+import { darwinFronting } from './fronting-darwin.js';
 
 /**
  * `lsof -nP -iTCP -sTCP:LISTEN -F pcLn`: one field per line, a type letter then the value. A process set (`p` PID,
@@ -74,6 +75,7 @@ export const darwin: Platform = {
   serviceFileName: (label) => `${label}.plist`,
   services: ({ run, env = process.env, home = os.homedir() } = {}) => launchdManager({ dir: darwin.userServiceDir(env, home), uid: process.getuid?.() ?? 501, run }),
   openCommand: (url) => ['open', [url]],
+  fronting: darwinFronting,
 
   // Without root, lsof sees only the current user's processes: the intended scope.
   async listListeners() {

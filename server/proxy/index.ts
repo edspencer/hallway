@@ -1,4 +1,4 @@
-// Fronted mode, the daemon's side (D4, D43): whenever it starts, and whenever an app or config.yaml changes, generate
+// Fronted mode, the daemon's side (D4, D46): whenever it starts, and whenever an app or config.yaml changes, generate
 // Caddy's config, write it to generated/caddy.json (the file Caddy starts from after a reboot, so routes come back
 // before the daemon does) and push it to Caddy's admin socket; and rewrite generated/fallback.html. In direct mode it
 // does nothing. A push that fails (Caddy not running yet) is retried every 30 s; nothing here needs privileges.

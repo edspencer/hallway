@@ -8,6 +8,7 @@
 // docs/11-research-notes.md until someone runs it on a Mac.
 import { darwin } from './darwin.js';
 import { linux } from './linux.js';
+import type { Fronting } from './fronting.js';
 import type { ProcessInfo, RawListener } from './listeners.js';
 import type { Runner, ServiceManager } from './services.js';
 
@@ -33,12 +34,16 @@ export interface Platform {
   services(opts?: { run?: Runner; env?: NodeJS.ProcessEnv; home?: string }): ServiceManager;
   /** The command that opens a URL in the default browser (`open` / `xdg-open`). */
   openCommand(url: string): [string, string[]];
+  /** Fronted mode's privileged parts: the 443/80 redirect, trusting the local CA, the custom-domain resolver (D46). */
+  fronting: Fronting;
 }
 
 export type { Listener, ProcessInfo, RawListener } from './listeners.js';
 export { bindScope, connectAddress, mergeListeners } from './listeners.js';
 export type { Runner, RunResult, ServiceManager, ServiceSpec, ServiceStatus } from './services.js';
 export { ServiceManagerError, defaultRunner } from './services.js';
+export type { Cmd, Fronting, FrontingEnv, Recipe, StagedFile } from './fronting.js';
+export { FrontingUnsupported, MARK, dnsmasqConf } from './fronting.js';
 
 export class UnsupportedPlatformError extends Error {
   constructor(public platform: string) {
