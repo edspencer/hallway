@@ -303,6 +303,12 @@ Mac:*
 - It then **hung in teardown**: the untrust step ran `security remove-trusted-cert -d`, which edits the admin trust
   settings and can wait for an authorisation prompt even as root. Teardown now only runs `security delete-certificate
   -Z <sha1>`, every command setup and teardown run has a 5-minute timeout, and the CI script times out each call.
+- Run 38943464360 then failed setup's own final check on macOS ("nothing answered" on 443 and 80) right after
+  `launchctl bootstrap`: the LaunchDaemon's `pfctl` can load the anchor a moment after `bootstrap` returns (and the
+  CI's root squatter on 443 was being killed by a pattern, not its pid). Setup's check now waits up to 15 s for the
+  redirect. **Run 38944433673 (commit 8c556dc) passed every check on both runners**, macOS included: setup, the
+  squatter refused, idempotent re-run, doctor, the fallback, the custom domain, `.local` refused, and teardown leaving
+  nothing behind (no anchor, LaunchDaemon, resolver file, keychain certificate or LaunchAgent).
 
 ## Prior art status (checked 2026-09-16 via GitHub API / npm)
 
