@@ -215,5 +215,11 @@ Read 2026-10-14. Relevant internals:
 - **Live update latency, measured 2026-10-16:** a new `apps/<slug>.yaml` written with the page open appeared as a
   card 200 ms later (criterion 2 asks for 1 s): the watcher's 150 ms debounce plus one `/api/apps/:slug`. *Verified on
   Linux.*
+- **With the real scanner and prober (after PR #4), 2026-10-16, Linux:** declared `expected: running` apps with nothing
+  listening show `■ down` ("connection refused"), `expected: adhoc` ones `○ stopped` (criterion 6); two git worktrees
+  of one made-up repo serving on 6103 and 6104 show as `dashboard @ main` and `dashboard @ feature-a` (criterion 7); a
+  real `python3 -m http.server 6203` appeared in the tray labelled with its directory, and **Claim** wrote
+  `apps/scratch-photos.yaml` (`port: 6203`, the commented-out `service:` block); the door appeared and went healthy
+  1.6 s later (criterion 4). Fresh uptime bars render as outlines with the first real bucket at the end. *Verified.*
 - **Unverified:** the dashboard has only been driven in Chromium. Safari and Firefox (the canvas favicon, `:has()`,
   `color-mix()`, `backdrop-filter`) are unverified; all four are supported in current releases of both.
