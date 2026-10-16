@@ -333,7 +333,7 @@ Threat model: the daemon listens on loopback, but any web page the user visits c
 rebinding (a hostile domain that resolves to 127.0.0.1) or by sending a cross-site "simple" request. In v1 the
 daemon can also start and stop launchd jobs, and in v2 it speaks MCP, so this matters.
 
-- **Bind to `127.0.0.1` only.** Never `0.0.0.0`.
+- **Bind to `127.0.0.1` only.** Never `0.0.0.0`. (The one exception is a development-only environment override, never a flag: D31.)
 - **Host allowlist.** Every request's `Host` must be `localhost`, `127.0.0.1` or `[::1]` (any port), **or the
   configured dashboard host** when in fronted mode. Anything else → 403. (Alternatively Caddy rewrites Host for the
   dashboard too; either way, the allowlist must be consistent with the proxy config — see `03-networking.md`.)

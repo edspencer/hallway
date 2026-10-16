@@ -20,4 +20,31 @@ Hallway gives them all a front door:
 
 ## Status
 
-**Specification only — no code yet.** Start at [spec.md](spec.md).
+**Pre-release — not on npm yet, and not usable day to day.** The design is complete ([spec.md](spec.md) and
+[docs/](docs/)); the implementation has just started: the daemon skeleton and a placeholder dashboard exist, and the
+features above arrive milestone by milestone ([docs/08-roadmap.md](docs/08-roadmap.md)). macOS and Linux.
+
+## Development quick start
+
+You need Node.js 22 or later and git.
+
+```sh
+git clone https://github.com/edspencer/hallway.git
+cd hallway
+npm ci
+npm run dev        # dashboard with hot reload on http://localhost:4255, daemon on :4256
+```
+
+Or build and run it the way an installed copy runs, with a throwaway data home:
+
+```sh
+HALLWAY_HOME=$(mktemp -d) npm start            # http://localhost:4255
+curl http://localhost:4255/api/health          # {"ok":true,"version":"0.0.0"}
+```
+
+Checks, conventions and how to send a pull request: [CONTRIBUTING.md](CONTRIBUTING.md). Agents working on this repo:
+[AGENTS.md](AGENTS.md).
+
+## License
+
+[MIT](LICENSE).

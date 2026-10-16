@@ -9,10 +9,16 @@ thing, not by reading the code.
 identity, claim and ignore; bookmarks; favicon/colour thumbnails; agent guide and `llms.txt`; `hallway service install`
 for the daemon itself; `hallway doctor` (daemon/data checks). **Direct mode only. No sudo anywhere.**
 
+**Platforms (D26):** macOS and Linux, behind `server/platform/`. On Linux, `hallway service install` writes a systemd
+user unit and the scanner uses `ss` (or `/proc`); on macOS, a LaunchAgent and `lsof`. Every criterion below is checked
+on Linux by running it; macOS behaviour that can't be run from a Linux machine is implemented, unit-tested, and listed
+as "unverified on macOS" in `11-research-notes.md` until it has been run on a Mac.
+
 Acceptance criteria:
 
 1. `npm i -g hallway && hallway service install` → `http://localhost:4255` serves the dashboard, and it is still
-   serving after logging out and back in, and after a reboot.
+   serving after logging out and back in, and after a reboot (a LaunchAgent on macOS; a systemd user unit on Linux,
+   with lingering enabled if it should run without a login session).
 2. Creating `apps/foo.yaml` with `name` and `port` in an editor makes a card appear on an already-open dashboard
    within 1 s, without a reload. Editing and deleting the file are reflected the same way.
 3. Writing a syntactically broken `apps/foo.yaml` shows an error on that card (file, line, message) while every other
@@ -35,7 +41,8 @@ Acceptance criteria:
 **Scope:** `hallway run`, `hallway stop/start/restart/logs`, `hallway service add/rm/regenerate` (launchd for apps); Caddy
 integration via admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; dashboard fallback page;
 `hallway setup` / `hallway teardown`; networking checks in `hallway doctor`; custom-domain mode (dnsmasq + `/etc/resolver`); bind
-address indicator; "Lost at last reboot"; log rotation.
+address indicator; "Lost at last reboot"; log rotation. On Linux (D26): systemd user units for apps, a `*.localhost`
+resolution check, `setcap` for Caddy, and custom-domain DNS via `systemd-resolved` or a dnsmasq drop-in.
 
 Acceptance criteria:
 
@@ -65,8 +72,8 @@ Acceptance criteria:
 ## v2 — Agents and polish
 
 **Scope:** MCP (Streamable HTTP at `/mcp` + `hallway mcp` stdio); optional screenshot thumbnails; generated-card
-thumbnails; 7 d / 90 d uptime from hourly rollups with latency charts; `hallway hook check-command`; Linux support
-(systemd user units, `*.localhost` resolution check, `setcap` for Caddy).
+thumbnails; 7 d / 90 d uptime from hourly rollups with latency charts; `hallway hook check-command`. (Linux support
+moved forward to v0/v1: D26.)
 
 Acceptance criteria:
 
@@ -76,7 +83,8 @@ Acceptance criteria:
 3. `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots; `hallway thumbs disable`
    removes it; the base install never depends on it.
 4. The 90-day view renders from rollups only and stays fast with 30 apps.
-5. On Linux, v0 criteria 1–12 pass with systemd user units in place of LaunchAgents.
+5. Every v0 and v1 criterion has been run on a real Mac, and nothing is left marked "unverified on macOS" in
+   `11-research-notes.md`.
 
 ## Later (unscheduled ideas)
 
@@ -85,8 +93,8 @@ Acceptance criteria:
 - macOS notifications when an `expected: running` app goes down.
 - Health checks for remote bookmarks (opt-in, per link).
 - Docker / process-compose discovery adapters.
-- A Homebrew tap; a documentation website (Local Review has one, as do the author's other open-source projects). It
-  should include a short **"Why the name"** origins page: the project's original name and why it was renamed (D1),
+- A Homebrew tap.
+- *(Brought forward: the documentation website is being built in `website/` alongside v0, D30.)* It should include a short **"Why the name"** origins page: the project's original name and why it was renamed (D1),
   and the hallway imagery behind the visual identity (D23).
 - Import from Homepage/Dashy/Homer configs (bookmarks).
 - Multiple base domains / aliases.
