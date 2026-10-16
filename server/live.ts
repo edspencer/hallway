@@ -5,14 +5,18 @@
 //   apps/*.yaml, config.yaml  ──(store)──▶ probe targets, scan and probe settings
 //   prober transitions        ──▶ bus { type: 'state' }     scans that change the list ──▶ bus { type: 'observed' }
 //   GET /api/state, /api/apps/:slug[/history], /api/observed, POST /api/scan ──▶ the provider below
+//   boot.json says the machine rebooted ──▶ state/lost.json ──▶ bus { type: 'reboot' }  ("Lost at last reboot", D54)
 import os from 'node:os';
-import type { AppHealth, AppHistory, ListenerIdentity, ObservedListener, ServerEvent } from '../shared/api.js';
-import { expandHome } from './config.js';
+import path from 'node:path';
+import type { AppHealth, AppHistory, ListenerIdentity, LostItem, LostNotice, ObservedListener, ServerEvent } from '../shared/api.js';
+import { dataPaths, expandHome } from './config.js';
 import type { EventBus } from './events.js';
 import { type HealthService, startHealth } from './health/index.js';
 import { type Platform, currentPlatform } from './platform/index.js';
 import type { ProbeHealth, ProbeTarget } from './prober/index.js';
+import { type LostAppInput, type LostRecord, LostStore, computeLost } from './lost/index.js';
 import type { ProviderRegistry } from './providers.js';
+import { isListening } from './services/ports.js';
 import { type Observation, type Scanner, createScanner, noiseReason, suggestSlug } from './scanner/index.js';
 import type { Store } from './store/index.js';
 
@@ -78,6 +82,41 @@ export function toObserved(o: Observation, taken: ReadonlySet<string>): Observed
   };
 }
 
+/** An identity for a lost app the scanner never recorded: what its file says. */
+function appOnlyIdentity(r: LostRecord): ListenerIdentity {
+  return {
+    pid: null,
+    ppid: null,
+    process: r.command?.[0] ? path.basename(r.command[0]) : null,
+    command: r.command?.join(' ') ?? null,
+    cwd: r.cwd,
+    projectDir: null,
+    name: r.label,
+    description: null,
+    repo: null,
+    branch: null,
+    worktree: false,
+    lastCommitAt: null,
+    framework: null,
+    bindAddress: null,
+    exposed: false,
+    orphaned: false,
+    startedAt: null,
+    label: null,
+  };
+}
+
+/** The declared apps, as the lost-set computation wants them. */
+export function lostApps(store: Store): LostAppInput[] {
+  const out: LostAppInput[] = [];
+  for (const [slug, e] of store.apps) {
+    const c = e.value;
+    if (!c) continue;
+    out.push({ slug, name: c.name, port: c.port, managed: !!c.service, command: c.service?.command ?? null, cwd: c.service?.cwd ? expandHome(c.service.cwd, os.homedir()) : null, projectDir: c.project?.dir ? expandHome(c.project.dir, os.homedir()) : null });
+  }
+  return out;
+}
+
 /** Probe targets from the declared apps with a good config. (Discovered apps join when an adapter exists.) */
 export function probeTargets(store: Store): ProbeTarget[] {
   const out: ProbeTarget[] = [];
@@ -116,6 +155,8 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   });
 
   let lastKey = '';
+  const lostStore = new LostStore(path.join(dataPaths(home).state, 'lost.json'));
+  let lastBackKey = '';
   const scanner: Scanner | null = scan
     ? createScanner({
         home,
@@ -128,6 +169,10 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
           const key = listKey([...r.listeners, ...r.other]);
           if (key !== lastKey) bus.emit({ type: 'observed', reason: 'scan' });
           lastKey = key;
+          // a lost item came back (or went again): the banner's rows change
+          const back = backKey();
+          if (back !== lastBackKey && lostStore.get()) bus.emit({ type: 'reboot', lost: lostStore.get()!.items.map((i) => i.id) });
+          lastBackKey = back;
         },
       })
     : null;
@@ -150,6 +195,90 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
     const r = scanner?.last();
     if (!r || !config().scan.enabled) return null;
     return r.known.get(port) ?? r.listeners.find((o) => o.port === port) ?? r.other.find((o) => o.port === port) ?? null;
+  }
+
+  /** Every listener in the latest scan, declared or not, noise filtered but before ignore rules and declared ports. */
+  function allListening(): Observation[] | null {
+    const r = scanner?.last();
+    if (!r) return null;
+    return [...r.listeners, ...r.other, ...r.known.values()];
+  }
+  const appOnPort = (port: number) => [...store.apps].find(([, e]) => e.value?.port === port)?.[0] ?? null;
+  /** Is something listening for a lost item again? The same process (by id), or anything on its app's port. */
+  function isBack(r: LostRecord): boolean {
+    const slug = appOnPort(r.port) ?? (r.slug && store.apps.has(r.slug) ? r.slug : null);
+    if (slug) {
+      const st = health.prober.health(slug)?.state;
+      if (st === 'healthy' || st === 'unhealthy') return true;
+    }
+    const now = allListening();
+    if (!now) return false;
+    return now.some((o) => o.id === r.id || (slug !== null && o.port === r.port));
+  }
+  const backKey = () => (lostStore.get()?.items ?? []).filter(isBack).map((i) => i.id).join(',');
+
+  function lostItem(r: LostRecord, taken: ReadonlySet<string>): LostItem {
+    const slug = appOnPort(r.port) ?? (r.slug && store.apps.has(r.slug) ? r.slug : null);
+    const o = r.observation;
+    return {
+      id: r.id,
+      port: r.port,
+      label: (slug && store.apps.get(slug)?.value?.name) || r.label,
+      slug,
+      managed: !!(slug && store.apps.get(slug)?.value?.service),
+      title: o?.http?.title ?? null,
+      identity: o ? toIdentity(o) : appOnlyIdentity(r),
+      firstSeen: r.firstSeen,
+      lastSeen: r.lastSeen,
+      back: isBack(r),
+      suggestedSlug: slug ? null : o ? suggestSlug(o, taken) : null,
+      command: r.command,
+      cwd: r.cwd,
+    };
+  }
+  function lostNotice(): LostNotice | null {
+    const f = lostStore.get();
+    if (!f) return null;
+    const taken = new Set(store.apps.keys());
+    return { bootTime: f.bootTime, previousBootTime: f.previousBootTime, detectedAt: f.detectedAt, items: f.items.map((r) => lostItem(r, taken)) };
+  }
+
+  /**
+   * After a reboot: what was running at the end of the last boot and isn't now, into state/lost.json (replacing the
+   * last notice), and a `reboot` event. Services that start at login may still be starting when the daemon's first
+   * scan runs, so if one of them isn't listening yet, wait out the start grace period and scan again first.
+   */
+  async function noticeReboot(boot: { bootTime: string | null; previous: { bootTime: string } | null }) {
+    const bootTime = Date.parse(boot.bootTime ?? '');
+    if (!Number.isFinite(bootTime)) return;
+    const atLogin = lostApps(store).filter((a) => store.apps.get(a.slug)?.value?.service?.runAtLoad);
+    if (scanner && atLogin.length && allListening() && atLogin.some((a) => !allListening()!.some((o) => o.port === a.port))) {
+      await new Promise((r) => setTimeout(r, config().services.startGraceSeconds * 1000).unref());
+      if (stopped) return;
+      await scanner.scan().catch(() => {});
+    }
+    const now = allListening();
+    const records = scanner?.history() ?? [];
+    const apps = lostApps(store);
+    // without a scan (scanning is off) look at each port once
+    const ports = new Set<number>();
+    if (!now) {
+      const candidates = new Set([...records.map((o) => o.port), ...apps.map((a) => a.port)]);
+      await Promise.all([...candidates].map(async (p) => ((await isListening(p, '127.0.0.1')) || (await isListening(p, '::1'))) && ports.add(p)));
+    }
+    if (stopped) return;
+    const items = computeLost({
+      records,
+      bootTime,
+      previousBootTime: boot.previous ? Date.parse(boot.previous.bootTime) : null,
+      listening: ({ id, port, slug }) => (now ? now.some((o) => o.id === id || (slug !== null && o.port === port)) : ports.has(port)),
+      apps,
+      lastSample: (slug) => health.store.lastBefore(slug, bootTime),
+      windowMs: 2 * config().scan.intervalSeconds * 1000 + 60_000,
+    });
+    lostStore.replace({ version: 1, bootTime: new Date(bootTime).toISOString(), previousBootTime: boot.previous?.bootTime ?? null, detectedAt: new Date().toISOString(), items });
+    lastBackKey = backKey();
+    bus.emit({ type: 'reboot', lost: items.map((i) => i.id) });
   }
 
   // history is a few dozen small queries; /api/state asks for every app's on every load, so keep each for a moment
@@ -185,6 +314,19 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
     appIdentity({ port }) {
       const o = onPort(port);
       return o ? toIdentity(o) : null;
+    },
+    lost: lostNotice,
+    lostRecord: (id: string) => lostStore.item(id),
+    dismissLost: (id?: string) => {
+      const n = lostStore.dismiss(id);
+      if (n) bus.emit({ type: 'reboot', lost: lostStore.get()?.items.map((i) => i.id) ?? [] });
+      return n;
+    },
+    lostChanged: async (id: string, slug: string) => {
+      lostStore.setSlug(id, slug);
+      await scanner?.scan().catch(() => {});
+      lastBackKey = backKey();
+      bus.emit({ type: 'reboot', lost: lostStore.get()?.items.map((i) => i.id) ?? [] });
     },
     ...(scanner
       ? {
@@ -223,16 +365,22 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   liveTimer.unref();
 
   // the first scan takes a couple of seconds (sniffs time out at 2 s): don't hold the daemon's start-up for it
+  let stopped = false;
   const ready = scanner ? scanner.start() : Promise.resolve(null);
   ready.catch(() => {});
+  const lostReady = ready.then((boot) => (boot?.rebooted ? noticeReboot(boot) : undefined)).catch((e) => process.stderr.write(`hallway: working out what the reboot lost failed: ${(e as Error).message}\n`));
 
   return {
     health,
     scanner,
     /** Resolves after the first scan, with what state/boot.json said (a reboot is v1's "Lost at last reboot"). */
     ready,
+    /** Resolves once a reboot's lost set (if there was a reboot) is in state/lost.json. */
+    lostReady,
+    lost: lostStore,
     observed,
     async stop() {
+      stopped = true;
       clearInterval(liveTimer);
       unsubscribe();
       unregister();

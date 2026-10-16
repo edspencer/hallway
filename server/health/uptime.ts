@@ -146,6 +146,12 @@ export class UptimeStore {
       .run(s.slug, s.ts, s.state, s.httpStatus, s.latencyMs);
   }
 
+  /** The slug's last sample before `ts` (within the samples' 48 h retention), for "Lost at last reboot". */
+  lastBefore(slug: string, ts: number): { state: Sample['state']; ts: number } | null {
+    const row = this.db.prepare('SELECT state, ts FROM samples WHERE slug = ? AND ts < ? ORDER BY ts DESC LIMIT 1').get(slug, ts) as { state: Sample['state']; ts: number } | undefined;
+    return row ? { state: row.state, ts: Number(row.ts) } : null;
+  }
+
   /** Counts and latency percentiles for one slug's samples in [from, to). */
   private aggregate(slug: string, from: number, to: number): Counts & { latencies: number[] } {
     const rows = this.db

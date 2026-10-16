@@ -250,6 +250,70 @@ export interface DiscoveredApp {
   url: string | null;
 }
 
+/**
+ * Something that was running before the machine last rebooted and wasn't listening after it ("Lost at last reboot",
+ * docs/04-apps-health-services.md; D54). Provider: the scanner's wiring (server/live.ts), from state/lost.json.
+ */
+export interface LostItem {
+  /** The observation's id (stable across restarts), or `app:<slug>` for an app known only from its health samples. */
+  id: string;
+  port: number;
+  /** What it was: the app's name, `repo @ branch`, the project's name, or the process and port. */
+  label: string;
+  /** The declared app on its port, if there was one when the reboot was noticed (or is now). */
+  slug: string | null;
+  /** That app has a `service:` block. */
+  managed: boolean;
+  /** The page's `<title>` when it was last seen. */
+  title: string | null;
+  /** What was last recorded about the process: command, directory, project, branch. The pid is the old one. */
+  identity: ListenerIdentity;
+  /** When it was first and last seen alive (before the reboot). */
+  firstSeen: string | null;
+  lastSeen: string | null;
+  /** Something is listening for it again: restarted by hand, by a job, or with one of the actions. */
+  back: boolean;
+  /** A slug for Restart once / Make it a service when there's no app yet. */
+  suggestedSlug: string | null;
+  /** The command an action would run, split into arguments; null when nothing was recorded. */
+  command: string[] | null;
+  /** The directory it would run in. */
+  cwd: string | null;
+}
+
+/** The "Lost at last reboot" notice: `lost` in `/api/state`, `GET /api/lost`. Dismissed items are gone from it. */
+export interface LostNotice {
+  /** When the machine booted, and the boot before it (when the lost things were running). */
+  bootTime: string;
+  previousBootTime: string | null;
+  /** When the daemon noticed the reboot. */
+  detectedAt: string;
+  items: LostItem[];
+}
+
+/** `GET /api/lost`. Null: nothing lost, or all of it dismissed. */
+export interface LostResponse {
+  lost: LostNotice | null;
+}
+
+/** `POST /api/lost/:id/restart` and `/api/lost/:id/service`: the slug to register it under when it has no app yet. */
+export interface LostActionRequest {
+  slug?: string;
+}
+
+/** What `POST /api/lost/:id/restart` and `/service` answer: `hallway run`'s outcome, plus the notice afterwards. */
+export interface LostActionResponse {
+  ok: boolean;
+  slug: string;
+  url: string;
+  port: number;
+  persist: boolean;
+  /** Why it didn't come up, and the last lines of its logs. */
+  reason?: string;
+  tail?: string;
+  lost: LostNotice | null;
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // API responses
 // ---------------------------------------------------------------------------------------------------------------
@@ -343,6 +407,8 @@ export interface StateResponse {
   ignore: IgnoreConfig;
   /** Every error and warning in the data home, including those already attached to an app or group. */
   problems: FileProblem[];
+  /** "Lost at last reboot": null when there's nothing to show. Absent from daemons older than the field. */
+  lost?: LostNotice | null;
 }
 
 /** `GET /api/apps`. */
@@ -398,5 +464,6 @@ export type ServerEvent =
   | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' | 'config' }
   | { type: 'thumb'; slug: string }
   | { type: 'config' }
-  /** v1. */
+  /** The "Lost at last reboot" notice changed: a reboot was noticed (`lost` has the ids), or items were dismissed or
+   * came back (`lost` has what's left). */
   | { type: 'reboot'; lost: string[] };
