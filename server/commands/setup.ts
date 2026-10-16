@@ -1,5 +1,5 @@
 // `hallway setup [--domain BASE] [--print]` and `hallway teardown [--uninstall-packages] [--print]`: fronted mode's
-// one privileged step and its undo (docs/03-networking.md, "Privileged setup"; D46). The work is in
+// one privileged step and its undo (docs/03-networking.md, "Privileged setup"; D47). The work is in
 // server/proxy/setup.ts; this turns a Ctx into its dependencies.
 import os from 'node:os';
 import { UsageError, check } from '../args.js';

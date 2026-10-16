@@ -34,7 +34,7 @@ export interface Platform {
   services(opts?: { run?: Runner; env?: NodeJS.ProcessEnv; home?: string }): ServiceManager;
   /** The command that opens a URL in the default browser (`open` / `xdg-open`). */
   openCommand(url: string): [string, string[]];
-  /** Fronted mode's privileged parts: the 443/80 redirect, trusting the local CA, the custom-domain resolver (D46). */
+  /** Fronted mode's privileged parts: the 443/80 redirect, trusting the local CA, the custom-domain resolver (D47). */
   fronting: Fronting;
 }
 

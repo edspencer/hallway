@@ -7,8 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { platformFor } from '../server/platform/index.ts';
 import type { FrontingEnv } from '../server/platform/fronting.ts';
-import { nftRules, resolvedDropin } from '../server/platform/fronting-linux.ts';
-import { pfAnchor, resolverText } from '../server/platform/fronting-darwin.ts';
+import { linuxFronting, nftRules, resolvedDropin } from '../server/platform/fronting-linux.ts';
+import { darwinFronting, pfAnchor, resolverText } from '../server/platform/fronting-darwin.ts';
+import { dnsmasqConf } from '../server/platform/fronting.ts';
 import { type Facts, SetupError, cmdLine, formatPlan, planSetup, runPlan, versionAtLeast } from '../server/proxy/setup.ts';
 import { HSTS_PRELOADED_TLDS, parseTlds, tldVerdict, delegatedTlds } from '../server/proxy/tld.ts';
 import { ROOT, tmpDir } from './fixture.ts';
@@ -46,6 +47,7 @@ function facts(over: Partial<Facts> & { os: 'darwin' | 'linux'; base?: string } 
     httpsPort: 4443,
     httpPort: 4480,
     dnsPort: 4253,
+    noRedirect: false,
     tld: custom ? tldVerdict(base, IANA) : null,
     caddy: { path: '/opt/homebrew/bin/caddy', version: 'v2.11.7', install: { advice: 'x' } },
     dnsmasq: custom ? { path: '/opt/homebrew/sbin/dnsmasq', install: { advice: 'x' } } : null,
@@ -116,7 +118,37 @@ describe('setup --print', () => {
   });
 });
 
+describe('fronted mode with no redirect (proxy.publicPort = proxy.httpsPort)', () => {
+  test('no redirect step, no 443/80 needed, a warning saying links carry the port; fine without systemd', () => {
+    const f = facts({ os: 'linux', noRedirect: true });
+    f.env.tools = { ...f.env.tools, systemctl: null, nft: null };
+    const p = plan(f);
+    assert.deepEqual(p.refusals, []);
+    assert.ok(!p.steps.some((s) => /Redirect/.test(s.why)));
+    assert.match(p.warnings.join(' '), /links carry :4443/);
+    assert.match(formatPlan(p), /Check https:\/\/hallway\.localhost:4443 answers, with/);
+  });
+});
+
 describe('the recipes', () => {
+  test('teardown undoes setup: every file installed is looked for and removed', () => {
+    for (const f of [darwinFronting, linuxFronting]) {
+      const e = facts({ os: f === darwinFronting ? 'darwin' : 'linux', base: 'myname.internal' }).env;
+      e.tools = { nft: '/usr/sbin/nft', certutil: null, systemctl: '/usr/bin/systemctl', resolved: true, caStore: 'debian' };
+      e.rootSha1 = 'AB12';
+      const installed = [...f.redirect(e).files, ...f.resolver(e).files].map((x) => x.dest);
+      const removed = [...f.unredirect(e).cmds, ...f.unresolver(e).cmds].filter((c) => c.argv[0] === 'rm').flatMap((c) => c.argv.slice(2));
+      const looked = Object.values(f.installed(e)).flat();
+      for (const d of installed) {
+        assert.ok(removed.includes(d), `${d} is removed`);
+        assert.ok(looked.includes(d), `${d} is looked for`);
+      }
+    }
+  });
+  test('dnsmasq: the base domain only, loopback only', () => {
+    const c = dnsmasqConf('myname.internal', 4253);
+    for (const l of ['port=4253', 'listen-address=127.0.0.1', 'bind-interfaces', 'no-resolv', 'address=/myname.internal/127.0.0.1', 'address=/myname.internal/::1']) assert.ok(c.split('\n').includes(l), l);
+  });
   test('pf: loopback only, both families, to the configured ports', () => {
     const a = pfAnchor({ httpsPort: 8443, httpPort: 8080 });
     assert.equal(a.split('\n').filter((l) => l.startsWith('rdr pass on lo0')).length, 4);

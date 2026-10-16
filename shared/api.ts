@@ -126,7 +126,7 @@ export interface HallwayConfig {
   port: number;
   mode: Mode;
   domain: { base: string; dashboard: string; tls: boolean; dnsPort: number };
-  /** Fronted mode's Caddy (D46). */
+  /** Fronted mode's Caddy (D47). */
   proxy: { caddy: string | null; httpsPort: number; httpPort: number; publicPort: number };
   probe: { intervalSeconds: number; liveIntervalSeconds: number; timeoutMs: number; concurrency: number; failuresBeforeUnhealthy: number };
   ports: { assignRange: [number, number] };

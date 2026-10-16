@@ -1,4 +1,4 @@
-// Caddy's admin API, over the Unix socket in the data home (D46): load a config, read the running one, ask whether
+// Caddy's admin API, over the Unix socket in the data home (D47): load a config, read the running one, ask whether
 // it's there at all. Used by the daemon (pushing on every change) and by `hallway doctor` and `hallway setup`.
 import http from 'node:http';
 

@@ -88,7 +88,7 @@ export const CADDY_LABEL = 'hallway.caddy';
 export const DNSMASQ_LABEL = 'hallway.dnsmasq';
 
 /**
- * Fronted mode's two helpers (D46), user-level jobs like any other, always running:
+ * Fronted mode's two helpers (D47), user-level jobs like any other, always running:
  *   hallway.caddy    `caddy run --config <data home>/generated/caddy.json` (the daemon keeps that file current and
  *                    pushes it over the admin socket; Caddy starts from it after a reboot, before the daemon is up)
  *   hallway.dnsmasq  custom domains only: `dnsmasq` in the foreground on generated/dnsmasq.conf

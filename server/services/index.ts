@@ -257,7 +257,7 @@ export class Services {
   }
 
   // ---------------------------------------------------------------------------------------------------------------
-  // Fronted mode's helpers: Caddy and dnsmasq (D46), installed by `hallway setup`, removed by `hallway teardown`
+  // Fronted mode's helpers: Caddy and dnsmasq (D47), installed by `hallway setup`, removed by `hallway teardown`
   // ---------------------------------------------------------------------------------------------------------------
 
   helperSpec(kind: 'caddy' | 'dnsmasq', program: string): ServiceSpec {

@@ -1,5 +1,5 @@
 // `hallway setup [--domain BASE] [--print]` and `hallway teardown [--uninstall-packages]` (docs/03-networking.md,
-// "Privileged setup"; D46). Setup is three kinds of step, all printed before they run:
+// "Privileged setup"; D47). Setup is three kinds of step, all printed before they run:
 //   Hallway   things Hallway does as you: write its files, install and start its own user-level jobs (Caddy, and
 //             dnsmasq for a custom domain), edit config.yaml
 //   you       a command run as you (installing Caddy with Homebrew)

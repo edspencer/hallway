@@ -1,4 +1,4 @@
-// macOS: the privileged parts of fronted mode (fronting.ts, D46). Unverified on macOS except where CI's macOS job
+// macOS: the privileged parts of fronted mode (fronting.ts, D47). Unverified on macOS except where CI's macOS job
 // runs them (docs/11-research-notes.md).
 //   redirect   a pf anchor, com.apple/hallway, loaded at boot by a LaunchDaemon that runs one fixed pfctl command.
 //              macOS's /etc/pf.conf already evaluates `rdr-anchor "com.apple/*"`, so pf.conf (which OS updates

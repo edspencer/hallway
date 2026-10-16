@@ -1,4 +1,4 @@
-// The privileged half of fronted mode (D46), per platform: the only things `hallway setup` runs as root, and
+// The privileged half of fronted mode (D47), per platform: the only things `hallway setup` runs as root, and
 // `hallway teardown` undoes. Each is a fixed job that takes no configuration from anything a user-level process can
 // write later:
 //   redirect   loopback 443 → proxy.httpsPort and 80 → proxy.httpPort (pf on macOS, nftables on Linux)

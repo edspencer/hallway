@@ -1,4 +1,4 @@
-// Linux: the privileged parts of fronted mode (fronting.ts, D46).
+// Linux: the privileged parts of fronted mode (fronting.ts, D47).
 //   redirect   an nftables table, `inet hallway`, with a nat output chain, applied at boot by a oneshot system unit.
 //              Its own table: nothing else's rules are touched, and teardown deletes the table whole.
 //   trust      the system CA store (Debian/Ubuntu: /usr/local/share/ca-certificates; Fedora/RHEL/Arch:
