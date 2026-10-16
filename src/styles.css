@@ -719,6 +719,35 @@ kbd {
   z-index: 1;
   margin-top: -10px;
 }
+/* a screenshot is the door's glass: set in the panels' frame, the paint, knob and plate around it (D54) */
+.hw-door-glass {
+  position: absolute;
+  inset: 14px 16px 10px;
+  width: calc(100% - 32px);
+  height: calc(100% - 24px);
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 999px 999px 3px 3px / 26px 26px 3px 3px;
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--paint), var(--hw-paint-shade) 30%),
+    inset 0 0 0 1px var(--hw-panel-line);
+}
+.hw-door--screenshot .hw-door-panes {
+  display: none;
+}
+/* a generated card is a drawing of the whole door: it replaces the CSS one (D54) */
+.hw-door-card {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hw-door--card .hw-door-panes,
+.hw-door--card .hw-door-knob,
+.hw-door--card .hw-door-plate {
+  display: none;
+}
 .hw-door-plate {
   position: absolute;
   bottom: 12px;
@@ -1776,6 +1805,17 @@ kbd {
     linear-gradient(160deg, color-mix(in oklab, var(--paint) 34%, transparent), transparent 75%),
     var(--hw-bg-raised);
   border-bottom: 1px solid var(--hw-line);
+}
+.hw-drawer-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: top center;
+  margin-bottom: 14px;
+  border-radius: var(--hw-radius-small);
+  border: 1px solid var(--hw-line);
 }
 .hw-drawer-tile {
   width: 52px;

@@ -96,7 +96,7 @@ export function cardSvg(m: CardModel): string {
     const d = `M${x} ${y + h}V${y + r}Q${x} ${y} ${x + r * 2} ${y}H${x + w - r * 2}Q${x + w} ${y} ${x + w} ${y + r}V${y + h}Z`;
     out.push(`<path d="${d}" fill="none" stroke="${light}" stroke-width="1.5" transform="translate(0.75 0.75)"/>`, `<path d="${d}" fill="none" stroke="${line}" stroke-width="1.5"/>`);
   };
-  panel(22, 16, W - 44, H - 30, 22);
+  panel(22, 26, W - 44, H - 52, 22);
   out.push(`<circle cx="${W - 34}" cy="${H * 0.56}" r="4.5" fill="url(#k)"/>`);
 
   // the framework, top left inside the panel: a small mark and its name
@@ -113,21 +113,22 @@ export function cardSvg(m: CardModel): string {
   // the name, as large as fits; under it `repo @ branch`
   const inner = W - 96;
   const chars = [...m.name].length || 1;
-  const size = Math.max(17, Math.min(30, inner / (chars * DISPLAY_EM)));
+  const size = Math.max(19, Math.min(34, inner / (chars * DISPLAY_EM)));
   const name = fit(m.name, Math.floor(inner / (size * DISPLAY_EM)));
   const where = m.repo ? (m.branch ? `${m.repo} @ ${m.branch}` : m.repo) : m.branch;
-  const nameY = where ? 98 : 106;
+  const nameY = where ? 94 : 104;
   out.push(`<text x="${W / 2}" y="${nameY}" text-anchor="middle" font-family="Fraunces" font-size="${size.toFixed(1)}" fill="${PALETTE.ink}">${esc(name)}</text>`);
   if (where) out.push(`<text x="${W / 2}" y="${nameY + 22}" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="${muted}">${esc(fit(where, Math.floor(inner / (11 * MONO_EM))))}</text>`);
 
   // the address on the brass number plate
   if (m.address) {
-    const addr = fit(m.address, Math.floor((W - 120) / (11 * MONO_EM)));
-    const w = [...addr].length * 11 * MONO_EM + 20;
+    const fs = 14;
+    const addr = fit(m.address, Math.floor((W - 96) / (fs * MONO_EM)));
+    const w = [...addr].length * fs * MONO_EM + 22;
     const x = (W - w) / 2;
     out.push(
-      `<rect x="${x.toFixed(1)}" y="${H - 50}" width="${w.toFixed(1)}" height="22" rx="4" fill="url(#b)" stroke="rgba(36,24,10,0.55)" stroke-width="1"/>`,
-      `<text x="${W / 2}" y="${H - 35.2}" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="${PALETTE.plateText}">${esc(addr)}</text>`,
+      `<rect x="${x.toFixed(1)}" y="${H - 66}" width="${w.toFixed(1)}" height="26" rx="5" fill="url(#b)" stroke="rgba(36,24,10,0.55)" stroke-width="1"/>`,
+      `<text x="${W / 2}" y="${H - 48.2}" text-anchor="middle" font-family="JetBrains Mono" font-size="${fs}" fill="${PALETTE.plateText}">${esc(addr)}</text>`,
     );
   }
 

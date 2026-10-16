@@ -15,7 +15,7 @@
 // /api/state must answer in milliseconds). Several providers can be registered; for each slot the first one that
 // returns a non-null answer wins, in registration order. A provider that throws is skipped for that call (and
 // logged), never taking the API down.
-import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, HistoryWindow, ListenerIdentity, ObservedListener } from '../shared/api.js';
+import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, HistoryWindow, ListenerIdentity, ObservedListener, ThumbKind } from '../shared/api.js';
 
 /** What the API tells a provider about a declared app. */
 export interface AppRef {
@@ -41,7 +41,9 @@ export interface StateProvider {
   /** Apps from other tools' registries (discovery adapters). */
   discovered?(): DiscoveredApp[];
   /** A thumbnail for an app (`GET /api/apps/:slug/thumb`). */
-  thumb?(slug: string): { body: Uint8Array; contentType: string; etag: string } | null;
+  thumb?(slug: string): { body: Uint8Array; contentType: string; etag: string; kind?: ThumbKind } | null;
+  /** Re-shoot screenshots now (`POST /api/thumbs/refresh`): one app, or every healthy one. Resolves with how many were taken. */
+  refreshThumbs?(slug?: string): Promise<number>;
   /** A bookmark's favicon (`GET /api/bookmarks/:group/icon?url=`), from its `url` and `icon:` (the thumbnailer). */
   bookmarkIcon?(link: { url: string; icon: string }, group?: string): { body: Uint8Array; contentType: string; etag: string } | null;
 }

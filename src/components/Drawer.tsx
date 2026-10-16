@@ -35,7 +35,9 @@ export function Drawer({ app, state, home, onClose, onCopy, onSaved }: DrawerPro
   const s = doorState(app);
   const checking = state.daemon.providers.health;
   const thumb = app.thumb ? thumbUrl(app.slug, app.thumb) : null;
-  const colour = useImageColour(thumb);
+  // the drawer already says what a generated card says, so it shows only a favicon or a screenshot (D54)
+  const kind = thumb ? (app.thumbKind ?? 'favicon') : null;
+  const colour = useImageColour(kind === 'card' ? null : thumb);
   const glyph = isGlyph(app.config?.icon) ? app.config!.icon : null;
 
   // focus moves into the drawer, stays there, and goes back where it was when it closes
@@ -63,7 +65,7 @@ export function Drawer({ app, state, home, onClose, onCopy, onSaved }: DrawerPro
       <div className="hw-drawer-backdrop" onClick={onClose} aria-hidden="true" />
       <aside className="hw-drawer" role="dialog" aria-modal="true" aria-labelledby="hw-drawer-title" tabIndex={-1} ref={ref} style={{ '--paint': paintFor(app.slug, colour) } as CSSProperties}>
         <header className={`hw-drawer-head hw-door--${!checking && s === 'unknown' ? 'unchecked' : s}`}>
-          <Tile name={app.name} src={thumb} glyph={glyph} className="hw-drawer-tile" />
+          <Tile name={app.name} src={kind === 'favicon' ? thumb : null} glyph={glyph} className="hw-drawer-tile" />
           <div className="hw-drawer-titles">
             <h2 id="hw-drawer-title">{app.name}</h2>
             {(app.identity?.label ?? app.config?.description) && <p className="hw-drawer-sub">{app.identity?.label ?? app.config?.description}</p>}
@@ -79,6 +81,7 @@ export function Drawer({ app, state, home, onClose, onCopy, onSaved }: DrawerPro
         </header>
 
         <div className="hw-drawer-body">
+          {kind === 'screenshot' && <img className="hw-drawer-shot" src={thumb!} alt={`${app.name}, as it looked when last checked`} width={640} height={400} decoding="async" />}
           <div className="hw-drawer-state">
             <StateMark state={s} label={!checking && s === 'unknown' ? 'not checked' : undefined} />
             <span className="hw-drawer-state-text">
