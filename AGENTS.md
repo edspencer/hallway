@@ -67,12 +67,11 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   security.ts      loopback-only Host/Origin/Content-Type middleware
   config.ts        package root, data home ($HALLWAY_HOME, ~/.hallway) and its layout, ports, dev overrides
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
-  live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events
+  live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events (D35, D38)
   platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) behind one interface; the
                    listener/process parsers are pure functions tested against test/fixtures/platform/
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
-  live.ts          plugs the scanner, prober and uptime store into the core: one provider + bus events (D35, D38)
   scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
                    (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
