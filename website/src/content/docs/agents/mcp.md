@@ -28,6 +28,10 @@ claude mcp add --transport http hallway http://localhost:4255/mcp
 
 If your daemon runs on another port (the `port` key in [config.yaml](/reference/config-yaml/)), use that in the URL.
 
+In [fronted mode](/concepts/modes/), the dashboard's own address works too: `https://hallway.localhost/mcp`, or
+`https://<base>/mcp` on a custom domain (`domain.dashboard` in config.yaml). The `localhost` URL keeps working in both
+modes and doesn't depend on Caddy running, so it's the one to register.
+
 ### Over stdio
 
 For clients that prefer to launch a stdio server, `hallway mcp` is a thin bridge: it forwards every message to the

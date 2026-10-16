@@ -340,4 +340,31 @@ describe('/mcp security', () => {
     // and a local origin is fine
     assert.equal((await t.raw(init, { origin: 'http://localhost:4255', 'mcp-protocol-version': '2025-11-25' })).status, 200);
   });
+
+  test("fronted mode: the dashboard's host reaches /mcp (as https://hallway.localhost/mcp through Caddy); others still don't", async () => {
+    const t = await setup();
+    const v = { 'mcp-protocol-version': '2025-11-25' };
+    // direct mode: the dashboard host is just another name
+    assert.equal((await t.raw(init, { ...v, host: 'hallway.localhost' })).status, 403);
+    await t.store.patchConfig({ mode: 'fronted' });
+    assert.equal((await t.raw(init, { ...v, host: 'hallway.localhost' })).status, 200);
+    assert.equal((await t.raw(init, { ...v, host: 'hallway.localhost', origin: 'https://hallway.localhost' })).status, 200);
+    assert.equal((await t.raw(init, { ...v, host: 'evil.example.com' })).status, 403);
+    assert.equal((await t.raw(init, { ...v, host: 'hallway.localhost', origin: 'https://evil.example.com' })).status, 403);
+    // an app's name is the app's, not the daemon's
+    assert.equal((await t.raw(init, { ...v, host: 'my-app.localhost' })).status, 403);
+
+    // a real client, as one registered with the fronted URL would connect (Caddy keeps the Host)
+    const fetch = async (url: string | URL | Request, i?: RequestInit) => {
+      const req = new Request(url, i);
+      const headers = new Headers(req.headers);
+      headers.set('host', new URL(req.url).host);
+      return t.app.request(new Request(req, { headers }));
+    };
+    const client = new Client({ name: 'fronted', version: '1' });
+    await client.connect(new StreamableHTTPClientTransport(new URL('https://hallway.localhost/mcp'), { fetch }));
+    cleanups.push(() => client.close());
+    const r = (await client.callTool({ name: 'add_bookmark', arguments: { group: 'docs', url: 'https://example.com' } })) as { isError?: boolean };
+    assert.ok(!r.isError);
+  });
 });

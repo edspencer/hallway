@@ -11,11 +11,13 @@ change within a second, exactly as if it had been made through the API.
 
 ## What this version does
 
-This is Hallway's first milestone (v0, released as 0.1.0), on macOS and Linux: the dashboard, the YAML files, health
-checks with uptime history, the port scanner, bookmarks, this guide, and `hallway run` for managed servers. It runs in
-**direct mode** only: every app's address is `http://localhost:<port>`. The `https://<slug>.localhost` names (fronted
-mode, `hallway setup`) are planned, not built: don't use or suggest them yet. An MCP server is available (below), as is
-an optional hook that stops agents starting dev servers directly.
+On macOS and Linux: the dashboard, the YAML files, health checks with uptime history, the port scanner, bookmarks,
+this guide, `hallway run` for managed servers, an MCP server (below) and an optional hook that stops agents starting
+dev servers directly. In **direct mode** (the default) every app's address is `http://localhost:<port>`. In
+**fronted mode**, which the user turns on with `hallway setup`, each app also gets `https://<slug>.localhost` (or
+`<slug>.<base>` on their own domain). The live facts above (when this guide comes from a running daemon) say which
+mode is on, and each app's `url` in `/api/state` is the address to give the user. Don't run `hallway setup` or `hallway teardown` yourself: they need sudo, so they're the
+user's to run.
 
 ## The rule: don't leave servers running in your session
 
@@ -135,6 +137,10 @@ claude mcp add --transport http hallway http://localhost:4255/mcp
 # or, for clients that want stdio (a bridge to the running daemon):
 claude mcp add hallway -- hallway mcp
 ```
+
+In fronted mode the dashboard's own address works too: `https://hallway.localhost/mcp` (or `https://<base>/mcp` on a
+custom domain; it's `domain.dashboard` in `config.yaml`). The `localhost` URL keeps working in both modes, and doesn't
+depend on Caddy running, so prefer it.
 
 | Tool | What it does |
 |------|--------------|
