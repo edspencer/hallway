@@ -1,5 +1,6 @@
 // Every `hallway` command except `serve` and `guide` (server/cli.ts), by name. Each resolves with its exit code, or
 // undefined while it keeps running (`logs --follow`).
+import { hook, mcp } from './agents.js';
 import { app, bookmark } from './apps.js';
 import type { Ctx } from './context.js';
 import { doctor } from './doctor.js';
@@ -25,4 +26,6 @@ export const COMMANDS: Record<string, Command> = {
   restart,
   logs,
   service,
+  mcp,
+  hook: (ctx, args, flags, rest) => hook(ctx, args, flags, rest),
 };

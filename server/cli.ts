@@ -42,6 +42,12 @@ Bookmarks
   bookmark add <group> <url> [--title T] [--description D]
   bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
 
+Coding agents
+  mcp                               An MCP server on stdio, for agents that want one: a bridge to the running
+                                    daemon's http://localhost:<port>/mcp.
+  hook check-command                A pre-tool-use hook (Claude Code's PreToolUse on Bash): blocks a bare
+                                    dev-server start and suggests the \`hallway run\` for it. See \`hallway guide\`.
+
 Other
   doctor [--json]                   Check the daemon, the data home and the services, with fixes.
   guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph

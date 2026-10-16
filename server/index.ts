@@ -8,6 +8,7 @@ import { WEB_DIST } from './config.js';
 import { removeDaemonRecord, writeDaemonRecord } from './daemonfile.js';
 import { bus as defaultBus, type EventBus } from './events.js';
 import { providers as defaultProviders, type ProviderRegistry } from './providers.js';
+import { mcpEndpoint, type McpEndpoint } from './mcp/index.js';
 import { localOnly } from './security.js';
 import { startLogRotation } from './services/rotate.js';
 import { startSnapshots } from './store/backups.js';
@@ -29,6 +30,8 @@ export interface AppOptions {
   startedAt?: Date;
   /** Managed services for the start/stop/restart routes (default: created on first use). */
   services?: () => Services;
+  /** The MCP endpoint (server/mcp/); default: one made for this app. */
+  mcp?: McpEndpoint;
 }
 
 /**
@@ -44,9 +47,12 @@ export function allowedHosts(store: Store, extra: readonly string[] = []): strin
  * The daemon's HTTP app: the JSON API under /api, the agent documents, and the dashboard (a single-page app) for
  * everything else.
  */
-export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date(), services }: AppOptions) {
+export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date(), services, mcp }: AppOptions) {
   const app = new Hono();
   app.use('*', localOnly(() => allowedHosts(store, extraHosts)));
+
+  const endpoint = mcp ?? mcpEndpoint({ store, bus, providers, startedAt });
+  app.all('/mcp', (c) => endpoint.handle(c));
 
   app.route('/api', apiRoutes({ store, bus, providers, startedAt, services }));
   app.route('/', agentRoutes({ store, providers }));
@@ -86,7 +92,8 @@ export interface ServerOptions extends Omit<AppOptions, 'store'> {
  */
 export async function startServer(port: number, { hostname = '127.0.0.1', home, watch = true, thumbs = true, store: given, ...opts }: ServerOptions) {
   const store = given ?? new Store(home, { bus: opts.bus ?? defaultBus }).init();
-  const app = createApp({ ...opts, store });
+  const mcp = mcpEndpoint({ store, bus: opts.bus ?? store.bus ?? defaultBus, providers: opts.providers ?? defaultProviders, startedAt: opts.startedAt ?? new Date() });
+  const app = createApp({ ...opts, store, mcp });
   const thumbnailer = thumbs ? startThumbs({ store, bus: opts.bus ?? store.bus ?? defaultBus, providers: opts.providers ?? defaultProviders }) : null;
   const { port: bound, close: closeHttp } = await new Promise<{ port: number; close: () => Promise<void> }>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
@@ -113,6 +120,7 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
     close: async () => {
       if (watch) removeDaemonRecord(home);
       thumbnailer?.stop();
+      await mcp.close();
       stopSnapshots();
       stopRotation();
       await watcher?.close();
