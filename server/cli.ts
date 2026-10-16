@@ -128,6 +128,14 @@ async function main(argv: string[]): Promise<number | undefined> {
   }
 }
 
+// `hallway doctor | head`: the reader has gone, so there's nothing left to cut off. Stop quietly, as other command-line
+// tools do, rather than with a stack trace.
+for (const stream of [process.stdout, process.stderr])
+  stream.on('error', (e: NodeJS.ErrnoException) => {
+    if (e.code !== 'EPIPE') throw e;
+    process.exit(process.exitCode ?? 0);
+  });
+
 // exitCode, not exit(): exiting could cut off output still being written to a pipe
 main(process.argv.slice(2)).then(
   (code) => {
