@@ -55,6 +55,8 @@ export interface FrontingEnv {
 export class FrontingUnsupported extends Error {}
 
 export interface Fronting {
+  /** Set where fronted mode can't work at all (Windows, D58): why, for `hallway setup` to refuse with up front. */
+  unsupported?: string;
   /** The redirect from 443/80 to Caddy's ports. Throws FrontingUnsupported with what to install when it can't. */
   redirect(env: FrontingEnv): Recipe;
   unredirect(env: FrontingEnv): Recipe;

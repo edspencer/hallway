@@ -40,7 +40,8 @@ export interface ProxyOptions {
 }
 
 /** The commands that restart the daemon, for people: Hallway's own, then the service manager's. */
-export function restartCommands(serviceManager: 'launchd' | 'systemd', uid = os.userInfo().uid): string[] {
+export function restartCommands(serviceManager: 'launchd' | 'systemd' | 'schtasks', uid = os.userInfo().uid): string[] {
+  if (serviceManager === 'schtasks') return ['hallway service restart'];
   return ['hallway service restart', serviceManager === 'launchd' ? `launchctl kickstart -k gui/${uid}/hallway.daemon` : 'systemctl --user restart hallway-daemon.service'];
 }
 

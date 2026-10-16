@@ -204,7 +204,7 @@ describe('MCP apps', () => {
     assert.match((await call('remove_app', { slug: 'gone', etag: '"0000000000000000"' })).error ?? '', /^Conflict/);
     const r = await call('remove_app', { slug: 'gone' });
     assert.equal(r.error, null);
-    assert.match(r.data.movedTo, /backups\/removed\/.*\/apps\/gone.yaml$/);
+    assert.match(r.data.movedTo.replaceAll('\\', '/'), /backups\/removed\/.*\/apps\/gone.yaml$/);
     assert.ok(!fs.existsSync(path.join(home, 'apps', 'gone.yaml')));
     const managed = await call('remove_app', { slug: 'kept' });
     assert.match(managed.error ?? '', /^Refused: 'kept' is run by Hallway as a service/);
@@ -285,7 +285,7 @@ describe('MCP bookmarks', () => {
     const r = await t.call('remove_bookmark', { group: 'tools', index: 1 });
     assert.equal(r.data.removed.url, 'https://b.example.com');
     const gone = await t.call('remove_bookmark_group', { group: 'tools' });
-    assert.match(gone.data.movedTo, /backups\/removed\/.*bookmarks\/tools.yaml$/);
+    assert.match(gone.data.movedTo.replaceAll('\\', '/'), /backups\/removed\/.*bookmarks\/tools.yaml$/);
     assert.equal((await t.call('list_bookmarks')).data.groups.length, 0);
     assert.match((await t.call('list_bookmarks', { group: 'tools' })).error ?? '', /no bookmark group/);
   });

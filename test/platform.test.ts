@@ -1,5 +1,5 @@
-// server/platform/: the macOS / Linux split (D26). Both platforms are tested on every OS: nothing here touches the
-// machine, so the macOS paths are checked on Linux CI too (and the other way round).
+// server/platform/: the macOS / Linux / Windows split (D26, D58). Every platform is tested on every OS: nothing here
+// touches the machine, so the macOS paths are checked on Linux and Windows CI too (and every other way round).
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { UnsupportedPlatformError, currentPlatform, platformFor } from '../server/platform/index.ts';
@@ -37,12 +37,23 @@ describe('platform', () => {
     assert.ok(r.from >= 1 && r.from <= r.to && r.to <= 65535);
   });
 
+  test('Windows: per-user scheduled tasks under %LOCALAPPDATA%, the IANA ephemeral range, no fronted mode (D58)', () => {
+    const p = platformFor('win32');
+    assert.equal(p.serviceManager, 'schtasks');
+    assert.equal(p.listenerSource, 'netstat');
+    assert.equal(p.userServiceDir({ LOCALAPPDATA: 'C:\\Users\\someone\\AppData\\Local' }, 'C:\\Users\\someone'), 'C:\\Users\\someone\\AppData\\Local\\hallway\\tasks');
+    assert.equal(p.userServiceDir({}, 'C:\\Users\\someone'), 'C:\\Users\\someone\\AppData\\Local\\hallway\\tasks');
+    assert.deepEqual(p.ephemeralPorts(), { from: 49152, to: 65535 });
+    assert.deepEqual(p.openCommand('http://localhost:4255/?a=1&b=2'), ['rundll32', ['url.dll,FileProtocolHandler', 'http://localhost:4255/?a=1&b=2']]);
+    assert.match(p.fronting.unsupported ?? '', /fronted mode isn't supported on Windows/);
+  });
+
   test('anything else is unsupported, with a clear message', () => {
-    assert.throws(() => platformFor('win32'), (e) => e instanceof UnsupportedPlatformError && /macOS and Linux, not win32/.test(e.message));
+    assert.throws(() => platformFor('freebsd'), (e) => e instanceof UnsupportedPlatformError && /macOS, Linux and Windows, not freebsd/.test(e.message));
   });
 
   test('currentPlatform matches the OS running the tests', () => {
-    if (process.platform === 'darwin' || process.platform === 'linux') assert.equal(currentPlatform().id, process.platform);
+    if (['darwin', 'linux', 'win32'].includes(process.platform)) assert.equal(currentPlatform().id, process.platform);
     else assert.throws(() => currentPlatform(), UnsupportedPlatformError);
   });
 });

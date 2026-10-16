@@ -5,7 +5,8 @@
 //              /etc/pki/ca-trust/source/anchors), plus the user's NSS database, which Chrome and Chromium read on
 //              Linux (no sudo; only when `certutil` and ~/.pki/nssdb exist).
 //   resolver   a systemd-resolved drop-in routing `~<base>` to Hallway's dnsmasq.
-import path from 'node:path';
+// POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
+import { posix as path } from 'node:path';
 import fs from 'node:fs';
 import { type Cmd, type Fronting, type FrontingEnv, FrontingUnsupported, MARK, type Recipe, findTool } from './fronting.js';
 

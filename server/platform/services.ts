@@ -66,7 +66,7 @@ export const defaultRunner: Runner = (cmd, args) =>
 export class ServiceManagerError extends Error {}
 
 export interface ServiceManager {
-  kind: 'launchd' | 'systemd';
+  kind: 'launchd' | 'systemd' | 'schtasks';
   /** Where a label's definition lives. */
   file(label: string): string;
   /** The definition's text. Pure. */

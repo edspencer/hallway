@@ -3,7 +3,8 @@
 // output, unit-tested on every OS; the lsof/ps/sysctl calls themselves are "unverified on macOS" until run on a Mac
 // (docs/11-research-notes.md).
 import os from 'node:os';
-import path from 'node:path';
+// POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
+import { posix as path } from 'node:path';
 import type { Platform } from './index.js';
 import { launchdManager } from './launchd.js';
 import { type ProcessInfo, type RawListener, run, splitHostPort } from './listeners.js';

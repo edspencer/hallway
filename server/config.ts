@@ -25,7 +25,7 @@ export const VERSION: string = JSON.parse(fs.readFileSync(path.join(ROOT, 'packa
 
 export function expandHome(p: string, home = os.homedir()) {
   if (p === '~') return home;
-  if (p.startsWith('~/')) return path.join(home, p.slice(2));
+  if (p.startsWith('~/') || p.startsWith(`~${path.sep}`)) return path.join(home, p.slice(2));
   return p;
 }
 

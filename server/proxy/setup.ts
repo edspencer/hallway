@@ -486,6 +486,8 @@ export interface SetupResult {
 }
 
 export async function setup(deps: SetupDeps, opts: { domain?: string; print?: boolean }): Promise<number> {
+  // before anything is looked for or written (Windows, D58)
+  if (deps.platform.fronting.unsupported) throw new SetupError(deps.platform.fronting.unsupported);
   const facts = await gatherFacts(deps, opts);
   const plan = planSetup(facts, deps.platform, deps.store.home, setupActions(deps, facts));
   if (opts.print) {
@@ -556,6 +558,10 @@ export async function planTeardown(deps: SetupDeps, opts: { uninstallPackages?: 
 }
 
 export async function teardown(deps: SetupDeps, opts: { uninstallPackages?: boolean; print?: boolean } = {}): Promise<number> {
+  if (deps.platform.fronting.unsupported) {
+    deps.out(`Nothing to undo: ${deps.platform.fronting.unsupported}.\n`);
+    return 0;
+  }
   const plan = await planTeardown(deps, opts);
   if (!plan.steps.length) {
     for (const w of plan.warnings) deps.out(`! ${w}\n`);

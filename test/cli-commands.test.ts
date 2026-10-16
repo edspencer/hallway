@@ -50,7 +50,7 @@ describe('hallway app and bookmark commands', () => {
     assert.deepEqual(ls.apps.map((x: { slug: string; config: { port: number } }) => [x.slug, x.config.port]), [['notes', port]]);
     const rm = await hallway(['app', 'rm', 'notes']);
     assert.equal(rm.code, 0, rm.stderr);
-    assert.match(rm.stdout, /moved to .*backups\/removed\//);
+    assert.match(rm.stdout.replaceAll('\\', '/'), /moved to .*backups\/removed\//);
     assert.equal(fs.existsSync(path.join(DATA, 'apps', 'notes.yaml')), false);
   });
 
