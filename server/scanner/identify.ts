@@ -134,7 +134,8 @@ export function repoName(commonDir: string): string {
 export async function gitInfo(dir: string): Promise<Observation['git']> {
   const paths = await git(dir, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-dir', '--git-common-dir']);
   if (!paths.ok) return null;
-  const [toplevel, gitDir, commonDir] = paths.stdout.trim().split('\n');
+  // git prints `C:/Users/…` on Windows: path.resolve makes it the OS's own form, as everything else here is
+  const [toplevel, gitDir, commonDir] = paths.stdout.trim().split(/\r?\n/).map((p) => p && path.resolve(p));
   if (!toplevel || !gitDir || !commonDir) return null;
   const [branch, log, remote] = await Promise.all([
     git(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD']),
