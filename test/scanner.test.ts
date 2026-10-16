@@ -388,7 +388,7 @@ describe('a whole scan over a fake platform', () => {
       { pid: 14, process: 'node', port: tcp.port, address: '127.0.0.1' },
       { pid: 15, process: 'node', port: known.port, address: '127.0.0.1' },
       { pid: 16, process: 'postgres', port: 5432, address: '127.0.0.1' },
-      { pid: 17, process: 'Code Helper', port: 52144, address: '127.0.0.1' },
+      { pid: 17, process: 'cupsd', port: 631, address: '127.0.0.1' },
       { pid: 18, process: 'node', port: 4999, address: '127.0.0.1' }, // under an ignored dir
     ];
     const cwd: Record<number, string> = { 11: WT_A, 12: WT_B, 13: path.join(TMP, 'plain'), 14: REPO, 15: REPO, 18: path.join(TMP, 'go') };
@@ -413,6 +413,8 @@ describe('a whole scan over a fake platform', () => {
       home,
       platform,
       homeDir: '/nowhere',
+      // the OS picks the test servers' ports, which on macOS are in the ephemeral range (that rule has its own test)
+      settings: () => ({ enabled: true, intervalSeconds: 120, includeEphemeralPorts: true, minPort: 1024 }),
       knownPorts: () => [known.port],
       ignore: () => ({ ports: [], processes: [], dirs: [path.join(TMP, 'go')] }),
       sniffTimeoutMs: 500,
@@ -436,7 +438,7 @@ describe('a whole scan over a fake platform', () => {
       assert.equal(wa.orphan, true);
       assert.deepEqual(r.other.map((l) => l.port), [tcp.port]);
       assert.deepEqual([...r.known.keys()], [known.port]);
-      assert.deepEqual(r.dropped, { daemon: 1, ephemeral: 1, ignored: 1 });
+      assert.deepEqual(r.dropped, { daemon: 1, 'low-port': 1, ignored: 1 });
       assert.equal(results.length, 1);
       assert.equal(scanner.last(), r);
       assert.equal(scanner.observation(wa.id)?.port, a.port);
