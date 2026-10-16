@@ -150,7 +150,7 @@ services:                       # v1
 scan:
   enabled: true
   intervalSeconds: 120
-  includeEphemeralPorts: false  # skip 49152–65535 by default (IDE/tool helpers live there)
+  includeEphemeralPorts: false  # skip 49152–65535 (and Linux's ip_local_port_range) by default (IDE/tool helpers)
   minPort: 1024
 
 thumbnails:

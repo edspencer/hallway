@@ -130,6 +130,7 @@ export function createScanner(opts: ScannerOptions) {
     const filterOpts = {
       minPort: s.minPort,
       includeEphemeralPorts: s.includeEphemeralPorts,
+      osEphemeral: platform.ephemeralPorts(),
       ignore: ignore(),
       selfPid: process.pid,
       selfPorts: opts.selfPorts?.() ?? [],

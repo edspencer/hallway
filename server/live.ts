@@ -10,7 +10,7 @@ import type { AppHealth, AppHistory, ListenerIdentity, ObservedListener, ServerE
 import { expandHome } from './config.js';
 import type { EventBus } from './events.js';
 import { type HealthService, startHealth } from './health/index.js';
-import type { Platform } from './platform/index.js';
+import { type Platform, currentPlatform } from './platform/index.js';
 import type { ProbeHealth, ProbeTarget } from './prober/index.js';
 import type { ProviderRegistry } from './providers.js';
 import { type Observation, type Scanner, createScanner, noiseReason, suggestSlug } from './scanner/index.js';
@@ -102,6 +102,7 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   const home = store.home;
   const config = () => store.currentConfig();
   const knownPorts = () => new Set(probeTargets(store).map((t) => t.port));
+  const osEphemeral = () => (platform ?? currentPlatform()).ephemeralPorts();
   const ignore = () => {
     const ig = store.currentIgnore();
     return { ports: ig.ports, processes: ig.processes, dirs: ig.dirs.map((d) => expandHome(d, os.homedir())) };
@@ -139,7 +140,7 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
     const cfg = config().scan;
     if (!r || !cfg.enabled) return [];
     const known = knownPorts();
-    const opts = { minPort: cfg.minPort, includeEphemeralPorts: cfg.includeEphemeralPorts, ignore: ignore(), selfPid: process.pid, selfPorts };
+    const opts = { minPort: cfg.minPort, includeEphemeralPorts: cfg.includeEphemeralPorts, osEphemeral: osEphemeral(), ignore: ignore(), selfPid: process.pid, selfPorts };
     return [...r.listeners, ...r.other].filter(
       (o) => !known.has(o.port) && !noiseReason({ pid: o.pid, process: o.process, port: o.port, addresses: o.addresses }, opts, o.cwd),
     );

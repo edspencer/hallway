@@ -246,7 +246,7 @@ export const CONFIG_SCHEMA: Field = {
       fields: {
         enabled: { t: 'bool', default: true, doc: 'Look for unnamed listeners.' },
         intervalSeconds: posInt('Seconds between scans.', 120, 10),
-        includeEphemeralPorts: { t: 'bool', default: false, doc: 'Include 49152–65535, where IDE and tool helpers listen.' },
+        includeEphemeralPorts: { t: 'bool', default: false, doc: 'Include ephemeral ports (49152–65535, and Linux\'s own range), where IDE and tool helpers listen.' },
         minPort: port('Ignore ports below this.', { default: 1024 }),
       },
     },

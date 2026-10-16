@@ -228,7 +228,7 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `scan` | mapping |  | The port scanner. |
 | `scan.enabled` | true/false | `true` | Look for unnamed listeners. |
 | `scan.intervalSeconds` | number ≥ 10 | `120` | Seconds between scans. |
-| `scan.includeEphemeralPorts` | true/false | `false` | Include 49152–65535, where IDE and tool helpers listen. |
+| `scan.includeEphemeralPorts` | true/false | `false` | Include ephemeral ports (49152–65535, and Linux's own range), where IDE and tool helpers listen. |
 | `scan.minPort` | number 1–65535 | `1024` | Ignore ports below this. |
 | `thumbnails` | mapping |  | Card images. |
 | `thumbnails.mode` | `favicon` \| `screenshot` \| `card` | `favicon` | `favicon` (a favicon on a colour tile); `screenshot` and `card` arrive in v2. |
