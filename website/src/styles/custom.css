@@ -1,0 +1,218 @@
+/* Hallway docs: brand tweaks on top of Starlight. Keep minimal; Starlight defaults are good. */
+
+/* Every colour and font is a token (tokens.css); this file only maps them onto Starlight. */
+@import './tokens.css';
+
+/*
+ * The proposed hallway identity (docs/05-ui.md, D23): dark is a warm, dim corridor at night with lamplight amber as
+ * the accent; light is a daylit hallway. Amber is ~1.8:1 on white, so it is never text on the light theme: there the
+ * accent is the deep amber-brown token instead.
+ */
+:root {
+	--sl-color-accent-low: var(--hw-amber-wash);
+	--sl-color-accent: var(--hw-amber);
+	--sl-color-accent-high: #f7d9a8;
+
+	--sl-color-white: var(--hw-night-text);
+	--sl-color-gray-1: #e6dccd;
+	--sl-color-gray-2: var(--hw-night-text-muted);
+	--sl-color-gray-3: var(--hw-night-text-subtle);
+	--sl-color-gray-4: #6b5e4d;
+	--sl-color-gray-5: var(--hw-night-border);
+	--sl-color-gray-6: #211b15;
+	--sl-color-black: var(--hw-night-ground);
+
+	--sl-font: var(--hw-font-sans);
+	--sl-font-mono: var(--hw-font-mono);
+
+	/* Slightly wider content column for reference tables (config keys, API). */
+	--sl-content-width: 50rem;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #f5e3c4;
+	--sl-color-accent: var(--hw-amber-deep);
+	--sl-color-accent-high: #5c3b0b;
+
+	--sl-color-white: var(--hw-day-text);
+	--sl-color-gray-1: #3a3026;
+	--sl-color-gray-2: var(--hw-day-text-muted);
+	--sl-color-gray-3: #6e604f;
+	--sl-color-gray-4: #9a8b77;
+	--sl-color-gray-5: #d6c9b6;
+	--sl-color-gray-6: #efe6d8;
+	--sl-color-gray-7: #f6efe5;
+	--sl-color-black: var(--hw-day-ground);
+}
+
+/* Nameplates: page titles and the site title in the warm display face. */
+.sl-markdown-content h2,
+h1#_top,
+.site-title {
+	font-family: var(--hw-font-display);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+/*
+ * The header is the front door: the night corridor's wood, with a lamplight sill, in both themes. It is the one
+ * place the docs look like the (planned) product.
+ *
+ * Scoped to `header.header` (Starlight's PageFrame), because `.header` alone also matches Starlight's inner header
+ * div and Expressive Code's code-frame titles. And the controls are restyled one by one rather than by overriding
+ * Starlight's --sl-color-* variables here: the search dialog lives inside this element, so overridden variables would
+ * leak into it.
+ */
+header.header {
+	background: linear-gradient(90deg, var(--hw-night-ground) 0%, var(--hw-wood-dark) 100%);
+	border-bottom: 2px solid var(--hw-amber);
+}
+
+header.header .site-title {
+	color: var(--hw-night-text);
+	font-size: 1.35rem;
+}
+
+header.header .site-title img {
+	height: 2rem;
+	width: auto;
+}
+
+header.header .social-icons a,
+header.header starlight-theme-select label,
+header.header starlight-theme-select select {
+	color: rgb(255 248 238 / 0.82);
+}
+
+header.header .social-icons a:hover,
+header.header starlight-theme-select label:hover,
+header.header starlight-theme-select select:hover {
+	color: #fff;
+}
+
+/* The picker's open list is drawn by the OS on the page's own colours. */
+header.header starlight-theme-select option {
+	color: var(--sl-color-gray-1);
+}
+
+header.header .social-icons::after {
+	border-color: rgb(255 248 238 / 0.24);
+}
+
+/* The search box sits on dark wood, so it gets a translucent light field rather than the page's grey. */
+header.header button[data-open-modal] {
+	background-color: rgb(255 248 238 / 0.07);
+	border-color: rgb(255 248 238 / 0.22);
+	color: rgb(255 248 238 / 0.82);
+}
+
+header.header button[data-open-modal]:hover {
+	border-color: rgb(var(--hw-amber-rgb) / 0.7);
+	color: #fff;
+}
+
+header.header button[data-open-modal] kbd {
+	background-color: rgb(255 248 238 / 0.12);
+	color: rgb(255 248 238 / 0.82);
+}
+
+/*
+ * Door-number plates and state chips, for use in pages as raw HTML:
+ *   <span class="plate">4255</span>
+ *   <span class="state state--down">■ down</span>
+ * A state is always colour AND shape AND word (docs/05-ui.md); never use the colour alone.
+ */
+.sl-markdown-content .plate {
+	display: inline-block;
+	padding: 0.05em 0.45em;
+	border-radius: 0.25rem;
+	background: var(--hw-brass);
+	color: var(--hw-ink);
+	font-family: var(--hw-font-mono);
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.4;
+	white-space: nowrap;
+}
+
+:root[data-theme='light'] .sl-markdown-content .plate {
+	background: var(--hw-wood-dark);
+	color: var(--hw-brass);
+}
+
+.sl-markdown-content .state {
+	font-family: var(--hw-font-mono);
+	font-size: 0.85em;
+	white-space: nowrap;
+	font-weight: 500;
+}
+
+.sl-markdown-content .state--healthy {
+	color: var(--hw-state-healthy);
+}
+.sl-markdown-content .state--unhealthy {
+	color: var(--hw-state-unhealthy);
+}
+.sl-markdown-content .state--down {
+	color: var(--hw-state-down);
+}
+.sl-markdown-content .state--stopped {
+	color: var(--hw-state-stopped);
+}
+.sl-markdown-content .state--unknown,
+.sl-markdown-content .state--starting {
+	color: var(--hw-night-text-subtle);
+}
+
+/* The light theme needs darker state colours to keep 4.5:1 on the daylit ground. */
+:root[data-theme='light'] .sl-markdown-content .state--healthy {
+	color: #2f7d32; /* app light --hw-healthy */
+}
+:root[data-theme='light'] .sl-markdown-content .state--unhealthy {
+	color: #9a6400; /* app light --hw-unhealthy */
+}
+:root[data-theme='light'] .sl-markdown-content .state--down {
+	color: #c62f22; /* app light --hw-down */
+}
+:root[data-theme='light'] .sl-markdown-content .state--stopped,
+:root[data-theme='light'] .sl-markdown-content .state--unknown,
+:root[data-theme='light'] .sl-markdown-content .state--starting {
+	color: #7a6e62; /* app light --hw-stopped */
+}
+
+/*
+ * Milestone badges: <span class="ms ms--v1">v1</span>. Every feature on this site is planned, not shipped; the badge
+ * says which milestone it belongs to (docs/08-roadmap.md).
+ */
+.sl-markdown-content .ms {
+	display: inline-block;
+	padding: 0 0.4em;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	font-family: var(--hw-font-mono);
+	font-size: 0.72em;
+	line-height: 1.5;
+	vertical-align: 0.12em;
+	white-space: nowrap;
+	color: var(--sl-color-gray-3);
+}
+
+.sl-markdown-content .ms--v0 {
+	color: var(--sl-color-accent);
+}
+
+/* Mermaid: render at natural size and scroll, rather than scaling down to fit.
+ * The natural width is pinned in public/mermaid-init.js; this rule only provides
+ * the scroll container. (Same approach as Paddock's docs.) */
+.sl-markdown-content pre.mermaid {
+	overflow-x: auto;
+	/* Room for the scrollbar when a wide diagram needs one. */
+	padding-block: 0.5rem;
+}
+
+.sl-markdown-content pre.mermaid > svg {
+	display: block;
+	/* Centre it when it is narrower than the column. */
+	margin-inline: auto;
+	height: auto;
+}
