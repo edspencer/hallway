@@ -30,7 +30,7 @@ export const QUICKSTART = {
 	id: 'install',
 	label: 'Install',
 	soon: 'Coming soon',
-	blurb: 'Not released yet: the npm name is reserved with an empty placeholder while Hallway is built in the open from a detailed spec. macOS first, Node 22+.',
+	blurb: 'Not released yet: the npm name is reserved with an empty placeholder while Hallway is built in the open from a detailed spec. macOS first, Node 22.13+.',
 	command: `${INSTALL_COMMAND} && hallway service install`,
 	link: { text: 'What it will look like', href: '/getting-started/quickstart/' },
 } as const;
