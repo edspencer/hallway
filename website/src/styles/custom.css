@@ -166,18 +166,18 @@ header.header button[data-open-modal] kbd {
 
 /* The light theme needs darker state colours to keep 4.5:1 on the daylit ground. */
 :root[data-theme='light'] .sl-markdown-content .state--healthy {
-	color: #3d7a2a;
+	color: #2f7d32; /* app light --hw-healthy */
 }
 :root[data-theme='light'] .sl-markdown-content .state--unhealthy {
-	color: #9a5a00;
+	color: #9a6400; /* app light --hw-unhealthy */
 }
 :root[data-theme='light'] .sl-markdown-content .state--down {
-	color: #b3261e;
+	color: #c62f22; /* app light --hw-down */
 }
 :root[data-theme='light'] .sl-markdown-content .state--stopped,
 :root[data-theme='light'] .sl-markdown-content .state--unknown,
 :root[data-theme='light'] .sl-markdown-content .state--starting {
-	color: #6e604f;
+	color: #7a6e62; /* app light --hw-stopped */
 }
 
 /*

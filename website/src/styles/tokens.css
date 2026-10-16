@@ -8,6 +8,11 @@
  *
  * Both the docs (custom.css, on top of Starlight) and the landing page (landing.css, outside Starlight) import it.
  *
+ * The values are the app's (src/theme/tokens.css at the repo root, D28), copied rather than imported so the site stays
+ * self-contained (Cloudflare builds with website/ as its root). Each copied value names its app token; keep them in
+ * step when the app's palette changes. The extra values here (light state colours, wood tones for the header) are
+ * the website's own.
+ *
  * Fonts are all OFL-licensed and self-hosted from @fontsource-variable packages (imported in astro.config.mjs and
  * LandingLayout.astro): Fraunces for nameplates and headings, Inter for text, JetBrains Mono for door numbers and
  * other figures.
@@ -15,43 +20,44 @@
 
 :root {
 	/* ---- night: the dark theme, and the landing page --------------------------------------------------------- */
-	--hw-night-ground: #14110d; /* the page: warm near-black, never blue-black */
-	--hw-night-raised: #1f1a14; /* cards, doors */
-	--hw-night-sunken: #0d0b08; /* terminal wells */
+	--hw-night-ground: #15110e; /* app --hw-bg: the page, warm near-black, never blue-black */
+	--hw-night-raised: #1e1915; /* app --hw-bg-raised: cards, doors */
+	--hw-night-sunken: #100d0b; /* app --hw-bg-sunken: terminal wells */
 	--hw-night-hover: #2a231b;
-	--hw-night-text: #f3ece2;
-	--hw-night-text-muted: #c9bca9;
-	--hw-night-text-subtle: #a39580;
-	--hw-night-border-subtle: #2c251d;
-	--hw-night-border: #3d3328;
+	--hw-night-text: #ede4d8; /* app --hw-text */
+	--hw-night-text-muted: #a8998a; /* app --hw-text-muted */
+	--hw-night-text-subtle: #8f8478; /* app --hw-stopped (5.1:1; the app's --hw-text-faint is too faint for text) */
+	--hw-night-border-subtle: #2f2822; /* app --hw-line */
+	--hw-night-border: #4c3e33; /* app --hw-door-edge */
 	--hw-night-border-strong: #6b5a45;
 
 	/* ---- day: the light theme ---------------------------------------------------------------------------------- */
-	--hw-day-ground: #f8f3eb;
-	--hw-day-raised: #fffaf3;
-	--hw-day-text: #2a221a;
-	--hw-day-text-muted: #5b4d3d;
-	--hw-day-border: #e3d7c5;
+	--hw-day-ground: #f6f1e9; /* app light --hw-bg */
+	--hw-day-raised: #fffbf4; /* app light --hw-bg-raised */
+	--hw-day-text: #2a211b; /* app light --hw-text */
+	--hw-day-text-muted: #6b5d50; /* app light --hw-text-muted */
+	--hw-day-border: #ddd1c0; /* app light --hw-line */
 
 	/* ---- the accent: lamplight -------------------------------------------------------------------------------- */
-	--hw-amber: #f0b45a; /* lamplight; on dark grounds only */
-	--hw-amber-rgb: 240 180 90;
-	--hw-amber-bright: #f7c87e;
-	--hw-amber-deep: #8a5a14; /* the accent as text on light grounds (amber itself is ~1.8:1 on white) */
+	--hw-amber: #f0b35a; /* app --hw-accent: lamplight; on dark grounds only */
+	--hw-amber-rgb: 240 179 90;
+	--hw-amber-bright: #ffd08a; /* app --hw-lamplight */
+	--hw-amber-deep: #8a5a14; /* the accent as TEXT on light grounds: 5.6:1. Deliberately darker than the app's light
+	                               --hw-accent (#a8641b), which is 4.15:1 on the light ground, under AA for body text. */
 	--hw-amber-wash: #3a2a14; /* a low, warm tint behind amber things on dark */
 	--hw-ink: #24180a; /* text on amber */
 
 	/* ---- wood and brass: the corridor itself --------------------------------------------------------------------- */
-	--hw-wood: #5a4330;
-	--hw-wood-dark: #2b2017;
-	--hw-brass: #d9a55b; /* door-number plates on dark */
+	--hw-wood: #4c3e33; /* app --hw-door-edge */
+	--hw-wood-dark: #241d18; /* app --hw-floor */
+	--hw-brass: #f0b35a; /* door-number plates on dark: the app uses its accent (--hw-accent) for them */
 
 	/* ---- door states (docs/04 "Health states"); always paired with a shape and a word ---------------------------- */
-	--hw-state-healthy: #8fc27a; /* door ajar, warm light */
-	--hw-state-unhealthy: #f0a040; /* flickering */
-	--hw-state-down: #e5675a; /* dark or boarded up: the only alarm */
-	--hw-state-stopped: #8d8273; /* closed: calm, neutral */
-	--hw-state-unknown: #6b6257; /* in shadow */
+	--hw-state-healthy: #8fcf7e; /* app --hw-healthy: door ajar, warm light */
+	--hw-state-unhealthy: #e8b44a; /* app --hw-unhealthy: flickering */
+	--hw-state-down: #ff6b5e; /* app --hw-down: dark or boarded up, the only alarm */
+	--hw-state-stopped: #8f8478; /* app --hw-stopped: closed, calm, neutral */
+	--hw-state-unknown: #6f6358; /* app --hw-unknown: in shadow */
 
 	/* ---- type --------------------------------------------------------------------------------------------------- */
 	--hw-font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
