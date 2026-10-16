@@ -49,6 +49,9 @@ async function serve(flags: Record<string, string>) {
   // the scanner, prober and uptime history (server/live.ts): plugged in once the port is ours
   const [{ startLive }, { providers }] = await Promise.all([import('./live.js'), import('./providers.js')]);
   await startLive({ store, bus: store.bus, providers, selfPorts: process.env.HALLWAY_DEV ? [bound, DEFAULT_PORT] : [bound] });
+  // fronted mode: Caddy's config and the fallback page, pushed now and on every change (server/proxy/)
+  const [{ startProxy, restartCommands }, { currentPlatform }] = await Promise.all([import('./proxy/index.js'), import('./platform/index.js')]);
+  await startProxy({ store, bus: store.bus, daemonPort: bound, restart: restartCommands(currentPlatform().serviceManager) });
   let out = `Hallway on http://localhost:${bound}\n`;
   if (!flags.quiet) {
     out += `Data home: ${tildify(dataPaths(HOME).home)}\n`;

@@ -53,7 +53,7 @@ export const ALWAYS_RESERVED = ['www', 'api'];
 export const defaultDashboardHost = (base: string) => (base === 'localhost' ? 'hallway.localhost' : base);
 
 /** Slugs an app can't have: `www`, `api`, and the dashboard's label if the dashboard is `<label>.<base>`. */
-export function reservedSlugs(cfg: Pick<HallwayConfig, 'domain'>): string[] {
+export function reservedSlugs(cfg: { domain: Pick<HallwayConfig['domain'], 'base' | 'dashboard'> }): string[] {
   const { base, dashboard } = cfg.domain;
   const label = dashboard.endsWith('.' + base) ? dashboard.slice(0, -base.length - 1) : null;
   return [...new Set([...(label && SLUG.test(label) ? [label] : []), ...ALWAYS_RESERVED])];
@@ -203,6 +203,17 @@ export const CONFIG_SCHEMA: Field = {
         base: str('Apps are served at `<slug>.<base>`.', { default: 'localhost', pattern: HOSTNAME, patternDoc: 'a host name' }),
         dashboard: str('Where the dashboard is in fronted mode.', { defaultDoc: '`hallway.localhost` when `base` is `localhost`, else `<base>`', pattern: HOSTNAME, patternDoc: 'a host name' }),
         tls: { t: 'bool', default: true, doc: 'Fronted mode is always HTTPS.' },
+        dnsPort: port('Custom domains only: the loopback port Hallway\'s own dnsmasq answers on (the resolver configuration points at it).', { default: 4253 }),
+      },
+    },
+    proxy: {
+      t: 'object',
+      doc: 'Fronted mode\'s Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` redirects 443 and 80 to them.',
+      fields: {
+        caddy: str('The Caddy binary.', { nullable: true, default: null, defaultDoc: '`caddy` on your PATH, else Homebrew\'s' }),
+        httpsPort: port('The loopback port Caddy serves HTTPS on.', { default: 4443 }),
+        httpPort: port('The loopback port Caddy serves HTTP (a redirect to HTTPS) on.', { default: 4480 }),
+        publicPort: port('The HTTPS port in links: 443 once `hallway setup` has redirected it to `httpsPort`. Set it to `httpsPort` to use fronted mode with no setup (links then carry the port).', { default: 443 }),
       },
     },
     probe: {

@@ -201,16 +201,16 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
       : {}),
   });
 
-  // Config and app files change under us (API writes and hand edits alike): re-read the probe targets. One of the
-  // bus's subscribers is this one, so "a dashboard is open" means more than one.
+  // Config and app files change under us (API writes and hand edits alike): re-read the probe targets. This is an
+  // internal subscriber, as are the thumbnailer and the proxy, so `bus.size` counts open dashboards only.
   const onEvent = (e: ServerEvent) => {
     if (e.type === 'app' || e.type === 'apps' || e.type === 'config') {
       health.prober.refresh();
       historyCache.clear();
     }
   };
-  const unsubscribe = bus.subscribe(onEvent);
-  const liveTimer = setInterval(() => health.prober.setLive(bus.size > 1), 2000);
+  const unsubscribe = bus.subscribe(onEvent, { internal: true });
+  const liveTimer = setInterval(() => health.prober.setLive(bus.size > 0), 2000);
   liveTimer.unref();
 
   // the first scan takes a couple of seconds (sniffs time out at 2 s): don't hold the daemon's start-up for it
