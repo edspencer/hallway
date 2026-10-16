@@ -100,7 +100,7 @@ export function claimFile(o: ObservedListener, req: ClaimRequest) {
   if (id.command) {
     const argv = id.command.split(/\s+/).filter(Boolean);
     footer = [
-      ' To have Hallway keep it running as a service (v1), uncomment this and check the command:',
+      ' To have Hallway keep it running as a service, uncomment this and check the command (or use `hallway service add`):',
       ' service:',
       `   command: ${JSON.stringify(argv)}`,
       ...(id.cwd ? [`   cwd: ${tildify(id.cwd)}`] : []),

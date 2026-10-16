@@ -113,7 +113,7 @@ export const APP_SCHEMA: Field = {
     service: {
       t: 'object',
       optional: true,
-      doc: 'Present: Hallway keeps it running as a native service (v1). Write it with the CLI (`hallway run`, `hallway service add`), not by hand.',
+      doc: 'Present: Hallway keeps it running as a native service (launchd / systemd). Write it with the CLI (`hallway run`, `hallway service add`), not by hand.',
       fields: {
         command: { t: 'list', of: str('an argument'), minItems: 1, required: true, doc: 'The command, as an argv array: `["npm", "run", "dev"]`.' },
         cwd: str('The working directory (`~` allowed).', { nullable: true, default: null }),
@@ -233,7 +233,7 @@ export const CONFIG_SCHEMA: Field = {
     },
     services: {
       t: 'object',
-      doc: 'Managed services (v1).',
+      doc: 'Managed services (`hallway run`, `hallway service add`).',
       fields: {
         startGraceSeconds: posInt('A service just started is `starting`, not `down`, for this long.', 30, 0),
         logMaxBytes: posInt('Rotate a service\'s log above this size.', 10485760, 1024),

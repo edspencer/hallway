@@ -5,6 +5,14 @@ thing, not by reading the code.
 
 ## v0 — The front page
 
+> **Status: done, released as 0.1.0 (2026-10-16).** Every criterion below was checked by running the packed tarball
+> on Linux (results and numbers: `11-research-notes.md`, "The v0 acceptance run"). Caveats, honestly: criterion 1's
+> "after logging out and back in, and after a reboot" was not run: CI's real launchd and systemd jobs install the
+> daemon, restart it and check it answers (systemd with lingering on), but never log out or reboot; and macOS has
+> only been exercised on CI runners, so the items in `11-research-notes.md`, "Platform support (D26): unverified on
+> macOS", still stand. v1's managed services (`hallway run`, `stop`/`start`/`restart`/`logs`,
+> `hallway service add/rm/regenerate`, log rotation) shipped early, in the same release.
+
 **Scope:** daemon; dashboard; YAML store with live updates; health probes with state and 24 h history; scanner with
 identity, claim and ignore; bookmarks; favicon/colour thumbnails; agent guide and `llms.txt`; `hallway service install`
 for the daemon itself; `hallway doctor` (daemon/data checks). **Direct mode only. No sudo anywhere.**
