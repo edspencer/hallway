@@ -7,7 +7,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, rmTmp, stopChild } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -34,7 +34,7 @@ const free = (port: number) =>
     s.listen(port, '127.0.0.1', () => s.close(() => resolve(true)));
   });
 
-after(() => fs.rmSync(ROOTDIR, { recursive: true, force: true }));
+after(() => rmTmp(ROOTDIR));
 
 describe('hallway app and bookmark commands', () => {
   test('app add (with an assigned port), app ls --json, refusals, app rm', async () => {
@@ -86,7 +86,7 @@ describe('scan, claim, ignore and status without a daemon', () => {
     server = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('<title>Scratch</title>')).listen(${port}, '127.0.0.1')`], { cwd: dir, stdio: 'ignore' });
     for (let i = 0; i < 50 && (await free(port)); i++) await new Promise((r) => setTimeout(r, 100));
   });
-  after(() => server?.kill());
+  after(() => stopChild(server));
 
   test('scan --json finds the listener, labelled with its directory', async () => {
     const r = await hallway(['scan', '--json']);

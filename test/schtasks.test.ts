@@ -10,7 +10,7 @@ import { jobPath, quoteArg, renderJob, renderTask, schtasksManager, taskEnabled 
 import { cmdQuote, launchArgs, mergeEnv, readState, stateFileOf, supervise } from '../server/platform/supervise.ts';
 import { splitCommandLine } from '../server/platform/win32.ts';
 import { candidates, which } from '../server/services/resolve.ts';
-import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -24,7 +24,7 @@ const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));
 const tmp = (p: string) => {
   const d = tmpDir(p);
-  cleanups.push(() => fs.rmSync(d, { recursive: true, force: true }));
+  cleanups.push(() => rmTmp(d));
   return d;
 };
 

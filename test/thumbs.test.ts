@@ -10,7 +10,7 @@ import { createApp } from '../server/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
 import { findFavicon, parseIconLinks, parseManifest, parseSizes, rankCandidates, sniffImage } from '../server/thumbs/favicon.ts';
 import { IconCache, appPageUrl, iconSource, startThumbs } from '../server/thumbs/index.ts';
-import { exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -159,7 +159,7 @@ describe('icon sources', () => {
 describe('IconCache', () => {
   test('answers at once, looks up in the background, and tells when it changes', async () => {
     const dir = tmpDir('hw-test-icons-');
-    cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(dir));
     let now = 1000;
     const changed: string[] = [];
     const cache = new IconCache(dir, { now: () => now, onChange: (k) => changed.push(k) });

@@ -12,7 +12,7 @@ import { EventBus } from '../server/events.ts';
 import { startServer } from '../server/index.ts';
 import { headerValue, headersFor, runBridge, sseMessages } from '../server/mcp/bridge.ts';
 import { ProviderRegistry } from '../server/providers.ts';
-import { ROOT, exitWatchdog, tmpDir } from './fixture.ts';
+import { ROOT, exitWatchdog, tmpDir, rmTmp } from './fixture.ts';
 
 void exitWatchdog();
 const cleanups: (() => void | Promise<void>)[] = [];
@@ -28,7 +28,7 @@ async function daemon() {
   const server = await startServer(0, { home, webDist: null, thumbs: false, bus: new EventBus(), providers: new ProviderRegistry() });
   cleanups.push(async () => {
     await server.close();
-    fs.rmSync(home, { recursive: true, force: true });
+    rmTmp(home);
   });
   return { home, server };
 }
@@ -57,7 +57,7 @@ describe('hallway mcp (a real child process)', () => {
 
   test('without a daemon it exits 1 and says how to start one', () => {
     const home = tmpDir('hw-bridge-none-');
-    cleanups.push(() => fs.rmSync(home, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(home));
     // a port nothing listens on, so a daemon someone runs on 4255 can't be found by accident
     fs.writeFileSync(path.join(home, 'config.yaml'), 'version: 1\nport: 1\n');
     const r = spawnSync(process.execPath, [...cli, 'mcp'], { input: '', encoding: 'utf8', env: { ...process.env, HALLWAY_HOME: home, HOME: home }, cwd: ROOT });

@@ -1,10 +1,38 @@
 // Throwaway directories under the OS temp dir. Tests never touch a real data home (~/.hallway).
+import type { ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Remove a throwaway directory. Windows refuses to delete a file another process still has open, or a directory that
+ * is a running process's working directory, and handles close a moment after the process that held them exits; so
+ * this retries for about a second (Node's own EBUSY/EPERM/ENOTEMPTY retry) before failing. Stop whatever uses the
+ * directory first (stopChild); the retries cover the OS catching up, not a process that's still running, and a
+ * process that never stops is still caught: by this failing, and by exitWatchdog.
+ */
+export function rmTmp(dir: string) {
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+}
+
+/** Kill a child process and wait until it has exited (killing alone returns at once, while it still holds its cwd). */
+export function stopChild(child: ChildProcess | null | undefined, timeoutMs = 5000): Promise<void> {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve();
+    }, timeoutMs);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    child.kill();
+  });
+}
 
 export function tmpDir(prefix: string) {
   // .native: on Windows it also expands 8.3 short names (C:\Users\RUNNER~1), which git and the OS report in full
@@ -18,7 +46,7 @@ export async function tmpStore(prefix = 'hw-test-home-') {
   const home = tmpDir(prefix);
   const bus = new EventBus();
   const store = new Store(home, { bus }).init();
-  return { home, bus, store, cleanup: () => fs.rmSync(home, { recursive: true, force: true }) };
+  return { home, bus, store, cleanup: () => rmTmp(home) };
 }
 
 /**

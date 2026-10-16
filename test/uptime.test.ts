@@ -10,12 +10,12 @@ import path from 'node:path';
 import { UptimeStore, percentile } from '../server/health/uptime.ts';
 import { startHealth } from '../server/health/index.ts';
 import type { Sample } from '../server/prober/index.ts';
-import { exitWatchdog, tmpDir } from './fixture.ts';
+import { exitWatchdog, tmpDir, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
 const TMP = tmpDir('hw-test-uptime-');
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => rmTmp(TMP));
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;

@@ -7,12 +7,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { UptimeStore } from '../server/health/uptime.ts';
-import { exitWatchdog, tmpDir } from './fixture.ts';
+import { exitWatchdog, tmpDir, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
 const TMP = tmpDir('hw-test-uptime-perf-');
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => rmTmp(TMP));
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;

@@ -9,7 +9,7 @@ import { createApp, startServer } from '../server/index.ts';
 import { locateDaemon } from '../server/commands/context.ts';
 import { readDaemonRecord, writeDaemonRecord } from '../server/daemonfile.ts';
 import { isLocalHost, isLocalOrigin } from '../server/security.ts';
-import { exitWatchdog, ROOT, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -23,7 +23,7 @@ fs.writeFileSync(path.join(WEB, 'assets', 'index-abc123.js'), 'console.log(1)');
 fs.writeFileSync(path.join(WEB, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
 const { store, cleanup } = await tmpStore();
 after(() => {
-  fs.rmSync(WEB, { recursive: true, force: true });
+  rmTmp(WEB);
   cleanup();
 });
 
@@ -120,7 +120,7 @@ describe('the dashboard', () => {
       assert.equal(res.status, 500);
       assert.match(await res.text(), /npm run build/);
     } finally {
-      fs.rmSync(empty, { recursive: true, force: true });
+      rmTmp(empty);
     }
   });
 
