@@ -89,7 +89,7 @@ Mirror Local Review (D16). Keep dependencies minimal.
     boot.json                 # last seen boot time, to detect reboots
   cache/                      # machine-written; regenerable
     thumbs/<slug>.<hash>.png
-    favicons/<slug>.<hash>.<ext>
+    favicons/<hash>.img, <hash>.json   # tier-1 icons for apps and bookmarks, and what was looked up (D39)
   generated/                  # machine-written; regenerable
     caddy.json                # last config pushed to Caddy (v1)
   logs/
@@ -237,7 +237,7 @@ it; nothing else writes those files.
 - **Atomic writes:** write `<file>.tmp-<pid>`, then `rename`. The watcher ignores `*.tmp*` files (Local Review does the
   same).
 - **Validate before writing.** Reject invalid slugs, ports outside 1–65535, unknown enum values. Validation is
-  hand-rolled, with the schemas as data, and the agent guide's file reference is generated from them (D37). PUT and
+  hand-rolled, with the schemas as data, and the agent guide's file reference is generated from them (D32). PUT and
   PATCH semantics: D33.
 - **Optimistic concurrency** for API/MCP writes: reads return an ETag (hash of file bytes); writes may send
   `If-Match`; a mismatch returns 409 so the UI or agent can re-read. Local Review has the same idea
@@ -315,10 +315,11 @@ All JSON. All under the security middleware below.
 | PATCH | `/api/apps/:slug` | Partial update |
 | DELETE | `/api/apps/:slug` | Remove declared app (moves file to `backups/`, never hard-deletes) |
 | GET | `/api/apps/:slug/history?window=24h\|7d\|90d` | Uptime buckets + latency series |
-| GET | `/api/apps/:slug/thumb` | Thumbnail image, with ETag |
+| GET | `/api/apps/:slug/thumb` | Thumbnail image, with ETag (its etag is also `thumb` on the AppView) |
 | POST | `/api/apps/:slug/service/:action` | `start`/`stop`/`restart` a managed service (v1) |
 | GET | `/api/apps/:slug/logs?lines=200` | Tail of a managed service's logs (v1) |
 | GET | `/api/bookmarks` | All groups |
+| GET | `/api/bookmarks/:group/icon?url=` | A bookmark's favicon, for a URL in that group only; 204 while there's none (D39) |
 | GET/PUT/PATCH/DELETE | `/api/bookmarks/:group` | One group; upsert; merge-patch; remove (moves the file to `backups/`) |
 | GET | `/api/config` | The settings in force, with the file's ETag and problems |
 | GET | `/api/observed` | Observed listeners with identity |

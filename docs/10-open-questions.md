@@ -23,7 +23,7 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
 |----|----------|-----------------|
 | Q-STORE | **Resolved 2026-10-16 (D37):** `node:sqlite`, in `state/health.sqlite`. | |
 | Q-DASHBOARD-HOST | Default dashboard hostname in `localhost` mode: `hallway.localhost` (current spec), a shorter `hall.localhost`, or bare `localhost`? | `hallway.localhost`: it matches the product and binary name. Bare `localhost` on :443 may collide with other tools. Whichever is chosen is a reserved app slug. |
-| Q-VALIDATION | Hand-rolled validation or a small schema library? | **Resolved (D37):** hand-rolled, with the schemas as data in `server/store/schema.ts`; the agent guide's file-format reference is generated from them. |
+| Q-VALIDATION | Hand-rolled validation or a small schema library? | **Resolved (D32):** hand-rolled, with the schemas as data in `server/store/schema.ts`; the agent guide's file-format reference is generated from them. |
 | Q-BOOKMARK-HEALTH | Health-check remote bookmarks? | Off by default; maybe opt-in per link later. Remote checks leak timing/traffic and often hit auth walls. |
 | Q-MCP-AUTH | Should `/mcp` require a token? | No for v2 (same trust boundary as the data home). Revisit if MCP ever gains process control. |
 | Q-MCP-RESTART | Allow MCP `restart_app` for services already installed via CLI? | Plausible middle ground; decide when v2 starts. |

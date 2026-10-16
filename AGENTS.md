@@ -5,9 +5,9 @@
 Hallway is **pre-release**. The repository holds a complete **specification** and the **start of the
 implementation**: the package, build, CI and release machinery, the daemon core (`hallway serve` and `guide`, the data
 home and its store, the watcher, event bus and SSE, the HTTP API, the agent guide and `llms.txt`, the security
-middleware, the platform abstraction) and a placeholder dashboard. The scanner, prober and uptime history are built and
-plug into the core as a provider (`server/live.ts`, D35); services and the proxy are still to be built, milestone by
-milestone.
+middleware, the platform abstraction, tier-1 thumbnails) and the v0 dashboard. The scanner, prober and uptime
+history are built and plug into the core as a provider (`server/live.ts`, D35); services and the proxy are still to be
+built, milestone by milestone.
 
 Nobody who took part in the design discussion will be available to answer questions, so the spec is deliberately
 exhaustive: it records decisions, their rationale, the alternatives that were rejected, verified facts, and open
@@ -72,6 +72,7 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
                    listener/process parsers are pure functions tested against test/fixtures/platform/
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
+  thumbs/          tier-1 thumbnails: favicon lookup (favicon.ts) and the cached provider for apps and bookmarks
   scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
                    (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
@@ -79,7 +80,13 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
 shared/            types used by both server/ and src/ (no imports, no Node or DOM APIs): api.ts is the API contract
 AGENT-GUIDE.md     the guide for coding agents (shipped; its file reference is generated: npm run sync:guide)
 src/               the dashboard (React, built by Vite into dist/web)
-  theme/tokens.css every colour, typeface and radius
+  App.tsx          the page: sections in `dashboard.sections` order, filter, drawer, help, empty states
+  live.ts          GET /api/state, then SSE: refetch what each event names, reconnect with backoff
+  api.ts           the client for the HTTP API (writes return conflict/invalid results for the forms)
+  keyboard.ts      `/`, arrows (spatial), `c`, `i`, Esc, `?`;  ambient.ts: tab title + canvas favicon (D22)
+  components/      Door (app card), UptimeBar, Drawer, Observed tray, Bookmarks, Header, Problems, Empty, …
+  lib/             pure logic, tested under node: status counts, formatting, filter, door paint
+  theme/tokens.css every colour, typeface and radius (theme.ts applies `dashboard.theme`)
   brand/           the provisional mark
 public/            static files copied into dist/web (favicon.svg)
 test/              node:test suites, run from source via tsx

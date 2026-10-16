@@ -1,10 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- the one request that paints the page: start it alongside the scripts rather than after them -->
+    <link rel="preload" href="/api/state" as="fetch" crossorigin="anonymous" />
     <title>Hallway</title>
+    <script>
+      // The theme before the first paint (no flash): dashboard.theme from the last visit, else the system's.
+      // src/theme/theme.ts takes over once the page has loaded.
+      (function () {
+        var pref = 'auto';
+        try {
+          pref = localStorage.getItem('hallway.theme') || 'auto';
+        } catch (e) {}
+        var light = pref === 'light' || (pref === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches);
+        document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
