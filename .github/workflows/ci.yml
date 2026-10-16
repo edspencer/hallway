@@ -98,6 +98,29 @@ jobs:
         run: node scripts/services-real.mjs
 
   # ---------------------------------------------------------------------------------------------------------------
+  # The Windows scanner for real (D59): as the runner's administrator, then as a new standard user through a scheduled
+  # task, since reading another process's working directory without administrator rights is the case that matters.
+  # It creates a local user, which is why it runs only here.
+  # ---------------------------------------------------------------------------------------------------------------
+  scanner-windows:
+    name: Scanner (real Windows, standard user)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: As the runner (an administrator)
+        run: node scripts/scanner-real-win.mjs
+      - name: As a standard user, through a scheduled task
+        shell: pwsh
+        run: ./scripts/scanner-real-win.ps1
+
+  # ---------------------------------------------------------------------------------------------------------------
   # Fronted mode for real (D47): `hallway setup` with the runner's passwordless sudo installs the 443/80 redirect (pf
   # on macOS, nftables on Linux), trusts Hallway's CA system-wide and runs Caddy (and, for a custom domain, dnsmasq)
   # as user-level jobs; scripts/fronted-real.mjs then checks v1's acceptance criteria with curl and the system trust
@@ -203,7 +226,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [test, services, fronted, website]
+    needs: [test, services, scanner-windows, fronted, website]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to have passed
