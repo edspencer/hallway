@@ -66,7 +66,7 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D1 | Name: **Hallway** (originally Spaghetti Junction; renamed October 2026); npm package `hallway` (unscoped, free as of 2026-10-16); CLI binary `hallway` (a short alias, `hw`, is proposed but not decided: Q-BINARY) |
 | D2 | Standalone, generic, open-source project. Not a feature of any other tool. |
 | D3 | It owns its own app registry and uses **native launchd** (systemd user units on Linux, D26) to keep services alive. No PM2. |
-| D4 | **Caddy** is the reverse proxy and TLS terminator. Hallway generates Caddy's config; it does not proxy traffic itself. |
+| D4 | **Caddy** is the reverse proxy and TLS terminator. Hallway generates Caddy's config; it does not proxy traffic itself. Caddy runs as the user (D47). |
 | D5 | Default domain is **`localhost`** (`<slug>.localhost`): resolves to loopback with zero DNS setup and gets Caddy's local CA automatically. Custom domains are supported via dnsmasq + `/etc/resolver`; `.internal` (e.g. `myname.internal`) is the recommended custom choice. |
 | D6 | **HTTPS is required** in fronted mode. |
 | D7 | **YAML on disk is the source of truth.** The API, CLI and MCP are all wrappers around one write module. Hand edits are first-class. |
@@ -102,6 +102,8 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D37 | Uptime history in **`node:sqlite`** (`state/health.sqlite`); `engines.node` raised to **≥ 22.13**, the first 22.x that loads it without a flag. |
 | D38 | Scanner and prober details: `/proc` fallback on Linux, cwd-as-project, `repo @ branch` rules, observation ids, damping of any move off `healthy`, uptime bar sizes. |
 | D39 | The v0 dashboard: one `/api/state` paints it, SSE refetches what each event names; tier-1 favicons from `server/thumbs/` (colour picked in the browser); "not checked" when no prober runs; bundled OFL fonts; contrast-checked tokens. |
+| D47 | Fronted mode: **Caddy runs as you** on loopback 4443/4480, its admin API a 0600 Unix socket; the only root parts are a fixed 443/80 redirect (pf on macOS, nftables on Linux), the trusted CA root and, for a custom domain, the resolver (to Hallway's user-level dnsmasq). No `--resume`: Caddy starts from `generated/caddy.json`. Dashboard at `hallway.localhost`. |
+| D48 | `hallway setup`/`teardown` are printed plans (`--print` runs nothing), idempotent by checking the real thing; refusals (`.local`, HSTS TLDs, a held 443) and warnings; doctor's networking checks; cards show `:port` beside the hostname. |
 
 ## 5. Glossary
 

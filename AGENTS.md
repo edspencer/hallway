@@ -7,7 +7,8 @@ implementation**: the package, build, CI and release machinery, the daemon core 
 home and its store, the watcher, event bus and SSE, the HTTP API, the agent guide and `llms.txt`, the security
 middleware, the platform abstraction, tier-1 thumbnails), the scanner, prober and uptime history (plugged into the
 core as a provider, `server/live.ts`, D35), the CLI commands and managed services (`hallway run`, launchd / systemd
-user units, log rotation, `doctor`) and the v0 dashboard. The proxy is still to be built, milestone by milestone.
+user units, log rotation, `doctor`), the v0 dashboard, and v1's fronted mode (`server/proxy/`: Caddy as a user-level
+job, `hallway setup` / `teardown`, doctor's networking checks; D47, D48).
 
 Nobody who took part in the design discussion will be available to answer questions, so the spec is deliberately
 exhaustive: it records decisions, their rationale, the alternatives that were rejected, verified facts, and open
@@ -83,6 +84,10 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
                    (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
   health/          uptime.ts (samples + hourly rollups in state/health.sqlite, node:sqlite), index.ts (startHealth)
+  proxy/           fronted mode (D47): caddy.ts (apps + config → Caddy JSON), fallback.ts (generated/fallback.html),
+                   index.ts (the daemon pushes on every change), admin.ts (the admin socket), setup.ts (setup and
+                   teardown: facts → plan → run), doctor.ts (networking checks), tld.ts, probe.ts, names.ts
+  platform/fronting-*.ts  the privileged recipes per OS: the 443/80 redirect (pf / nftables), trust, the resolver
 shared/            types used by both server/ and src/ (no imports, no Node or DOM APIs): api.ts is the API contract
 AGENT-GUIDE.md     the guide for coding agents (shipped; its file reference is generated: npm run sync:guide)
 src/               the dashboard (React, built by Vite into dist/web)

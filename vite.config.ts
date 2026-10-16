@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+import fs from 'node:fs';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { DEFAULT_PORT } from './server/port.ts';
 
@@ -8,8 +9,18 @@ import { DEFAULT_PORT } from './server/port.ts';
 const webPort = Number(process.env.HALLWAY_WEB_PORT ?? DEFAULT_PORT);
 const apiPort = Number(process.env.HALLWAY_API_PORT ?? DEFAULT_PORT + 1);
 
+// The design tokens, as a file of their own in dist/web: the static fallback page Caddy serves when the daemon is down
+// (server/proxy/fallback.ts) inlines them, so it looks like the dashboard. src/theme/tokens.css stays the one source.
+const tokensAsset = (): Plugin => ({
+  name: 'hallway-tokens-asset',
+  apply: 'build',
+  generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'tokens.css', source: fs.readFileSync('src/theme/tokens.css', 'utf8') });
+  },
+});
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tokensAsset()],
   server: {
     port: webPort,
     host: '127.0.0.1',

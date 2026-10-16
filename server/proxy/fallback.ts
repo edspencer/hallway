@@ -7,11 +7,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { HallwayConfig } from '../../shared/api.js';
-import { ROOT } from '../config.js';
+import { ROOT, WEB_DIST } from '../config.js';
 import type { ProxyAppInput } from './caddy.js';
 import { appHosts, dialAddress, httpsUrl } from './names.js';
 
-export const TOKENS_CSS = path.join(ROOT, 'src', 'theme', 'tokens.css');
+/** The design tokens: the copy Vite puts in the built dashboard (the npm package), else the source (a checkout). */
+export const TOKENS_CSS = [path.join(WEB_DIST, 'tokens.css'), path.join(ROOT, 'src', 'theme', 'tokens.css')];
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -28,7 +29,7 @@ export interface FallbackInput {
 }
 
 export function fallbackHtml({ config, apps, restart, directUrl, now = new Date(), tokens }: FallbackInput): string {
-  const css = tokens ?? safeRead(TOKENS_CSS);
+  const css = tokens ?? TOKENS_CSS.map(safeRead).find(Boolean) ?? '';
   const sorted = [...apps].sort((a, b) => a.config.name.localeCompare(b.config.name) || a.slug.localeCompare(b.slug));
   const data = {
     dashboard: config.domain.dashboard.toLowerCase(),
