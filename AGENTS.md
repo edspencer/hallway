@@ -11,7 +11,7 @@ guide and `llms.txt`, the security middleware, the platform abstraction), the sc
 hourly rollups (plugged into the core as a provider, `server/live.ts`, D35, D57), the CLI commands and managed
 services (`hallway run`, launchd / systemd user units, log rotation, `doctor`), the dashboard, v1's fronted mode
 (`server/proxy/`: Caddy as a user-level job, `hallway setup` / `teardown`, doctor's networking checks; D47, D48) and
-"Lost at last reboot" (`server/lost/`, D54), and v2's MCP server (`server/mcp/`, D52, D53), the dev-server hook
+"Lost at last reboot" (`server/lost/`, D54), and v2's MCP server (`server/mcp/`, D50–D53), the dev-server hook
 (`server/hook.ts`, D51) and thumbnails: favicons, generated cards and opt-in screenshots (`server/thumbs/`, D55–D57).
 
 Nobody who took part in the design discussion will be available to answer questions, so the spec is deliberately
@@ -96,7 +96,7 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   health/          uptime.ts (samples + hourly rollups in state/health.sqlite, node:sqlite), index.ts (startHealth)
   lost/            "Lost at last reboot" (D54): index.ts (what was running before the reboot and isn't now, state/lost.json),
                    actions.ts (restart once, make it a service, dismiss)
-  mcp/             the MCP server (D52, D53): index.ts (`/mcp`, Streamable HTTP), tools.ts (the tools and resources; none
+  mcp/             the MCP server (D50–D53): index.ts (`/mcp`, Streamable HTTP), tools.ts (the tools and resources; none
                    starts a process), bridge.ts (`hallway mcp`: stdio forwarded to the daemon's `/mcp`)
   proxy/           fronted mode (D47): caddy.ts (apps + config → Caddy JSON), fallback.ts (generated/fallback.html),
                    index.ts (the daemon pushes on every change), admin.ts (the admin socket), setup.ts (setup and
