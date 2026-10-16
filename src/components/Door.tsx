@@ -26,6 +26,15 @@ export function subtitle(app: AppView): string | null {
   return app.identity?.label ?? app.config?.description ?? null;
 }
 
+/**
+ * The uptime bar sits above the card's link so its bars can be hovered; a click on it still opens the app, as a click
+ * anywhere else on the door does (with the same modifier keys, so ⌘-click is still a new tab).
+ */
+function passThrough(e: React.MouseEvent) {
+  const link = (e.currentTarget as HTMLElement).closest('.hw-door')?.querySelector<HTMLElement>('.hw-door-link');
+  link?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, button: e.button }));
+}
+
 export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   const state = doorState(app);
   const thumb = app.thumb ? thumbUrl(app.slug, app.thumb) : null;
@@ -75,7 +84,7 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
             </button>
           )}
         </div>
-        <UptimeBar history={app.history} label={`${app.name}, last 24 hours`} />
+        <UptimeBar history={app.history} label={`${app.name}, last 24 hours`} onClick={passThrough} />
         <div className="hw-door-foot">
           <StateMark state={state} label={unchecked ? 'not checked' : undefined} />
           <span className="hw-door-stats">{stats || (expected && expected !== 'running' && expected !== state ? expected : '')}</span>

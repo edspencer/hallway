@@ -8,8 +8,9 @@ const W = 400;
 const H = 96;
 const PAD = { l: 34, r: 6, t: 8, b: 6 };
 
+/** The axis top: a round number at or above `v`, and never under 10 ms, so a fast local app's axis isn't 0–1 ms. */
 function niceMax(v: number) {
-  if (v <= 0) return 10;
+  if (v <= 10) return 10;
   const p = 10 ** Math.floor(Math.log10(v));
   return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v)!;
 }
@@ -69,6 +70,8 @@ export function LatencyChart({ buckets }: { buckets: UptimeBucket[] }) {
         ))}
         <path className="hw-latency-line hw-latency-line--p95" d={path(p95, x, y)} />
         <path className="hw-latency-line hw-latency-line--p50" d={path(p50, x, y)} />
+        {/* a period with data between two without is a point, not a line: draw it */}
+        {p50.map((v, i) => (v !== null && p50[i - 1] == null && p50[i + 1] == null ? <circle key={i} className="hw-latency-dot hw-latency-dot--p50" cx={x(i)} cy={y(v)} r={2.5} /> : null))}
         {hover !== null && (
           <g>
             <line className="hw-latency-cross" x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={H - PAD.b} />

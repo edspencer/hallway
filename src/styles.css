@@ -684,6 +684,11 @@ kbd {
   position: relative;
   z-index: 2;
 }
+/* the uptime bar too, so its bars can be hovered (a click on it is passed to the link: Door.tsx) */
+.hw-door .hw-bar {
+  z-index: 2;
+  cursor: pointer;
+}
 
 /* the door itself: an arched panel in the app's paint */
 .hw-door-panel {
@@ -1069,6 +1074,12 @@ kbd {
   white-space: nowrap;
   pointer-events: none;
   box-shadow: var(--hw-shadow-lifted);
+}
+.hw-bar-tip--start {
+  transform: translateX(-12px);
+}
+.hw-bar-tip--end {
+  transform: translateX(calc(-100% + 12px));
 }
 .hw-bar-tip-range {
   font-family: var(--hw-font-mono);

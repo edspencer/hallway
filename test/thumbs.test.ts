@@ -10,7 +10,9 @@ import { createApp } from '../server/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
 import { findFavicon, parseIconLinks, parseManifest, parseSizes, rankCandidates, sniffImage } from '../server/thumbs/favicon.ts';
 import { IconCache, appPageUrl, iconSource, startThumbs } from '../server/thumbs/index.ts';
-import { tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
+
+await exitWatchdog();
 
 const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));

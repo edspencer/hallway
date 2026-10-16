@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Hono } from 'hono';
 import type { ServerEvent } from '../shared/api.ts';
-import { DEBOUNCE_MS, EventBus, sseHandler } from '../server/events.ts';
+import { EventBus, sseHandler } from '../server/events.ts';
 import { startWatcher } from '../server/watcher.ts';
 import { exitWatchdog, tmpStore } from './fixture.ts';
 
