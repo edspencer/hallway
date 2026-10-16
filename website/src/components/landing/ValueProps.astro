@@ -2,9 +2,8 @@
 /**
  * ValueProps — the six-card grid.
  *
- * Each card carries the milestone it is planned for (docs/08-roadmap.md), so
- * nothing on the page reads as shipped. v0 badges are lamplight; later ones are
- * quiet.
+ * Each card carries its milestone (docs/08-roadmap.md): v0 is available now
+ * (lamplight badge); v1 and v2 are upcoming (quiet badges) and say so.
  */
 import Icon from './Icon.astro';
 import { VALUE_PROPS } from './copy';
@@ -13,7 +12,7 @@ import { VALUE_PROPS } from './copy';
 <section class="props section">
 	<div class="container">
 		<header class="props-head" data-reveal>
-			<p class="eyebrow">What it will do</p>
+			<p class="eyebrow">What it does</p>
 			<h2 class="h2">A home page for your own machine.</h2>
 			<p class="lede">
 				A home-lab dashboard for one laptop: self-populating, so it never needs maintaining, and calm, so you
@@ -29,7 +28,7 @@ import { VALUE_PROPS } from './copy';
 							<span class="prop-icon">
 								<Icon name={p.icon} />
 							</span>
-							<span class={`ms ms--${p.ms}`} title={`Planned for ${p.ms}`}>
+							<span class={`ms ms--${p.ms}`} title={p.ms === 'v0' ? 'Available now, in v0' : `Coming in ${p.ms}`}>
 								{p.ms}
 							</span>
 						</div>

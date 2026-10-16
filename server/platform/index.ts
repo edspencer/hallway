@@ -36,6 +36,14 @@ export interface Platform {
   openCommand(url: string): [string, string[]];
   /** Fronted mode's privileged parts: the 443/80 redirect, trusting the local CA, the custom-domain resolver (D47). */
   fronting: Fronting;
+  /** The range the OS picks from when a program listens on port 0, where tool helpers end up: macOS uses IANA's
+   * 49152–65535, Linux its own (`ip_local_port_range`, usually 32768–60999). */
+  ephemeralPorts(): PortRange;
+}
+
+export interface PortRange {
+  from: number;
+  to: number;
 }
 
 export type { Listener, ProcessInfo, RawListener } from './listeners.js';

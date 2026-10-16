@@ -130,7 +130,8 @@ Full scope and acceptance criteria: [docs/08-roadmap.md](docs/08-roadmap.md).
 
 - **v0 — The front page.** Daemon + dashboard + YAML store + live updates + health probes + port scanner with claim
   flow + bookmarks + favicon tiles + agent guide + self-install as a launchd service (systemd user unit on Linux).
-  Links use `http://localhost:<port>`. No sudo. macOS and Linux (D26).
+  Links use `http://localhost:<port>`. No sudo. macOS and Linux (D26). **Done: released as 0.1.0**, with v1's
+  managed services (`hallway run`, `hallway service add`) brought forward into it.
 - **v1 — Fronting and services.** `hallway run` and `hallway service add` (launchd jobs for apps), Caddy integration, HTTPS on
   `*.localhost`, `hallway setup` / `hallway doctor`, custom-domain mode (dnsmasq), "lost since reboot".
 - **v2 — Agents and polish.** MCP server (HTTP + stdio), screenshot thumbnails, generated cards, 90-day uptime

@@ -5,11 +5,12 @@
  * through the components, so the words can be worked on without touching markup.
  * (Same arrangement as Local Review's and Paddock's sites.)
  *
- * Hallway is PRE-RELEASE: it is a specification with an implementation just
- * starting. Every claim here must be checkable against the spec (spec.md and
- * docs/ at the repo root) and must say which milestone it belongs to. Nothing
- * may read as shipped. The illustrations are mock-ups of the planned design,
- * drawn in HTML and CSS (Mock.astro), and are captioned as such.
+ * Hallway 0.1.0 (milestone v0) is released; v1 and v2 are still to come. Every
+ * claim here must be checkable against the spec (spec.md and docs/ at the repo
+ * root) and the code, and must say which milestone it belongs to: v0 means
+ * "available now", v1 and v2 mean "upcoming" and must never read as shipped.
+ * The illustrations are mock-ups of the design, drawn in HTML and CSS
+ * (Mock.astro), and are captioned as such.
  */
 
 import { REPO_URL, TAGLINE, INSTALL_COMMAND } from '../../site.mjs';
@@ -18,21 +19,22 @@ export { REPO_URL };
 
 export const hero = {
 	/** Small line above the H1. */
-	eyebrow: 'Pre-release · open source · local-only',
+	eyebrow: 'v0 out now · open source · local-only',
 	/** The H1. */
 	title: `${TAGLINE}.`,
 	lede: 'Hallway keeps a live list of every web server running on your machine: the ones you installed on purpose, the ones a coding agent started and forgot, and the ones nobody remembers starting at all.',
-	body: 'It shows them on one calm page, with what each one is, whether it is healthy and how to reach it. Later, it gives each a memorable HTTPS name and keeps the important ones running across reboots.',
+	body: 'It shows them on one calm page, with what each one is, whether it is healthy and how to reach it, and it can start a server as a native service that outlives the session. Next, it gives each app a memorable HTTPS name.',
 };
 
-/** The one command worth pasting, once it exists. */
+/** The one command worth pasting. */
 export const QUICKSTART = {
 	id: 'install',
 	label: 'Install',
-	soon: 'Coming soon',
-	blurb: 'Not released yet: the npm name is reserved with an empty placeholder while Hallway is built in the open from a detailed spec. macOS first, Node 22.13+.',
+	/** The pill in the terminal bar. */
+	tag: 'On npm',
+	blurb: 'macOS and Linux, Node 22.13+. The second command runs Hallway at every login (a LaunchAgent on macOS, a systemd user unit on Linux); then open http://localhost:4255.',
 	command: `${INSTALL_COMMAND} && hallway service install`,
-	link: { text: 'What it will look like', href: '/getting-started/quickstart/' },
+	link: { text: 'The first five minutes', href: '/getting-started/quickstart/' },
 } as const;
 
 /** The second item in the strip: a link, not a tab (see CommandTabs.astro). */
@@ -92,21 +94,21 @@ export const VALUE_PROPS = [
 		icon: 'lock',
 		ms: 'v1',
 		title: 'Memorable HTTPS names',
-		body: 'Turn on fronted mode and every app gets https://<slug>.localhost with a locally trusted certificate, through Caddy. No DNS server needed; .internal domains are there if you want your own.',
+		body: 'Coming in v1: turn on fronted mode and every app gets https://<slug>.localhost with a locally trusted certificate, through Caddy. No DNS server needed; .internal domains are there if you want your own.',
 	},
 	{
 		icon: 'refresh',
-		ms: 'v1',
+		ms: 'v0',
 		title: 'Survives the reboot',
-		body: 'The apps you care about become native launchd services and come back on their own. Everything else is remembered, so after a restart Hallway lists what was lost and offers to bring it back.',
+		body: 'hallway run --persist makes the apps you care about native services (launchd on macOS, systemd on Linux) that come back on their own. Coming in v1: everything else is remembered, so after a restart Hallway lists what was lost.',
 	},
 ] as const;
 
 /**
- * The scroll-swap "how it will work" section: each entry is one step and the
+ * The scroll-swap "how it works" section: each entry is one step and the
  * illustration that goes with it. `mock` names a panel in Mock.astro; they are
  * drawn in HTML/CSS from the spec's designs (docs/05-ui.md), not captured from
- * software, because the software does not exist yet.
+ * the software (no real captures have been made yet).
  */
 export const FEATURES = [
 	{
@@ -124,16 +126,16 @@ export const FEATURES = [
 		alt: 'Mock-up of three app cards: a healthy one with a warm edge and a full uptime bar, a stopped one drawn quietly, and a down one marked with a red square and the word down',
 	},
 	{
-		ms: 'v1',
+		ms: 'v0',
 		title: 'Agents start servers properly',
-		body: 'Instead of a bare npm run dev, an agent runs hallway run. The server is handed to launchd so it outlives the session, keeps a stable port, and the command prints the URL and exits, so it never hangs a tool call.',
+		body: 'Instead of a bare npm run dev, an agent runs hallway run. The server is handed to launchd (or systemd on Linux) so it outlives the session, keeps a stable port, and the command prints the URL and exits, so it never hangs a tool call.',
 		mock: 'run',
 		alt: 'Mock-up of a terminal: hallway run slides -- npx astro dev --port $PORT, followed by the app URL, the log path and a prompt',
 	},
 	{
 		ms: 'v1',
 		title: 'Names instead of numbers',
-		body: 'In fronted mode, Caddy serves each app at https://<slug>.localhost with a certificate your machine trusts. Adding an app never needs sudo; the one privileged step is a guided hallway setup that prints every command before it runs.',
+		body: 'Coming in v1: in fronted mode, Caddy serves each app at https://<slug>.localhost with a certificate your machine trusts. Adding an app never needs sudo; the one privileged step is a guided hallway setup that prints every command before it runs.',
 		mock: 'address',
 		alt: 'Mock-up of a browser address bar showing a padlock and https://slides.localhost',
 	},
@@ -154,15 +156,15 @@ export const AGENTS = {
 	points: [
 		{
 			title: 'One command instead of npm run dev',
-			body: '`hallway run <slug> -- <command>` starts the server under launchd, waits for it to listen, prints the URL and exits. Planned for v1.',
+			body: '`hallway run <slug> -- <command>` starts the server as a launchd or systemd user service, waits for it to listen, prints the URL and exits.',
 		},
 		{
 			title: 'A guide written for agents',
-			body: '`hallway guide` prints the agent guide, with live data, and `hallway guide --snippet` prints two sentences for your `AGENTS.md` or `CLAUDE.md`. Planned for v0.',
+			body: '`hallway guide` prints the agent guide, with live data, and `hallway guide --snippet` prints a short paragraph for your `AGENTS.md` or `CLAUDE.md`.',
 		},
 		{
 			title: 'MCP, without the risk',
-			body: 'A v2 MCP server on the same port describes apps and edits bookmarks, through the same write path as everything else. It never starts a process.',
+			body: 'Coming in v2: an MCP server on the same port describes apps and edits bookmarks, through the same write path as everything else. It never starts a process.',
 		},
 	],
 	link: { text: 'Read about agents', href: '/agents/overview/' },

@@ -23,8 +23,8 @@ npm run check-links                 # after a build: every internal link and #fr
 ## Structure
 
 - `src/pages/index.astro` and `src/components/landing/`: the marketing landing page at `/` (outside Starlight). Its
-  copy is all in `src/components/landing/copy.ts`; its illustrations are HTML/CSS mock-ups of the planned dashboard
-  (`Mock.astro`), tagged as such, because there is no software to capture yet.
+  copy is all in `src/components/landing/copy.ts`; its illustrations are HTML/CSS mock-ups of the dashboard's design
+  (`Mock.astro`), tagged as such, because no real captures have been made yet.
 - `src/content/docs/`: the documentation pages (`.md` / `.mdx`, Starlight frontmatter).
 - `src/sidebar.mjs`: the hand-maintained sidebar (read by `astro.config.mjs` and by the llms.txt routes).
 - `astro.config.mjs`: site config.
@@ -32,7 +32,7 @@ npm run check-links                 # after a build: every internal link and #fr
   snippet.
 - `src/styles/tokens.css`: **every colour and font**, in one place. To try a different palette or typeface, edit only
   this file.
-- `src/components/Banner.astro`: the pre-release banner on every docs page.
+- `src/components/Banner.astro`: the banner on every docs page (v0 is out; what the v0 / v1 / v2 badges mean).
 - `src/pages/llms.txt.ts`, `src/pages/llms-full.txt.ts`, `src/pages/[...slug].md.ts`: `/llms.txt`, `/llms-full.txt`
   and every page as Markdown, for coding agents, generated from the pages at build time.
 - `brand/`: the hand-authored placeholder mark and social card; `public/`, `src/assets/`: their rendered copies.

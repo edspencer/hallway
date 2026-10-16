@@ -76,6 +76,8 @@ export const darwin: Platform = {
   services: ({ run, env = process.env, home = os.homedir() } = {}) => launchdManager({ dir: darwin.userServiceDir(env, home), uid: process.getuid?.() ?? 501, run }),
   openCommand: (url) => ['open', [url]],
   fronting: darwinFronting,
+  // macOS's default net.inet.ip.portrange.first/last is IANA's range; a changed sysctl isn't read (unverified on macOS)
+  ephemeralPorts: () => ({ from: 49152, to: 65535 }),
 
   // Without root, lsof sees only the current user's processes: the intended scope.
   async listListeners() {

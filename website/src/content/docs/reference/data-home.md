@@ -27,7 +27,7 @@ just works.
     caddy.json                # the last config pushed to Caddy (v1)
   logs/
     daemon.out.log, daemon.err.log
-    <slug>.out.log, <slug>.err.log   # managed services (v1)
+    <slug>.out.log, <slug>.err.log   # managed services
   backups/
     <ISO-timestamp>/          # snapshots of the editable files
 ```
@@ -68,8 +68,9 @@ dotfiles. Hallway generates a `.gitignore` inside it that excludes `state/`, `ca
 
 Hallway writes nowhere else, except:
 
-- <span class="ms ms--v0">v0</span> `~/Library/LaunchAgents/hallway.daemon.plist`, when you run
-  `hallway service install`;
-- <span class="ms">v1</span> `~/Library/LaunchAgents/hallway.app.<slug>.plist` for managed services;
+- <span class="ms ms--v0">v0</span> the daemon's service definition, when you run `hallway service install`:
+  `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux;
+- <span class="ms ms--v0">v0</span> one per managed service: `~/Library/LaunchAgents/hallway.app.<slug>.plist` on
+  macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on Linux;
 - <span class="ms">v1</span> during `hallway setup` only: `/Library/LaunchDaemons/hallway.*.plist`, the dnsmasq
   drop-in, and `/etc/resolver/<base>`. See [Setup](/networking/setup-and-doctor/).

@@ -4,7 +4,7 @@ description: The few environment variables Hallway reads, and the ones it sets f
 ---
 
 Hallway needs **no environment variables** to work. Agents often run commands from shells that load no profile, and
-launchd jobs inherit no environment at all, so every default works with an empty environment. These are overrides.
+launchd jobs and systemd units inherit no shell environment, so every default works with an empty environment. These are overrides.
 
 ## Read by Hallway
 
@@ -16,7 +16,7 @@ launchd jobs inherit no environment at all, so every default works with an empty
 
 ## Set by Hallway for managed services
 
-<span class="ms">v1</span> Every [managed service](/concepts/services/) and every server started with [`hallway run`](/agents/hallway-run/)
+<span class="ms ms--v0">v0</span> Every [managed service](/concepts/services/) and every server started with [`hallway run`](/agents/hallway-run/)
 gets:
 
 | Variable | Value |

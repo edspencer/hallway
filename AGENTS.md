@@ -2,8 +2,8 @@
 
 ## Where things stand
 
-Hallway is **pre-release**. The repository holds a complete **specification** and the **start of the
-implementation**: the package, build, CI and release machinery, the daemon core (`hallway serve` and `guide`, the data
+Milestone **v0 is done** (released as 0.1.0; its acceptance run is in `docs/11-research-notes.md`). The repository
+holds a complete **specification** and the implementation so far: the package, build, CI and release machinery, the daemon core (`hallway serve` and `guide`, the data
 home and its store, the watcher, event bus and SSE, the HTTP API, the agent guide and `llms.txt`, the security
 middleware, the platform abstraction, tier-1 thumbnails), the scanner, prober and uptime history (plugged into the
 core as a provider, `server/live.ts`, D35), the CLI commands and managed services (`hallway run`, launchd / systemd

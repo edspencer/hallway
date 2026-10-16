@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { Platform } from './index.js';
+import type { Platform, PortRange } from './index.js';
 import { systemdManager, unitName } from './systemd.js';
 import { type ProcessInfo, type RawListener, run, splitHostPort } from './listeners.js';
 import { linuxFronting } from './fronting-linux.js';
@@ -164,6 +164,20 @@ export function listFromProc(procRoot = '/proc'): RawListener[] {
 
 let hasSs: boolean | undefined;
 
+/** Linux's default `net.ipv4.ip_local_port_range`. */
+export const LINUX_EPHEMERAL = { from: 32768, to: 60999 } as const;
+
+/** `/proc/sys/net/ipv4/ip_local_port_range` ("32768\t60999"), or null if it doesn't look like a range. */
+export function parseLocalPortRange(text: string): PortRange | null {
+  const m = /^\s*(\d{1,5})\s+(\d{1,5})\s*$/.exec(text);
+  if (!m) return null;
+  const from = Number(m[1]);
+  const to = Number(m[2]);
+  return from >= 1 && from <= to && to <= 65535 ? { from, to } : null;
+}
+
+let ephemeral: PortRange | undefined;
+
 export const linux: Platform = {
   id: 'linux',
   serviceManager: 'systemd',
@@ -176,6 +190,16 @@ export const linux: Platform = {
   services: ({ run, env = process.env, home = os.homedir() } = {}) => systemdManager({ dir: linux.userServiceDir(env, home), run }),
   openCommand: (url) => ['xdg-open', [url]],
   fronting: linuxFronting,
+  ephemeralPorts() {
+    if (ephemeral) return ephemeral;
+    let text = '';
+    try {
+      text = fs.readFileSync('/proc/sys/net/ipv4/ip_local_port_range', 'utf8');
+    } catch {
+      /* no /proc: the default */
+    }
+    return (ephemeral = parseLocalPortRange(text) ?? LINUX_EPHEMERAL);
+  },
 
   async listListeners() {
     if (hasSs !== false) {

@@ -1,6 +1,6 @@
 // What each state looks like, and the counts the header, the tab title and the favicon show. Pure: no DOM, no React,
 // so it's tested under node (test/dashboard.test.ts).
-import type { AppState, AppView } from '../../shared/api.js';
+import type { AppState, AppView, StateResponse } from '../../shared/api.js';
 
 /** What a card shows: the five health states, plus `starting` (a managed service in its grace period, v1). */
 export type DoorState = AppState | 'starting';
@@ -57,4 +57,16 @@ export function tabTitle(c: Pick<Counts, 'down' | 'unhealthy'>, name = 'Hallway'
 /** The favicon's status mark: none when all is well. */
 export function faviconMark(c: Pick<Counts, 'down' | 'unhealthy'>): 'down' | 'unhealthy' | null {
   return c.down ? 'down' : c.unhealthy ? 'unhealthy' : null;
+}
+
+/** The second line under a door's name: `repo @ branch` for a worktree sibling, else the description. Not the label
+ * when the name already is it (a claimed worktree is named after its label). */
+export function subtitle(app: Pick<AppView, 'name' | 'identity' | 'config'>): string | null {
+  const label = app.identity?.label;
+  return (label && label !== app.name ? label : null) ?? app.config?.description ?? null;
+}
+
+/** Whether the daemon is looking for listeners: it has a scanner and `scan.enabled` is on. */
+export function isScanning(state: Pick<StateResponse, 'daemon' | 'config'>): boolean {
+  return state.daemon.providers.scanner && state.config.config.scan.enabled;
 }

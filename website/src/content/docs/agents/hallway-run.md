@@ -3,7 +3,7 @@ title: hallway run
 description: The one command agents should use to start a dev server, so it never becomes an orphan.
 ---
 
-<span class="ms">v1</span> `hallway run` replaces the ad-hoc `npm run dev` that leaves orphaned servers behind.
+<span class="ms ms--v0">v0</span> `hallway run` replaces the ad-hoc `npm run dev` that leaves orphaned servers behind.
 
 ```sh
 hallway run <slug> [--cwd DIR] [--port N] [--persist] [--name "Display name"] -- <command...>
@@ -12,30 +12,29 @@ hallway run <slug> [--cwd DIR] [--port N] [--persist] [--name "Display name"] --
 For example:
 
 ```sh
-hallway run slides -- npx astro dev --port $PORT
-hallway run docs --persist -- npx vite --port $PORT --strictPort
+hallway run slides -- npx astro dev --port '$PORT'
+hallway run docs --persist -- npx vite --port '$PORT' --strictPort
 ```
 
-Hallway sets `PORT` to the app's port in the server's environment.
-
-:::note[Detail to settle]
-Written unquoted as above, `$PORT` would be expanded by your own shell before Hallway sees it. Exactly how the port
-reaches the command line (quoting `'$PORT'`, or Hallway substituting it) is decided during v1; the examples follow
-the spec for now.
-:::
+Hallway sets `PORT` to the app's port in the server's environment, and replaces `$PORT` (or `${PORT}`, `$HOST`,
+`${HOST}`) in the command's arguments with the app's values when it generates the job. **Quote it**, as above:
+unquoted, your own shell would expand `$PORT` before Hallway sees it, usually to nothing. The app file keeps the
+command as written, so it stays right if you edit the file later.
 
 ## What it does
 
 1. **Registers the app.** It creates or updates `apps/<slug>.yaml` with the command, the working directory (default:
    where you ran it) and the port: the app's existing port if it has one, the one you pinned with `--port`, or else a
    stable one assigned from 5100–5999. The app is `expected: adhoc`, or `running` with `--persist`.
-2. **Hands the server to launchd**, so it is owned by launchd, **not by your session**, and survives the session
-   ending.
-   - Without `--persist`, it won't come back after a reboot, but it stays on the dashboard as `stopped` with a
-     one-click restart, and appears under [Lost at last reboot](/concepts/services/#lost-at-last-reboot).
-   - With `--persist`, it is a full service that starts at login and restarts if it crashes.
+2. **Hands the server to the OS's service manager** (a launchd job on macOS, a systemd user unit on Linux), so it is
+   owned by that, **not by your session**, and survives the session ending.
+   - Without `--persist`, it won't come back after a reboot; it stays on the dashboard as `stopped`, and
+     `hallway run <slug>` starts it again. <span class="ms">v1</span> Upcoming: it will also be listed under
+     [Lost at last reboot](/concepts/services/#lost-at-last-reboot).
+   - With `--persist`, it is a full service that starts at login and restarts if it exits.
 3. **Waits until the port is listening** (up to 30 seconds), then **prints the URL and the log path, and exits 0**.
-   If the server doesn't come up, it prints the last 30 lines of its log and exits 1.
+   If the server doesn't come up (or exits first), it prints the last 30 lines of its logs and exits 1, and leaves the
+   app declared so you can fix it and re-run.
 
 Because it returns promptly and prints the URL, an agent can run it inside a tool call without hanging.
 
@@ -59,17 +58,18 @@ Hallway sets `PORT` and `HOST=127.0.0.1` in the server's environment. Frameworks
 
 | Framework | Command |
 | --- | --- |
-| Vite | `npx vite --port $PORT --strictPort` |
-| Astro | `npx astro dev --port $PORT` |
-| Next.js | `npx next dev -p $PORT` |
+| Vite | `npx vite --port '$PORT' --strictPort` |
+| Astro | `npx astro dev --port '$PORT'` |
+| Next.js | `npx next dev -p '$PORT'` |
 
 Always pass `--strictPort` to Vite. Without it, Vite quietly takes another port when its own is busy, and the app
 moves away from the URL Hallway printed.
 
-## Why launchd, and why not PM2
+## Why launchd and systemd, and why not PM2
 
-launchd is how macOS itself keeps things running, and it is reliable across reboots. A second process manager (PM2,
-or the `pm` wrapper this command succeeds) would be one more supervisor on top of launchd, with its own history of
+launchd is how macOS itself keeps things running, and systemd is how most Linux distributions do; both are reliable
+across reboots. A second process manager (PM2, or a home-grown wrapper like the ones this command replaces) would be
+one more supervisor on top of them, with its own history of
 boot-integration problems. See [Services and reboots](/concepts/services/).
 
 ## Why it's CLI-only

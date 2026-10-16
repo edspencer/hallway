@@ -14,14 +14,14 @@ service for your own machine. It keeps a live directory of every web server you 
 - and the unidentified ones it finds simply by looking at what is listening.
 
 It shows them on one calm dashboard with their health, uptime history and a thumbnail, and doubles as a personal
-jumping-off page of bookmarks to the remote things you always forget the URL of. Later releases give each app a
-memorable HTTPS hostname (`slides.localhost` instead of a port number nobody remembers) and keep the important ones
-running as native OS services across reboots.
+jumping-off page of bookmarks to the remote things you always forget the URL of, and it can start a dev server as a
+native OS service so it outlives the session (and, if you ask, comes back after a reboot). The next release gives each
+app a memorable HTTPS hostname (`slides.localhost` instead of a port number nobody remembers).
 
-:::caution[Pre-release]
-Hallway is being built in the open from a detailed specification, and **nothing described on this site is shipped
-yet**. Each feature is marked with the milestone it is planned for: <span class="ms ms--v0">v0</span>,
-<span class="ms">v1</span> or <span class="ms">v2</span>. See the [roadmap](/roadmap/).
+:::note[What's released]
+**v0 is out**, as Hallway 0.1.0 on npm: see [Installation](/getting-started/installation/). Each feature on this site
+is marked with its milestone: <span class="ms ms--v0">v0</span> is available now; <span class="ms">v1</span> and
+<span class="ms">v2</span> are upcoming. See the [roadmap](/roadmap/).
 :::
 
 ## The problem
@@ -52,31 +52,35 @@ Plenty of dashboards show tiles and bookmarks. Hallway's differences:
 
 1. **It populates itself.** It reads registries and *scans for listeners*, so the page reflects reality without anyone
    maintaining a config. Every hand-maintained dashboard recreates the original problem.
-2. **It remembers.** It records what it saw while processes were alive, so after a reboot it can say what was lost.
-3. **It fronts.** Memorable HTTPS hostnames per app, with defaults that need no DNS server.
-4. **It keeps things alive.** Native launchd services, no extra process manager.
-5. **It is built for agent-spawned servers.** Plain YAML an agent can edit, an agent guide, MCP, and one command,
+2. **It remembers.** It records what it saw while processes were alive, so after a reboot it can say what was lost
+   (that list arrives in v1).
+3. **It fronts** (coming in v1). Memorable HTTPS hostnames per app, with defaults that need no DNS server.
+4. **It keeps things alive.** Native launchd (macOS) or systemd user (Linux) services, no extra process manager.
+5. **It is built for agent-spawned servers.** Plain YAML an agent can edit, an agent guide, MCP (in v2), and one command,
    `hallway run`, that starts a server so it never becomes an orphan.
 
 ## What ships when
 
-- <span class="ms ms--v0">v0</span> **The front page.** The daemon, the dashboard at <code>{`http://localhost:${DEFAULT_PORT}`}</code>,
-  YAML config with live updates, health checks, the port scanner with claim and ignore, bookmarks, favicon tiles, the
-  agent guide, and running Hallway itself as a login service. Links go to `http://localhost:<port>`. No sudo, no DNS,
-  no proxy.
-- <span class="ms">v1</span> **Fronting and services.** `hallway run`, managed launchd services for apps, Caddy with
-  HTTPS on `*.localhost`, `hallway setup` and `hallway doctor`, custom `.internal` domains, and "lost at last reboot".
-- <span class="ms">v2</span> **Agents and polish.** The MCP server, screenshot thumbnails, 90-day uptime history, and
-  Linux (systemd) support.
+- <span class="ms ms--v0">v0</span> **The front page**, released in 0.1.0 for macOS and Linux. The daemon, the
+  dashboard at <code>{`http://localhost:${DEFAULT_PORT}`}</code>, YAML config with live updates, health checks with
+  24-hour uptime bars (7- and 90-day views in the drawer), the port scanner with claim and ignore, bookmarks, favicon
+  tiles, the agent guide, `hallway doctor` for the daemon and data, and running Hallway itself as a login service.
+  Shipped early from v1: `hallway run`, `stop`, `start`, `restart` and `logs`, managed services for apps (launchd or
+  systemd user units) and log rotation. Links go to `http://localhost:<port>`. No sudo, no DNS, no proxy.
+- <span class="ms">v1</span> **Fronting** (upcoming). Caddy with HTTPS on `*.localhost`, `hallway setup` and
+  `teardown`, networking checks in `hallway doctor`, custom `.internal` domains, the fallback page, and "lost at last
+  reboot".
+- <span class="ms">v2</span> **Agents and polish** (upcoming). The MCP server, screenshot thumbnails, latency charts,
+  and `hallway hook check-command`.
 
 ## Who it's for
 
 One developer, on their own machine, running many small local web servers, especially one who leans on coding agents.
-macOS first; Linux later. Comfortable with a CLI and with editing YAML; not interested in maintaining a hand-written
+On macOS or Linux. Comfortable with a CLI and with editing YAML; not interested in maintaining a hand-written
 dashboard config. Hallway is **not** for teams, remote access, production process management or containers.
 
 <CardGrid>
-	<LinkCard title="Quickstart" description="What the first five minutes will look like." href="/getting-started/quickstart/" />
+	<LinkCard title="Quickstart" description="The first five minutes." href="/getting-started/quickstart/" />
 	<LinkCard title="Apps" description="Declared, discovered and observed: where apps come from." href="/concepts/apps/" />
 	<LinkCard title="For agents" description="Files first, hallway run, and MCP." href="/agents/overview/" />
 	<LinkCard title="Why the name" description="From Spaghetti Junction to a calm, well-lit hallway." href="/why-the-name/" />

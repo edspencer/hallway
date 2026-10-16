@@ -7,7 +7,7 @@ import type { AppView } from '../../shared/api';
 import { thumbUrl } from '../api';
 import { paintFor } from '../lib/colour';
 import { displayUrl, millis, percent } from '../lib/format';
-import { STATE_META, doorState } from '../lib/status';
+import { STATE_META, doorState, subtitle } from '../lib/status';
 import { StateMark } from './StateMark';
 import { Tile, isGlyph, useImageColour } from './Tile';
 import { UptimeBar } from './UptimeBar';
@@ -19,11 +19,6 @@ export interface DoorProps {
   checking: boolean;
   onCopy(url: string, what: string): void;
   onDetails(slug: string): void;
-}
-
-/** The second line under a door's name: `repo @ branch` for a worktree sibling, else the description. */
-export function subtitle(app: AppView): string | null {
-  return app.identity?.label ?? app.config?.description ?? null;
 }
 
 /**

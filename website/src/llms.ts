@@ -34,9 +34,9 @@ export async function sections(): Promise<Section[]> {
 
 export const intro = `# ${TITLE}
 
-> ${TAGLINE}. A small, always-on, local-only service for a developer's own machine: a live dashboard of every local web server (declared, discovered from other tools, or simply found listening), with health, uptime and bookmarks; memorable HTTPS hostnames via Caddy; and native launchd services for the apps that should survive a reboot.
+> ${TAGLINE}. A small, always-on, local-only service for a developer's own machine (macOS and Linux): a live dashboard of every local web server (declared, discovered from other tools, or simply found listening), with health, uptime and bookmarks; native launchd or systemd user services for the apps that should survive a reboot; and, upcoming, memorable HTTPS hostnames via Caddy.
 
-**Status: pre-release.** Hallway is a specification with an implementation starting. Nothing described here is shipped; each feature is marked v0, v1 or v2 (see ${SITE_URL}/roadmap/). The npm package \`hallway\` is a placeholder until the first release.
+**Status: v0 is released** (\`npm i -g hallway\`, Node 22.13+). Each feature is marked v0 (available now), v1 or v2 (upcoming); see ${SITE_URL}/roadmap/.
 
 Every page below is also available as Markdown at the same URL with \`.md\` instead of the trailing slash.
 `;

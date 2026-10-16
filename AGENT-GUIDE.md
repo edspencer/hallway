@@ -9,6 +9,13 @@ machine, with health checks, on a dashboard at http://localhost:4255. Its config
 home** (`~/.hallway` by default, or `$HALLWAY_HOME`) that you can read and edit directly: the dashboard picks up every
 change within a second, exactly as if it had been made through the API.
 
+## What this version does
+
+This is Hallway's first milestone (v0, released as 0.1.0), on macOS and Linux: the dashboard, the YAML files, health
+checks with uptime history, the port scanner, bookmarks, this guide, and `hallway run` for managed servers. It runs in
+**direct mode** only: every app's address is `http://localhost:<port>`. The `https://<slug>.localhost` names (fronted
+mode, `hallway setup`) and the MCP server are planned, not built: don't use or suggest them yet.
+
 ## The rule: don't leave servers running in your session
 
 A dev or preview server started inside your session (`npm run dev`, `vite`, `astro dev`, `next dev`,
@@ -158,7 +165,7 @@ One app per file: `apps/<slug>.yaml`. The slug is the file name. The slug: lower
 | `proxy` | mapping |  | Fronted mode only (v1). |
 | `proxy.preserveHost` | true/false | `false` | Pass the public Host header through instead of rewriting it to the upstream address. |
 | `proxy.aliases` | list of text | `[]` | Extra names: `[review]` also serves it at `review.<base>`. |
-| `service` | mapping | absent | Present: Hallway keeps it running as a native service (v1). Write it with the CLI (`hallway run`, `hallway service add`), not by hand. |
+| `service` | mapping | absent | Present: Hallway keeps it running as a native service (launchd / systemd). Write it with the CLI (`hallway run`, `hallway service add`), not by hand. |
 | `service.command` | list of text | **required** | The command, as an argv array: `["npm", "run", "dev"]`. |
 | `service.cwd` | text | `null` | The working directory (`~` allowed). |
 | `service.env` | mapping of text | `{}` | Extra environment. `PORT` and `HOST` are set for you. |
@@ -227,14 +234,14 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `probe.failuresBeforeUnhealthy` | number ≥ 1 | `2` | Consecutive failures before an app leaves `healthy`. |
 | `ports` | mapping |  | Port assignment. |
 | `ports.assignRange` | list of number 1–65535 | `[5100, 5999]` | `[low, high]`: where new apps with no port get one. Existing ports are never changed. |
-| `services` | mapping |  | Managed services (v1). |
+| `services` | mapping |  | Managed services (`hallway run`, `hallway service add`). |
 | `services.startGraceSeconds` | number ≥ 0 | `30` | A service just started is `starting`, not `down`, for this long. |
 | `services.logMaxBytes` | number ≥ 1024 | `10485760` | Rotate a service's log above this size. |
 | `services.logGenerations` | number ≥ 1 | `3` | Rotated logs to keep. |
 | `scan` | mapping |  | The port scanner. |
 | `scan.enabled` | true/false | `true` | Look for unnamed listeners. |
 | `scan.intervalSeconds` | number ≥ 10 | `120` | Seconds between scans. |
-| `scan.includeEphemeralPorts` | true/false | `false` | Include 49152–65535, where IDE and tool helpers listen. |
+| `scan.includeEphemeralPorts` | true/false | `false` | Include ephemeral ports (49152–65535, and Linux's own range), where IDE and tool helpers listen. |
 | `scan.minPort` | number 1–65535 | `1024` | Ignore ports below this. |
 | `thumbnails` | mapping |  | Card images. |
 | `thumbnails.mode` | `favicon` \| `screenshot` \| `card` | `favicon` | `favicon` (a favicon on a colour tile); `screenshot` and `card` arrive in v2. |

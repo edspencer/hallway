@@ -66,20 +66,22 @@ hallway doctor --json
 
 Read-only diagnostics. Each check prints pass, warn or fail with a suggested fix.
 
-**<span class="ms ms--v0">v0</span> The daemon and your data:**
+**<span class="ms ms--v0">v0</span> The daemon, your data and your services:**
 
-- the daemon is running, its port is free or its own, and its launchd job is loaded;
+- the daemon is running, its port is free or its own, and its service (launchd job or systemd user unit) is loaded;
+- on Linux, whether lingering is on, so services keep running without a login session;
 - the data home is readable, and lists any YAML parse or validation errors;
 - two declared apps on one port;
-- apps listening on `0.0.0.0`, which exposes them to your network.
+- apps listening on `0.0.0.0`, which exposes them to your network;
+- managed-service jobs that are missing or orphaned, whose `PATH` contains per-shell version-manager directories or
+  entries that no longer exist, or whose Node version has been uninstalled (see
+  [the PATH trap](/concepts/services/#the-path-trap)).
 
-**<span class="ms">v1</span> Networking and services:**
+**<span class="ms">v1</span> Networking (upcoming):**
 
 - Caddy is running, its admin API is reachable, and its config matches what the daemon expects;
 - ports 80 and 443 belong to Caddy, or **who holds them instead** (process, PID and owner);
 - Caddy's root certificate is trusted, with a note for Firefox;
 - for a custom domain: dnsmasq is running and bound to loopback only, `/etc/resolver/<base>` exists, and both
   `<base>` and a test subdomain resolve to your machine;
-- for a custom domain: its TLD is not delegated (checked against IANA's list), not `.local`, and not HSTS-preloaded;
-- launchd jobs whose `PATH` contains per-shell version-manager directories or entries that no longer exist, or whose
-  Node version has been uninstalled (see [the PATH trap](/concepts/services/#the-path-trap)).
+- for a custom domain: its TLD is not delegated (checked against IANA's list), not `.local`, and not HSTS-preloaded.

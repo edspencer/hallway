@@ -10,7 +10,7 @@ import type { AppHealth, AppHistory, ListenerIdentity, ObservedListener, ServerE
 import { expandHome } from './config.js';
 import type { EventBus } from './events.js';
 import { type HealthService, startHealth } from './health/index.js';
-import type { Platform } from './platform/index.js';
+import { type Platform, currentPlatform } from './platform/index.js';
 import type { ProbeHealth, ProbeTarget } from './prober/index.js';
 import type { ProviderRegistry } from './providers.js';
 import { type Observation, type Scanner, createScanner, noiseReason, suggestSlug } from './scanner/index.js';
@@ -102,6 +102,7 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   const home = store.home;
   const config = () => store.currentConfig();
   const knownPorts = () => new Set(probeTargets(store).map((t) => t.port));
+  const osEphemeral = () => (platform ?? currentPlatform()).ephemeralPorts();
   const ignore = () => {
     const ig = store.currentIgnore();
     return { ports: ig.ports, processes: ig.processes, dirs: ig.dirs.map((d) => expandHome(d, os.homedir())) };
@@ -132,13 +133,14 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
     : null;
 
   /** The latest scan's unknown listeners, with today's ignore rules and declared ports applied (a claim or an
-   * ignore takes effect at once, without waiting for the next scan). */
+   * ignore takes effect at once, without waiting for the next scan). Nothing while `scan.enabled` is off: the last
+   * scan before it was turned off would otherwise stay in the tray for good, ageing. */
   function observed(): Observation[] {
     const r = scanner?.last();
-    if (!r) return [];
-    const known = knownPorts();
     const cfg = config().scan;
-    const opts = { minPort: cfg.minPort, includeEphemeralPorts: cfg.includeEphemeralPorts, ignore: ignore(), selfPid: process.pid, selfPorts };
+    if (!r || !cfg.enabled) return [];
+    const known = knownPorts();
+    const opts = { minPort: cfg.minPort, includeEphemeralPorts: cfg.includeEphemeralPorts, osEphemeral: osEphemeral(), ignore: ignore(), selfPid: process.pid, selfPorts };
     return [...r.listeners, ...r.other].filter(
       (o) => !known.has(o.port) && !noiseReason({ pid: o.pid, process: o.process, port: o.port, addresses: o.addresses }, opts, o.cwd),
     );
@@ -146,7 +148,7 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   /** Any listener on a port, declared or not, from the latest scan. */
   function onPort(port: number): Observation | null {
     const r = scanner?.last();
-    if (!r) return null;
+    if (!r || !config().scan.enabled) return null;
     return r.known.get(port) ?? r.listeners.find((o) => o.port === port) ?? r.other.find((o) => o.port === port) ?? null;
   }
 
@@ -202,11 +204,18 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   });
 
   // Config and app files change under us (API writes and hand edits alike): re-read the probe targets. This is an
-  // internal subscriber, as are the thumbnailer and the proxy, so `bus.size` counts open dashboards only.
+  // internal subscriber, as are the thumbnailer and the proxy, so `bus.size` counts open dashboards only. Turning the
+  // scanner off empties the tray, and turning it back on scans straight away rather than after a whole interval.
+  let scanEnabled = config().scan.enabled;
   const onEvent = (e: ServerEvent) => {
     if (e.type === 'app' || e.type === 'apps' || e.type === 'config') {
       health.prober.refresh();
       historyCache.clear();
+    }
+    if (e.type === 'config' && scanner && config().scan.enabled !== scanEnabled) {
+      scanEnabled = config().scan.enabled;
+      if (scanEnabled) scanner.scan().catch(() => {});
+      bus.emit({ type: 'observed', reason: 'config' });
     }
   };
   const unsubscribe = bus.subscribe(onEvent, { internal: true });

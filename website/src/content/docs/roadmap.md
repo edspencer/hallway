@@ -1,28 +1,37 @@
 ---
 title: Roadmap
-description: What ships in v0, v1 and v2, with the acceptance criteria each milestone is checked against.
+description: What shipped in v0 (Hallway 0.1.0), what is upcoming in v1 and v2, and the acceptance criteria each milestone is checked against.
 ---
 
 Each milestone is useful on its own, and each is checked by **running the software** against the criteria below,
 not by reading the code.
 
 :::note[Where things stand]
-Hallway is a detailed specification with the v0 implementation just starting. Nothing below has shipped. The
-[specification](https://github.com/edspencer/hallway/blob/main/spec.md) in the repository is the source of truth
-while the code catches up.
+**v0 is released, as Hallway 0.1.0**, for macOS and Linux. It also includes part of v1 early: `hallway run` and the
+managed services behind it. **v1's fronting and v2 are upcoming.** The
+[specification](https://github.com/edspencer/hallway/blob/main/spec.md) in the repository is the source of truth for
+what is still to come.
 :::
 
 ## v0: The front page
+
+<span class="ms ms--v0">v0</span> **Released in 0.1.0.**
 
 **Scope:** the daemon; the dashboard; YAML config with live updates; health probes with state and 24-hour history;
 the scanner with identity, claim and ignore; bookmarks; favicon tiles; the agent guide and `llms.txt`;
 `hallway service install` for the daemon itself; `hallway doctor` for the daemon and data. **Direct mode only. No
 sudo anywhere.**
 
+**Platforms:** macOS and Linux. On macOS the daemon is a LaunchAgent and the scanner uses `lsof`; on Linux it is a
+systemd user unit (with lingering enabled if it should run without a login session) and the scanner uses `ss` or
+`/proc`. Every criterion below was checked on Linux by running it. The macOS side is unit-tested and CI runs the real
+launchd service job on a macOS runner; a few details that need a real Mac (such as Safari) are listed as unverified in
+the repository's research notes until they have been run on one.
+
 Done when:
 
 1. `npm i -g hallway && hallway service install` serves the dashboard at `http://localhost:4255`, still serving after
-   logging out and in, and after a reboot.
+   logging out and in, and after a reboot (a LaunchAgent on macOS; a systemd user unit on Linux).
 2. Creating `apps/foo.yaml` with a `name` and `port` in an editor makes a card appear on an open dashboard within a
    second, without a reload. Editing and deleting the file are reflected the same way.
 3. A syntactically broken `apps/foo.yaml` shows an error on that card (file, line, message) while every other card
@@ -41,8 +50,12 @@ Done when:
 
 ## v1: Fronting and services
 
-**Scope:** `hallway run`, `stop`, `start`, `restart` and `logs`; managed launchd services for apps; Caddy through its
-admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; the fallback page; `hallway setup` and
+<span class="ms">v1</span> **Upcoming**, except the services half, which shipped early in 0.1.0: `hallway run`,
+`stop`, `start`, `restart` and `logs`, `hallway service add`, `rm` and `regenerate`, managed launchd and systemd user
+services for apps, and log rotation. Everything else here, including "lost at last reboot", is still to come.
+
+**Scope:** `hallway run`, `stop`, `start`, `restart` and `logs`; managed services for apps (launchd on macOS, systemd
+user units on Linux); Caddy through its admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; the fallback page; `hallway setup` and
 `teardown`; networking checks in `hallway doctor`; custom domains (dnsmasq and `/etc/resolver`); the "exposed"
 indicator; "lost at last reboot"; log rotation.
 
@@ -72,9 +85,11 @@ Done when:
 
 ## v2: Agents and polish
 
+<span class="ms">v2</span> **Upcoming.**
+
 **Scope:** the MCP server (Streamable HTTP at `/mcp`, and `hallway mcp` over stdio); optional screenshot thumbnails;
-generated-card thumbnails; 7- and 90-day uptime from hourly rollups, with latency charts; `hallway hook
-check-command`; Linux (systemd user units, a `*.localhost` resolution check, `setcap` for Caddy).
+generated-card thumbnails; latency charts over the 7- and 90-day uptime views (the views themselves, from hourly
+rollups, are already in v0's drawer); `hallway hook check-command`. Linux support moved forward to v0 and v1.
 
 Done when:
 
@@ -83,7 +98,7 @@ Done when:
 3. `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots;
    `hallway thumbs disable` removes it; the base install never depends on it.
 4. The 90-day view renders from rollups only and stays fast with 30 apps.
-5. On Linux, every v0 criterion passes with systemd user units in place of LaunchAgents.
+5. Every v0 and v1 criterion has been run on a real Mac, with nothing left marked unverified on macOS.
 
 ## Later, unscheduled
 
@@ -98,6 +113,6 @@ Done when:
 ## Still open
 
 Some decisions are deliberately left for implementation. Among them: how Caddy gets port 443 without a reconfigurable
-root process (blocking for v1); whether a short `hw` alias ships; whether health history lives in SQLite or JSON
-lines; whether the dashboard's default hostname is `hallway.localhost`. The full list is in the repository's
+root process (blocking for v1); whether a short `hw` alias ships; whether the dashboard's default hostname is
+`hallway.localhost`. The full list is in the repository's
 [open questions](https://github.com/edspencer/hallway/blob/main/docs/10-open-questions.md).
