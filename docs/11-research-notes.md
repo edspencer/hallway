@@ -67,8 +67,15 @@ Sources:
   were distinguishable only by branch. After a reboot the cwd of dead processes was unrecoverable; they could only be
   matched afterwards by cross-referencing build-cache mtimes, inconclusively. *Verified 2026-09-30.*
 - `node:sqlite` works without a flag on Node v24.15.0 (SQLite 3.51.3). *Verified 2026-10-14.*
+- `node:sqlite` also works without a flag on **Node v22.23.3** (SQLite 3.51.3), on Linux: `new DatabaseSync(':memory:')`
+  and `select sqlite_version()` succeed, and Node prints `ExperimentalWarning: SQLite is an experimental feature`. The
+  daemon would want to silence that warning (or accept it in the log) if Q-STORE picks SQLite. Earlier 22.x releases
+  are still unchecked (Q-NODE-MIN). *Verified 2026-10-16.*
 
 ## Names, npm and binary collisions
+
+- **Update, 2026-10-16 (later the same day):** `npm view hallway` lists versions `0.0.0-stage` and `0.0.1`, with
+  `latest` = `0.0.1`: the author's code-free placeholder (D29, `RELEASING.md`). *Verified.*
 
 *Checked 2026-10-16 against `https://registry.npmjs.org/<name>` (404 = free).* The pre-rename naming record (2026-10-14)
 is in D1.
@@ -88,6 +95,21 @@ is in D1.
   - Not found as a command on a stock Linux box. **Not checked:** a stock macOS install, or popular shell-framework
     aliases (e.g. Oh My Zsh plugins). Check both before shipping the alias.
   - `hwy` is also an npm web framework (no bin); `hall` is an npm router package (no bin). Neither was pursued.
+
+## Platform support (D26): unverified on macOS
+
+Hallway is developed and run end to end on Linux; macOS is the primary platform but its code paths can only be
+unit-tested from there. Each item below is implemented (or will be, at the milestone shown) but **has not been run on
+a Mac**. Move an item out of this list, with the date and how, once it has been. Tests that pass on CI's
+`macos-latest` runner count only for what they actually exercise.
+
+| Item | Milestone | Status |
+|------|-----------|--------|
+| `server/platform/darwin.ts`: LaunchAgents directory (`~/Library/LaunchAgents`) and `<label>.plist` naming | scaffold | Unit-tested on Linux and macOS CI; never installed on a Mac. |
+| The daemon binding 127.0.0.1 and serving the built dashboard on macOS | scaffold | CI (`macos-latest`) runs the tests and `smoke:pack`, which start the packed daemon and fetch from it. Not run interactively on a Mac. |
+| `hallway service install` via `launchctl bootstrap gui/<uid>` | v0 | Not built yet. |
+| `lsof -nP -iTCP -sTCP:LISTEN -F pcLn` parsing on current macOS | v0 | Not built yet. |
+| Boot time from `sysctl -n kern.boottime` | v1 | Not built yet. |
 
 ## Caddy
 

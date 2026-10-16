@@ -2,8 +2,9 @@
 
 > The front door for everything you vibe-coded on a random port.
 
-**Status:** specification only. No code exists yet. This document set is written to be handed to an implementing
-agent (or person) who was not present for any of the design discussion. Anything not written down here is lost, so
+**Status:** pre-release. The implementation has started (package, CI, release machinery, a daemon skeleton and a
+placeholder dashboard: see `AGENTS.md`); the domain logic is still to be built. This document set is written to be
+handed to an implementing agent (or person) who was not present for any of the design discussion. Anything not written down here is lost, so
 the spec errs heavily on the side of detail, rationale, and recording what was considered and rejected.
 
 ---
@@ -64,7 +65,7 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 |----|----------|
 | D1 | Name: **Hallway** (originally Spaghetti Junction; renamed October 2026); npm package `hallway` (unscoped, free as of 2026-10-16); CLI binary `hallway` (a short alias, `hw`, is proposed but not decided: Q-BINARY) |
 | D2 | Standalone, generic, open-source project. Not a feature of any other tool. |
-| D3 | It owns its own app registry and uses **native launchd** (systemd later) to keep services alive. No PM2. |
+| D3 | It owns its own app registry and uses **native launchd** (systemd user units on Linux, D26) to keep services alive. No PM2. |
 | D4 | **Caddy** is the reverse proxy and TLS terminator. Hallway generates Caddy's config; it does not proxy traffic itself. |
 | D5 | Default domain is **`localhost`** (`<slug>.localhost`): resolves to loopback with zero DNS setup and gets Caddy's local CA automatically. Custom domains are supported via dnsmasq + `/etc/resolver`; `.internal` (e.g. `myname.internal`) is the recommended custom choice. |
 | D6 | **HTTPS is required** in fronted mode. |
@@ -84,8 +85,15 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D20 | Default daemon port **4255** ("HALL" on a phone keypad). Was 7724 ("SPAG") under the old name. |
 | D21 | **`hallway run`** is the one command agents use to start a server: launchd-owned, stable port, prints URL, exits. |
 | D22 | The **tab title and favicon** show when something is down. |
-| D23 | Visual identity: **the hallway** — each app is a numbered door; door states show health; bookmarks hang by the front door. **Proposal, awaiting the author's approval** (replaces the old motorway-signage identity). |
+| D23 | Visual identity: **the hallway** — each app is a numbered door; door states show health; bookmarks hang by the front door. **Approved as the working direction (D28); final logo/palette/typeface sign-off pending** (replaces the old motorway-signage identity). |
 | D24 | Docs use `.internal` for every custom-domain example. |
+| D25 | Licence: **MIT**. |
+| D26 | OS specifics sit behind a **platform abstraction** (`server/platform/`); **Linux is supported from v0** alongside macOS (primary). Anything not yet run on a Mac is marked "unverified on macOS". |
+| D27 | Only the `hallway` binary ships for now (the `hw` alias stays open: Q-BINARY). |
+| D28 | The hallway identity is the working direction; every visual token lives in `src/theme/tokens.css` so it can be swapped. |
+| D29 | Release machinery as Local Review's (changesets, trusted publishing, provenance). Nothing is published until a changeset is merged; `0.0.0` is never released. |
+| D30 | The docs website lives in `website/` as its own project; root CI tolerates it and builds it in a separate job. |
+| D31 | Development-only environment overrides for the bind address and Host allowlist (never flags, never documented to users). |
 
 ## 5. Glossary
 
@@ -111,12 +119,12 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 Full scope and acceptance criteria: [docs/08-roadmap.md](docs/08-roadmap.md).
 
 - **v0 — The front page.** Daemon + dashboard + YAML store + live updates + health probes + port scanner with claim
-  flow + bookmarks + favicon tiles + agent guide + self-install as a launchd service. Links use
-  `http://localhost:<port>`. No sudo.
+  flow + bookmarks + favicon tiles + agent guide + self-install as a launchd service (systemd user unit on Linux).
+  Links use `http://localhost:<port>`. No sudo. macOS and Linux (D26).
 - **v1 — Fronting and services.** `hallway run` and `hallway service add` (launchd jobs for apps), Caddy integration, HTTPS on
   `*.localhost`, `hallway setup` / `hallway doctor`, custom-domain mode (dnsmasq), "lost since reboot".
 - **v2 — Agents and polish.** MCP server (HTTP + stdio), screenshot thumbnails, generated cards, 90-day uptime
-  history with rollups and sparklines, Linux (systemd) support.
+  history with rollups and sparklines; everything verified on a real Mac.
 
 ## 7. How to maintain this spec
 

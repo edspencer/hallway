@@ -12,7 +12,7 @@ Decisions here supersede anything contradictory elsewhere; if you find a contrad
   stand to see them all. The word is plain, easy to say and spell, a single word, and it describes the *cure* (a calm,
   tidy home where you know what is behind each door) rather than the mess.
 - **npm:** `hallway` (unscoped) and `hall-way` were both free on 2026-10-16 (`registry.npmjs.org` returned 404 for
-  each). The author is publishing a placeholder to reserve `hallway`.
+  each). The author published a code-free placeholder, `hallway@0.0.1`, on 2026-10-16 to reserve it (D29).
 - **Binary:** `hallway`, the same as the package. A short alias is optional; `hw` is proposed, not decided
   (Q-BINARY).
 
@@ -48,6 +48,8 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   (changesets, provenance).
 
 ### D3 — Own the registry; use native launchd; no PM2, no `pm`
+
+- *Updated by D26:* systemd user units on Linux are implemented alongside launchd from v0, behind `server/platform/`.
 
 - Once Hallway owns the app registry, fronting and service installation, a separate process manager is
   redundant.
@@ -191,12 +193,12 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
 - `(N down) Hallway` and a status-marked favicon, live over SSE; only `down`/`unhealthy` count. A pinned tab
   becomes a passive monitor without any notification system. Details in `05-ui.md`.
 
-### D23 — Visual identity: the hallway (**proposal, awaiting the author's approval**)
+### D23 — Visual identity: the hallway (**approved as the working direction, D28; final sign-off pending**)
 
-- **Status: proposed, not approved.** It replaces the original D23 (British motorway signage), which the author
-  approved but which only made sense under the old name. Implementers should treat it as the working direction, and
-  prototype against it with screenshots, but must not finalise branding (logo, display typeface, palette) until the
-  author signs off (Q-VISUAL-IDENTITY).
+- **Status: approved as the direction to build against (2026-10-16, D28), not finalised.** It replaces the original
+  D23 (British motorway signage), which the author approved but which only made sense under the old name.
+  Implementers build against it and iterate with screenshots, but must not finalise branding (logo, display typeface,
+  palette) until the author signs off (Q-VISUAL-IDENTITY).
 - **The idea:** the dashboard is a calm, well-kept hallway. Each app is a **door** and its port is the **door
   number**. A door's state shows the app's health: **ajar** with light showing means healthy, **closed** means stopped
   on purpose, and **dark or boarded up** means down. Unclaimed listeners from the scanner are **noises behind doors you
@@ -220,6 +222,88 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   delegated, and gets Caddy's local CA automatically, so it is the simplest custom domain that is also correct.
 - The *default* stays `localhost` (D5): it needs no dnsmasq, which `.internal` still does. `.internal` is the answer
   when someone wants their own namespace.
+
+### D25 — Licence: MIT (approved by the author, 2026-10-16)
+
+- Matches the author's other open-source projects (Local Review, Paddock), so code and patterns can move between them
+  freely. `LICENSE` is Local Review's, copyright Ed Spencer. Resolves Q-LICENSE.
+
+### D26 — A platform abstraction, with Linux pulled forward from v2 (approved by the author, 2026-10-16)
+
+- Everything OS-specific sits behind one interface in `server/platform/` (`darwin.ts`, `linux.ts`): the per-user
+  service manager (launchd LaunchAgents / **systemd user units**), how listening sockets are listed (`lsof` /
+  **`ss`, falling back to `/proc/net/tcp{,6}`**), and boot time (`sysctl kern.boottime` / `/proc/stat` `btime`).
+  The rest of the server never branches on `process.platform`.
+- **Linux is implemented alongside macOS from v0**, not deferred to v2, so every milestone can be built, run and
+  checked end to end on a Linux development machine (where the implementing agents work). It also keeps the
+  abstraction honest: two real implementations from the start, not one plus a guess.
+- **macOS stays the primary platform.** Its implementation is written and unit-tested (both platforms' logic is
+  tested on every OS, and CI runs on macOS too), but anything that can only be exercised on a real Mac — `launchctl`
+  behaviour, `lsof` output on current macOS, LaunchAgent lifecycle across login/reboot — is listed as **"unverified on
+  macOS"** in `11-research-notes.md` until someone runs it there.
+- Linux scope follows Q-LINUX-SCOPE's leaning: systemd user units, a `*.localhost` resolution check, `setcap` for
+  Caddy (v1). Custom-domain DNS on Linux (`systemd-resolved` / dnsmasq drop-in) is still v1 work.
+- Updates D3 ("native launchd, systemd later") and `08-roadmap.md`.
+- **Rejected:** macOS-only until v2 (nothing could be run end to end by the agents doing the building); separate
+  per-OS code paths without an interface (scatters `process.platform` checks through the server).
+
+### D27 — Ship the `hallway` binary only, for now (approved by the author, 2026-10-16)
+
+- `package.json` declares one bin, `hallway`. Whether a short alias (`hw`) ships too is still open (Q-BINARY);
+  adding it later is a one-line, non-breaking change, while removing a shipped alias would break scripts.
+
+### D28 — The hallway identity (D23) is the approved working direction; tokens live in one place (2026-10-16)
+
+- The author approved D23 as the direction to **build against**. Final sign-off on the logo, display typeface and
+  palette is still open (Q-VISUAL-IDENTITY), so the identity must stay cheap to change:
+  - every colour, typeface and radius is a CSS custom property in `src/theme/tokens.css` (dark-first, with a light
+    variant under `prefers-color-scheme`); no other file hard-codes a colour;
+  - the provisional mark (a door ajar with lamplight) lives only in `src/brand/Logo.tsx` and `public/favicon.svg`.
+- No display font is bundled yet; the token names a warm serif with system fallbacks. Bundling one (OFL, licence
+  checked) is part of the visual-identity work.
+
+### D29 — Release machinery ported from Local Review; nothing published until a changeset says so (2026-10-16)
+
+- `.changeset/`, `.github/workflows/release.yml` and `RELEASING.md` follow Local Review exactly: a changesets version
+  PR, `verify-ci` (CI must be green on the exact commit), `publish-npm` over **npm trusted publishing (OIDC) with
+  provenance** and no npm token, then the `v<version>` tag and GitHub Release.
+- The npm side is set up: the author published a code-free placeholder, `hallway@0.0.1`, by hand on 2026-10-16 (a
+  trusted publisher can only be attached to an existing package) and configured trusted publishing for
+  `edspencer/hallway` / `release.yml`, with 2FA required and tokens disallowed. Publishing through the pipeline is
+  authorised.
+- **One addition to Local Review's workflow:** `package.json` starts at the unreleased version `0.0.0`, and the
+  Release workflow never releases `0.0.0`. Without that guard, any push to `main` with no pending changesets would
+  find no `v0.0.0` tag and try to publish. So nothing is published until a PR adds a changeset and the resulting
+  version PR is merged; the first real release is planned as `0.1.0` once v0 works.
+- **Rejected:** an `NPM_TOKEN` secret (no provenance guarantee; the sibling packages disallow tokens); `"private":
+  true` until release (it would need a code change to release, and changesets treats private packages
+  differently); an extra repository-variable switch on publishing (considered, then dropped: the `0.0.0` guard and
+  the changesets flow already make every release a deliberate merge, as in Local Review).
+
+### D30 — The documentation website lives in `website/` as its own project (2026-10-16)
+
+- `website/` is a separate npm project (its own `package.json` and lockfile), as in Local Review. The root
+  `tsconfig*.json`, `npm test`, the npm package's `files` and `smoke:pack` never include it; `check:nul` scans it
+  (skipping its dependencies and build output).
+- `ci.yml` has a `website` job that builds the site only when `website/**` changes, and passes with its steps
+  skipped until the directory exists; `ci-passed` requires it. Whoever adds the site adapts that job's steps.
+- Brings the "documentation website" item forward from "Later" in `08-roadmap.md`; it is being built in parallel
+  with v0.
+
+### D31 — Development-only overrides for the bind address and Host allowlist (2026-10-16)
+
+- The daemon binds 127.0.0.1 and accepts only loopback `Host` headers (`02-architecture.md`, "Security model"),
+  which makes it impossible to preview a development build through a reverse proxy on another machine, which is how
+  a remote development machine typically exposes previews. So two **environment variables** relax it, for development
+  only: `HALLWAY_DEV_BIND` (an address to bind instead of 127.0.0.1) and `HALLWAY_DEV_ALLOWED_HOSTS` (extra
+  hostnames, comma-separated, that the Host/Origin check accepts).
+- Constraints: environment only, **never a CLI flag**; never in `--help`, the agent guide or user docs (only
+  `CONTRIBUTING.md`/`AGENTS.md`); unset by default; the daemon prints a warning on stderr while either is in effect;
+  `smoke:pack` and the tests scrub them. Nothing about the production default changes.
+- Local Review deliberately has no such override ("no `--host` flag"). Hallway has one only because its
+  development often happens on remote machines; if that stops being true, delete it.
+- **Rejected:** a `--host` flag (discoverable by users, contradicts the security model); tunnelling 127.0.0.1 through
+  SSH for every preview (works, but not with the dev box's existing proxy).
 
 ## Alternatives considered for the whole product
 
