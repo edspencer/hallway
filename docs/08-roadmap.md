@@ -83,7 +83,7 @@ Acceptance criteria:
 thumbnails; 7 d / 90 d uptime from hourly rollups with latency charts; `hallway hook check-command`. (Linux support
 moved forward to v0/v1: D26.)
 
-Acceptance criteria:
+Acceptance criteria (1 and 2 met on 2026-10-16: `11-research-notes.md`, "The v2 MCP acceptance run"):
 
 1. An MCP client can `add_bookmark` and the dashboard shows it live; it appears in the YAML file with comments in that
    file preserved.

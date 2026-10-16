@@ -1,4 +1,4 @@
-// The MCP tools and resources (docs/06-agent-interface.md, "MCP server"; D8, D10, D48). A typed convenience layer
+// The MCP tools and resources (docs/06-agent-interface.md, "MCP server"; D8, D10, D50). A typed convenience layer
 // over the same store and views as the HTTP API: every write goes through the Store (D7), takes an optional `etag`
 // (If-Match) and returns the new one. Nothing here starts, stops or installs a process (D10): `declare_app` and
 // `update_app` refuse `service`, `update_app` refuses a port change (D17), `remove_app` refuses a managed app.

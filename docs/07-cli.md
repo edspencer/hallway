@@ -73,8 +73,8 @@ Commands that are richer with live data look for the daemon on `127.0.0.1:<confi
 | Command | Description |
 |---------|-------------|
 | `hallway guide [--snippet]` | Print the agent guide, or just the snippet for agent instruction files. [v0, **built**] |
-| `hallway mcp` | stdio MCP bridge to the daemon. [v2] |
-| `hallway hook check-command` | Optional pre-tool-use hook helper; blocks bare dev-server starts. [v2] |
+| `hallway mcp` | stdio MCP server: a bridge to the running daemon's `/mcp`, so the daemon stays the one writer; exits 1 with instructions if there's no daemon (D51). [v2, **built**] |
+| `hallway hook check-command` | Optional pre-tool-use hook (Claude Code's `PreToolUse` on `Bash`): reads the payload on stdin, denies a bare dev-server start with the equivalent `hallway run`, lets everything else through (D51). [v2, **built**] |
 
 ## Thumbnails
 

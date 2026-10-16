@@ -1,5 +1,5 @@
 // `hallway mcp` (the stdio bridge to the daemon's /mcp, D8) and `hallway hook check-command` (the pre-tool-use hook,
-// D49): the two commands that coding agents run rather than people.
+// D51): the two commands that coding agents run rather than people.
 import { UsageError, check, need } from '../args.js';
 import type { Ctx } from './context.js';
 

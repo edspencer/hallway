@@ -1,5 +1,5 @@
 // `hallway hook check-command`: an optional pre-tool-use hook for coding agents (docs/06-agent-interface.md, "Changing
-// agent habits"; D49). It reads the agent's hook payload on stdin and, when the shell command it's about to run starts
+// agent habits"; D51). It reads the agent's hook payload on stdin and, when the shell command it's about to run starts
 // a dev server directly (`npm run dev`, `vite`, `astro dev`, `python -m http.server`, …), blocks it with a message
 // suggesting the equivalent `hallway run`, which keeps the server running outside the agent's session on a stable
 // port. Anything else, including a payload it can't read, is let through silently: a hook must never get in the way
