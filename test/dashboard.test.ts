@@ -8,11 +8,22 @@ import type { AppHealth } from '../shared/api.ts';
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, slugify, tildify } from '../src/lib/format.ts';
-import { countStates, doorState, faviconMark, tabTitle } from '../src/lib/status.ts';
+import { countStates, doorState, faviconMark, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
 
 const health = (state: AppHealth['state'], starting = false): { health: AppHealth } => ({
   health: { state, starting, since: null, checkedAt: null, httpStatus: null, latencyMs: null, detail: null, uptime24h: null, latencyP50: null },
+});
+
+describe('door subtitle', () => {
+  test('repo @ branch for a worktree, unless the name already says it; else the description', () => {
+    const app = (name: string, label: string | null, description: string | null = null) =>
+      ({ name, identity: label === null ? null : { label }, config: { description } }) as Parameters<typeof subtitle>[0];
+    assert.equal(subtitle(app('Notes', 'notes @ branch-a')), 'notes @ branch-a');
+    assert.equal(subtitle(app('notes @ branch-a', 'notes @ branch-a')), null);
+    assert.equal(subtitle(app('notes @ branch-a', 'notes @ branch-a', 'Team notes')), 'Team notes');
+    assert.equal(subtitle(app('Deck', null, 'Slides')), 'Slides');
+  });
 });
 
 describe('status', () => {

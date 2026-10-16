@@ -58,3 +58,10 @@ export function tabTitle(c: Pick<Counts, 'down' | 'unhealthy'>, name = 'Hallway'
 export function faviconMark(c: Pick<Counts, 'down' | 'unhealthy'>): 'down' | 'unhealthy' | null {
   return c.down ? 'down' : c.unhealthy ? 'unhealthy' : null;
 }
+
+/** The second line under a door's name: `repo @ branch` for a worktree sibling, else the description. Not the label
+ * when the name already is it (a claimed worktree is named after its label). */
+export function subtitle(app: Pick<AppView, 'name' | 'identity' | 'config'>): string | null {
+  const label = app.identity?.label;
+  return (label && label !== app.name ? label : null) ?? app.config?.description ?? null;
+}
