@@ -1,8 +1,8 @@
 // Windows: supported where feasible, best effort (D58). Nothing here needs administrator rights. Listeners come from
 // `netstat -ano` and process names from `tasklist` (both fast, and parsed without relying on their localised words);
 // command lines, parents and start times from one PowerShell call per scan (Win32_Process), which also reads each
-// process's working directory out of its PEB, as psutil does (D59). Managed services refuse with a message for now,
-// and fronted mode is unsupported (setup refuses before doing anything). Checked on GitHub's hosted Windows runners;
+// process's working directory out of its PEB, as psutil does (D59). Managed services are per-user scheduled tasks
+// running `hallway supervise` (schtasks.ts, D60), and fronted mode is unsupported (setup refuses before doing anything). Checked on GitHub's hosted Windows runners;
 // everything else is "unverified on a real Windows desktop" in docs/11-research-notes.md. The parsers are pure
 // functions over captured output (test/fixtures/platform/win32-*), tested on every OS.
 import { execFileSync } from 'node:child_process';
@@ -12,7 +12,7 @@ import { win32 as path } from 'node:path';
 import type { Platform, PortRange } from './index.js';
 import { FrontingUnsupported, type Fronting } from './fronting.js';
 import { type ProcessInfo, type RawListener, run, splitHostPort } from './listeners.js';
-import { type ServiceManager, ServiceManagerError, type ServiceStatus } from './services.js';
+import { schtasksManager } from './schtasks.js';
 
 /**
  * `netstat -ano`: `  TCP    127.0.0.1:4255    0.0.0.0:0    LISTENING    1234`. The state word is localised (`ABHÖREN`,
@@ -252,30 +252,7 @@ export function powershell(script: string, timeoutMs = 30_000) {
 
 let ephemeral: PortRange | undefined;
 
-export const WINDOWS_SERVICES_UNSUPPORTED = "managed services aren't supported on Windows yet: start the server yourself and register it (hallway claim <port>)";
 export const WINDOWS_FRONTING_UNSUPPORTED = "fronted mode isn't supported on Windows: apps keep their http://localhost:<port> addresses";
-
-function unsupportedServices(dir: string): ServiceManager {
-  const refuse = async (): Promise<never> => {
-    throw new ServiceManagerError(WINDOWS_SERVICES_UNSUPPORTED);
-  };
-  return {
-    kind: 'schtasks',
-    unsupported: WINDOWS_SERVICES_UNSUPPORTED,
-    file: (label) => path.join(dir, `${label}.xml`),
-    render: () => {
-      throw new ServiceManagerError(WINDOWS_SERVICES_UNSUPPORTED);
-    },
-    readPath: () => null,
-    write: refuse,
-    start: refuse,
-    stop: refuse,
-    restart: refuse,
-    remove: refuse,
-    status: async (label): Promise<ServiceStatus> => ({ label, installed: false, loaded: false, running: false, pid: null, lastExitCode: null, state: null, enabled: null }),
-    list: () => [],
-  };
-}
 
 const refuseFronting = (): never => {
   throw new FrontingUnsupported(WINDOWS_FRONTING_UNSUPPORTED);
@@ -300,11 +277,11 @@ export const win32: Platform = {
   id: 'win32',
   serviceManager: 'schtasks',
   listenerSource: 'netstat',
-  // where the scheduled tasks' definitions are kept (D58); nothing is written there yet
+  // the job files and task definitions (D60); the tasks themselves live in Task Scheduler's root folder
   userServiceDir: (env = process.env, home = os.homedir()) =>
     path.join(env.LOCALAPPDATA && path.isAbsolute(env.LOCALAPPDATA) ? env.LOCALAPPDATA : path.join(home, 'AppData', 'Local'), 'hallway', 'tasks'),
   serviceFileName: (label) => `${label}.xml`,
-  services: ({ env = process.env, home = os.homedir() } = {}) => unsupportedServices(win32.userServiceDir(env, home)),
+  services: ({ run, env = process.env, home = os.homedir() } = {}) => schtasksManager({ dir: win32.userServiceDir(env, home), run }),
   // `start` is a cmd built-in and would need quoting for `&`; the URL handler takes the URL as one argument
   openCommand: (url) => ['rundll32', ['url.dll,FileProtocolHandler', url]],
   fronting: win32Fronting,
