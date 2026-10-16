@@ -57,9 +57,13 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
 
         <div className="hw-header-status">
           {connection !== 'live' && (
-            <span className="hw-pill hw-pill--warn" role="status">
+            <span
+              className="hw-pill hw-pill--warn"
+              role="status"
+              title={connection === 'reconnecting' ? 'The Hallway daemon isn’t answering. The states shown are from before it stopped; this page reconnects by itself.' : undefined}
+            >
               <span className="hw-pulse" aria-hidden="true" />
-              {connection === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
+              {connection === 'reconnecting' ? 'Daemon not answering: reconnecting…' : 'Connecting…'}
             </span>
           )}
           {counts && counts.total > 0 && (checking ? <CountLine c={counts} /> : <span className="hw-pill" title="No prober is running in this daemon, so no app has been checked">Health checks off</span>)}
