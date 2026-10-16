@@ -7,8 +7,8 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
 
 | ID | Question | Why it matters | How to check |
 |----|----------|----------------|--------------|
-| Q-SAFARI-LOCALHOST | Does Safari resolve `https://app.localhost` typed into the address bar? | D5 assumes `*.localhost` works with no DNS in all major browsers. The macOS system resolver handles it (verified), so Safari probably does. | Try it once fronted mode exists. If not, the default must fall back to dnsmasq even for `.localhost`. |
-| Q-SECURE-CONTEXT | Do Chrome/Firefox/Safari treat `http://*.localhost` as a secure context? | Only matters if anyone runs fronted mode without TLS (not planned). | `window.isSecureContext` in each browser. |
+| Q-SAFARI-LOCALHOST | Does Safari resolve `https://app.localhost` typed into the address bar? | D5 assumes `*.localhost` works with no DNS in all major browsers. The macOS system resolver handles it (verified), so Safari probably does. | Fronted mode exists (0.2.0), so this is now a check on a real Mac: run `hallway setup` and type the address into Safari. If it fails, the default must fall back to dnsmasq even for `.localhost`. |
+| Q-SECURE-CONTEXT | Do Chrome/Firefox/Safari treat `http://*.localhost` as a secure context? | Only matters if anyone runs fronted mode without TLS. Fronted mode as built (D47) is always HTTPS, so this is moot unless that changes. | `window.isSecureContext` in each browser. |
 | Q-CADDY-RESUME | **Resolved 2026-10-16 (D47):** no `--resume`. An admin push autosaves to `$XDG_CONFIG_HOME/caddy/autosave.json` and `--resume` then ignores `--config`; Caddy starts from `generated/caddy.json` instead, with `persist: false`. | | |
 | Q-CADDY-TRUST | **Resolved 2026-10-16 (D47):** Caddy runs as the user, its CA is in the data home, its own trust installation is off, and `hallway setup` installs the root itself (`security add-trusted-cert` / `update-ca-certificates`). The macOS command is unverified on a Mac (CI's macOS job runs it). | | |
 | Q-HMR | **Resolved 2026-10-16 (D47) for Vite:** Vite 8.3.4 through Caddy with Host rewritten hot-updates with no reload and no `server.hmr.clientPort`. Astro (Vite underneath) not separately run. | | |
@@ -44,14 +44,15 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
       `engines.node`, `files`, `publishConfig: { access: public, provenance: true }` (Local Review's shape).
 - [x] CI: typecheck, tests, build, a "no NUL bytes in source" check (`npm run check:nul`), pack smoke test
       (`npm run smoke:pack`), on Node 22/24 × Linux/macOS, plus a placeholder docs-site job (D30).
-- [x] changesets + release workflow with npm provenance and trusted publishing (D29). Nothing is published until a
-      changeset is merged; the first real release is planned as `0.1.0` once v0 works.
+- [x] changesets + release workflow with npm provenance and trusted publishing (D29). The first real release,
+      `0.1.0`, went out on 2026-10-16, followed by 0.2.0 and 0.3.0 the same day.
 - [x] `AI-DECLARATION.md`, `SECURITY.md` and `CONTRIBUTING.md`, adapted from Local Review's.
 - [ ] README with the pitch ("The front door for everything you vibe-coded on a random port"), a screenshot/GIF, and a
       30-second quick start. *(Pitch and a development quick start are in; the screenshot/GIF and a user quick start
       wait for v0.)*
-- [ ] What's left of the release checklist in `RELEASING.md` (author only): GitHub settings (Actions may create
-      pull requests; optional `CI passed` ruleset; private vulnerability reporting).
+- [ ] What's left in `RELEASING.md`, "Maintainer settings" (author only): `npm deprecate hallway@0.0.1` (and
+      `0.0.0-stage`); optionally a `CI passed` ruleset and private vulnerability reporting. (Actions may now create
+      and approve pull requests: done, as the three version PRs show.)
 - [x] Reserve the npm name `hallway` early: the author published the placeholder `hallway@0.0.1` on 2026-10-16 and
       configured trusted publishing (D29, `RELEASING.md`).
 - [x] Give the documentation website a short "Why the name" origins page: the original name, why it was renamed,
