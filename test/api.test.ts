@@ -272,6 +272,16 @@ describe('observed listeners', () => {
     assert.equal((await req('/api/observed/zzz/claim', { method: 'POST', json: { slug: 'x' } })).status, 404);
   });
 
+  test('claim names a worktree sibling repo @ branch, and keeps an IPv6-only listener on ::1', async () => {
+    const { req, providers, home } = await setup();
+    const wt = { ...OBS, id: 'wt1', identity: { ...OBS.identity, name: 'my-dashboard', label: 'my-dashboard @ branch-a', bindAddress: '::1', exposed: false } };
+    providers.register({ name: 'scanner', observed: () => [wt] });
+    assert.equal((await req('/api/observed/wt1/claim', { method: 'POST', json: { slug: 'dash-a' } })).status, 201);
+    const text = fs.readFileSync(path.join(home, 'apps/dash-a.yaml'), 'utf8');
+    assert.match(text, /^name: my-dashboard @ branch-a$/m);
+    assert.match(text, /^host: "?::1"?$/m);
+  });
+
   test('ignore by port, process or dir writes ignore.yaml', async () => {
     const { req, providers, store } = await setup();
     providers.register({ name: 'scanner', observed: () => [OBS, { ...OBS, id: 'nodir', identity: { ...OBS.identity, cwd: null, process: null } }] });
