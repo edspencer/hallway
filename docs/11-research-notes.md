@@ -105,12 +105,42 @@ a Mac**. Move an item out of this list, with the date and how, once it has been.
 
 | Item | Milestone | Status |
 |------|-----------|--------|
-| `server/platform/darwin.ts`: LaunchAgents directory (`~/Library/LaunchAgents`) and `<label>.plist` naming | scaffold | Unit-tested on Linux and macOS CI; never installed on a Mac. |
+| `server/platform/darwin.ts`: LaunchAgents directory (`~/Library/LaunchAgents`) and `<label>.plist` naming | scaffold | Unit-tested on Linux and macOS CI; installed and loaded on CI's `macos-latest` runner by `scripts/services-real.mjs` (2026-10-16, below). Never on a developer's Mac. |
 | The daemon binding 127.0.0.1 and serving the built dashboard on macOS | scaffold | CI (`macos-latest`) runs the tests and `smoke:pack`, which start the packed daemon and fetch from it. Not run interactively on a Mac. |
 | The file watcher (chokidar 5) on macOS | v0 | chokidar 4+ dropped its `fsevents` backend and uses `fs.watch` per directory. Verified on Linux 2026-10-16 (create, edit, delete and a broken file in `apps/` arrive over SSE in 150–260 ms, including an editor-style save by rename; `test/events.test.ts` and a curl run against the daemon). On macOS only CI's `macos-latest` run of the same tests; not tried with real editors (atomic-rename saves from vim, VS Code) on a Mac. |
-| `hallway service install` via `launchctl bootstrap gui/<uid>` | v0 | Not built yet. |
+| `hallway service install` via `launchctl bootstrap gui/<uid>` | v0 | **Run against real launchd on CI's `macos-latest` runner, 2026-10-16** (see "Managed services on real launchd and systemd" below). Not yet on a developer's Mac, and not across a logout/login or reboot. |
+| The launchd lifecycle: `enable`/`bootstrap`/`kickstart`/`kickstart -k`/`bootout`/`disable`/`print` and their exit codes | v1 | Same CI run: every verb ran for real and `print`'s `state = running` / `pid` were parsed. The bootstrap retry after a bootout ("5: Input/output error") never triggered there, so that path is only unit-tested. Exit codes 3/36/113 for "not loaded" are taken from launchctl's documented behaviour, not observed. |
+| `disable` keeping a stopped job stopped at the next **login** (D41), and `RunAtLoad` starting a job at login | v1 | Unverified: CI can't log out and back in. |
+| The PATH trap on a Mac with fnm (the per-shell `fnm_multishells` symlink resolved to the stable install) | v1 | The resolution is unit-tested with a fake fnm layout on both OSes; CI's runners don't use fnm. |
 | `lsof -nP -iTCP -sTCP:LISTEN -F pcLn` parsing on current macOS | v0 | Not built yet. |
 | Boot time from `sysctl -n kern.boottime` | v1 | Not built yet. |
+
+## Managed services on real launchd and systemd (2026-10-16)
+
+Run by `scripts/services-real.mjs` in CI (the `Services (real launchd)` / `Services (real systemd)` jobs of PR #7):
+`macos-latest` (launchd, `gui/501`) and `ubuntu-latest` (systemd's user instance, after `loginctl enable-linger`;
+`XDG_RUNTIME_DIR=/run/user/<uid>`). Each installs the daemon as a service, restarts it, runs an app with
+`hallway run`, stops, starts and restarts it, runs a `--persist` app and kills it, checks log rotation, regenerates,
+runs `doctor`, and removes everything. Observed:
+
+- **Both pass end to end.** The generated plist and unit load and run as written; the PATH and program resolution work
+  on both runners; `doctor` reports no problems.
+- **KeepAlive / `Restart=always`:** a `SIGKILL`ed persistent app came back with a new pid in about 10 s on both
+  (launchd's ThrottleInterval 10, systemd's RestartSec=10).
+- **`launchctl kickstart -k` on the daemon** took about 10 s to answer again on macOS, against under a second with
+  `systemctl --user restart`; probably ThrottleInterval applying to the restart. Fine for a restart command, but worth
+  knowing when timing out: `hallway service restart` waits 15 s.
+- **Copy-then-truncate rotation works with both service managers' log files:** after the daemon rotated a 300 KB
+  `StandardOutPath` / `StandardOutput=append:` file (limit 64 KiB), the rotated copy was 65,500 bytes and the next
+  writes landed at the start of the truncated file (20 bytes, not a sparse file at the old offset). So launchd opens
+  `StandardOutPath` for appending, as systemd's `append:` does.
+- **Validators:** `plutil -lint` accepts the golden plists (`macos-latest`), `systemd-analyze verify --user` accepts
+  the generated units (`ubuntu-latest`); `test/services.test.ts`.
+- **Not covered by CI:** behaviour across logout/login and reboot (RunAtLoad, a `disable`d job staying stopped,
+  lingering at boot), and Macs with a version manager's shims.
+
+The development box these were built on has no systemd at all (PID 1 is `tini` in a container): there the end-to-end
+tests and `smoke:pack` use `test/fixtures/fake-systemctl`, which runs the generated units for real, detached.
 
 ## Caddy
 

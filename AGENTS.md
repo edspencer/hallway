@@ -5,8 +5,9 @@
 Hallway is **pre-release**. The repository holds a complete **specification** and the **start of the
 implementation**: the package, build, CI and release machinery, the daemon core (`hallway serve` and `guide`, the data
 home and its store, the watcher, event bus and SSE, the HTTP API, the agent guide and `llms.txt`, the security
-middleware, the platform abstraction) and a placeholder dashboard. The prober, scanner, services and proxy are still
-to be built, milestone by milestone; they plug into the core as providers (`server/providers.ts`, D35).
+middleware, the platform abstraction), the CLI commands and managed services (`hallway run`, launchd / systemd user
+units, log rotation, `doctor`) and a placeholder dashboard. The prober, scanner and proxy are still to be built,
+milestone by milestone; they plug into the core as providers (`server/providers.ts`, D35).
 
 Nobody who took part in the design discussion will be available to answer questions, so the spec is deliberately
 exhaustive: it records decisions, their rationale, the alternatives that were rejected, verified facts, and open
@@ -56,6 +57,11 @@ The human-facing version of the development conventions, with setup, CI and pull
 ```
 server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   cli.ts           `hallway` entry point (the package's bin); args.ts parses its arguments
+  commands/        every other command: services.ts (run, stop, start, restart, logs, service …), apps.ts (app,
+                   bookmark), status.ts (status, scan, claim, ignore, open), doctor.ts; context.ts is what they share
+  client.ts        the CLI's side of the HTTP API (finds the daemon on config.yaml's port, D44)
+  services/        managed services: spec.ts (YAML → resolved job), resolve.ts (the PATH trap), index.ts (the
+                   lifecycle and the YAML side of it), run.ts (`hallway run`), ports.ts, logs.ts, rotate.ts, probe.ts
   index.ts         the HTTP app (createApp) and startServer: store + watcher + snapshots + HTTP
   api.ts           the /api routes, the SSE route, /llms.txt, /llms-full.txt, /agent-guide.md
   views.ts         what the API returns: files merged with provider data (shared/api.ts types)
@@ -66,7 +72,8 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   security.ts      loopback-only Host/Origin/Content-Type middleware
   config.ts        package root, data home ($HALLWAY_HOME, ~/.hallway) and its layout, ports, dev overrides
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
-  platform/        macOS (launchd, lsof) / Linux (systemd user units, ss) behind one interface
+  platform/        macOS (launchd, lsof) / Linux (systemd user units, ss) behind one interface; launchd.ts and
+                   systemd.ts render the job definitions (pure) and run the lifecycle verbs through a mockable runner
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
   scanner/         observed listeners: list, filter, identify, record      (v0, not built yet)
@@ -94,7 +101,8 @@ npm run typecheck     # server + dashboard
 npm run build         # dist/web (Vite) + dist/server, dist/shared (tsc)
 npm run check:nul     # no raw NUL bytes in JS/TS sources
 npm run sync:guide    # regenerate AGENT-GUIDE.md's file-format reference after changing server/store/schema.ts
-npm run smoke:pack    # npm pack, install the tarball into a temp prefix, run it, check it serves
+npm run smoke:pack    # npm pack, install the tarball into a temp prefix, run it, check it serves (and, on
+                      # Linux, `service install` and `run` against test/fixtures/fake-systemctl)
 npm run changeset     # add a changeset for a user-facing change
 ```
 
@@ -113,8 +121,10 @@ Run `npm test` and `npm run typecheck` before committing, and `npm run smoke:pac
 - **The default port is one constant**, `DEFAULT_PORT` in `server/port.ts`; the CLI help, the startup line and
   `npm run dev` derive from it.
 - **Server imports use `.js` extensions** (NodeNext); tests import `.ts` files directly. The build rewrites them.
-- **Tests never touch a real data home**: use `tmpDir()` / `tmpStore()` from `test/fixture.ts` and pass
-  `HALLWAY_HOME`. Give each test its own `EventBus` and `ProviderRegistry` rather than the daemon's singletons.
+- **Tests never touch a real data home or the real service manager**: use `tmpDir()` / `tmpStore()` from
+  `test/fixture.ts` and pass `HALLWAY_HOME`; give the CLI a throwaway `HOME` (so the unit directory is too), and mock
+  the platform's command runner or put `test/fixtures/fake-systemctl` first on `PATH`. Only
+  `scripts/services-real.mjs`, in CI, loads real jobs. Give each test its own `EventBus` and `ProviderRegistry` rather than the daemon's singletons.
 - **Only the store writes the human-editable files.** Anything that changes `apps/`, `bookmarks/`, `ignore.yaml` or
   `config.yaml` goes through `Store` (server/store/index.ts); new fields go into `schema.ts` (then
   `npm run sync:guide`). Live data never goes into those files: register a provider (server/providers.ts) and emit
