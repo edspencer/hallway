@@ -32,7 +32,7 @@ import {
   type Field,
   type Issue,
 } from './schema.js';
-import { appendMapping, appendToList, locate, mergePatch, newDocument, parse, removeFromList, replaceWith, stringify, type Parsed } from './yamldoc.js';
+import { appendMapping, appendToList, locate, mergePatch, newDocument, parse, patchListItem, removeFromList, replaceWith, stringify, type Parsed } from './yamldoc.js';
 
 export { SLUG } from './schema.js';
 
@@ -568,7 +568,7 @@ export class Store {
   }
 
   /** Append a link to a group (`hallway bookmark add`), creating the group's file if it's missing. Comments stay. */
-  async addBookmark(group: string, link: { url: string; title?: string; description?: string }, opts: WriteOptions = {}): Promise<Entry<BookmarkGroupConfig>> {
+  async addBookmark(group: string, link: { url: string; title?: string; description?: string; icon?: string; tags?: string[] }, opts: WriteOptions = {}): Promise<Entry<BookmarkGroupConfig>> {
     this.requireName(group, 'group');
     this.rejectUnknown((BOOKMARKS_SCHEMA as Extract<Field, { t: 'object' }>).fields.links, [link]);
     const e = this.groupEntry(group);
@@ -597,6 +597,33 @@ export class Store {
     this.track(this.groups, e);
     this.bus.emit({ type: 'bookmarks', group });
     return removed!;
+  }
+
+  /**
+   * Merge-patch one link in a group, found by its URL or its 0-based index (MCP's `update_bookmark`). The link keeps
+   * its place and comments; `null` removes a key. Returns the link as written.
+   */
+  async updateBookmark(group: string, which: string | number, patch: unknown, opts: WriteOptions = {}): Promise<Record<string, unknown>> {
+    this.requireName(group, 'group');
+    const linkSchema = (BOOKMARKS_SCHEMA as Extract<Field, { t: 'object' }>).fields.links;
+    const ofLink = linkSchema.t === 'list' ? linkSchema.of : undefined;
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new ValidationError('the patch must be an object');
+    this.rejectUnknown(linkSchema, [patch]);
+    const e = this.groupEntry(group);
+    let index = -1;
+    await this.write(
+      e,
+      (doc) => {
+        const links = ((doc.toJS() as { links?: unknown } | null)?.links ?? []) as { url: string }[];
+        index = typeof which === 'number' ? which : Array.isArray(links) ? links.findIndex((l) => l && l.url === which) : -1;
+        if (!Array.isArray(links) || !patchListItem(doc, 'links', index, patch as Record<string, unknown>, ofLink))
+          throw new NotFoundError(typeof which === 'number' ? `${e.file} has no link number ${which}` : `${e.file} has no link to ${which}`);
+      },
+      { ...opts, mustExist: true },
+    );
+    this.track(this.groups, e);
+    this.bus.emit({ type: 'bookmarks', group });
+    return (e.value?.links[index] ?? {}) as unknown as Record<string, unknown>;
   }
 
   async deleteGroup(group: string, opts: WriteOptions = {}): Promise<string> {

@@ -115,6 +115,14 @@ export function mergePatch(doc: Document, patch: Record<string, unknown>, schema
   setNode(doc, root(doc), patch, () => false, schema);
 }
 
+/** Merge-patch the mapping at `key[index]` (one bookmark in `links`), keeping its comments. False if there's none. */
+export function patchListItem(doc: Document, key: string, index: number, patch: Record<string, unknown>, schema: Field | undefined): boolean {
+  const seq = root(doc).get(key, true);
+  if (!isSeq(seq) || index < 0 || index >= seq.items.length || !isMap(seq.items[index])) return false;
+  seq.items[index] = setNode(doc, seq.items[index], patch, () => false, schema);
+  return true;
+}
+
 /** A fresh document for a new file, with optional comment blocks before and after its contents. */
 export function newDocument(comments: { header?: string; footer?: string } = {}): Document {
   const doc = new YAML.Document(new YAMLMap());
