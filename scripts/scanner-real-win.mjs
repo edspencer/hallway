@@ -29,6 +29,10 @@ try {
   t = Date.now();
   const info = await win32.processInfo([child.pid, ...others]);
   verdict.infoMs = Date.now() - t;
+  // again, warm: the first PowerShell on a fresh machine pays for .NET, CIM and compiling the PEB reader
+  t = Date.now();
+  await win32.processInfo([child.pid]);
+  verdict.infoWarmMs = Date.now() - t;
   verdict.info = info.get(child.pid) ?? null;
   verdict.others = { asked: others.length, described: others.filter((p) => info.has(p)).length, withCwd: others.filter((p) => info.get(p)?.cwd).length };
   verdict.ok = !!ours && ours.process === 'node' && verdict.info?.cwd === dir && /node/i.test(verdict.info?.command ?? '') && verdict.info?.orphan === false;
