@@ -81,7 +81,7 @@ const managerSays = (label) => {
 
 try {
   step(`${darwin ? 'launchd (gui/' + uid + ')' : 'systemd --user'}; data home ${data}`);
-  hw('doctor'); // creates the data home; fine to warn here
+  hw('app', 'ls'); // creates the data home
   const port = await freePort();
   fs.appendFileSync(path.join(data, 'config.yaml'), `port: ${port}\n`);
 

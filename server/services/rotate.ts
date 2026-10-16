@@ -1,4 +1,4 @@
-// Log rotation for managed services and the daemon (docs/04-apps-health-services.md, "Logs"; Q-LOG-ROTATION, D40).
+// Log rotation for managed services and the daemon (docs/04-apps-health-services.md, "Logs"; Q-LOG-ROTATION, D43).
 // launchd and systemd append to a log file they hold open, so renaming it would leave them writing to the renamed
 // file. Instead: copy, then truncate in place. Every `*.log` in the data home's logs/ above `services.logMaxBytes`
 // is copied to `<file>.1` (older generations shift up to `services.logGenerations`, the oldest dropped) and then

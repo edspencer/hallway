@@ -1,6 +1,6 @@
 // macOS: launchd LaunchAgents in the gui/<uid> domain (docs/04-apps-health-services.md, "Generating launchd jobs").
 // The plist follows the template in docs/04 exactly; the lifecycle uses the modern launchctl verbs (bootstrap,
-// bootout, kickstart, print), plus enable/disable so that a stopped job stays stopped at the next login (D38).
+// bootout, kickstart, print), plus enable/disable so that a stopped job stays stopped at the next login (D41).
 // Behaviour checked only with the runner mocked is listed as "unverified on macOS" in docs/11-research-notes.md.
 import fs from 'node:fs';
 import path from 'node:path';

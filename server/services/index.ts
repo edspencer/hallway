@@ -1,6 +1,6 @@
 // Managed services (v1): what `hallway run`, `start`, `stop`, `restart`, `service add|rm|regenerate` and
 // `service install|uninstall|status|restart` do, on top of the platform's service manager (server/platform/) and the
-// store (the only writer of apps/*.yaml). The YAML side of the lifecycle (docs/04, "Lifecycle"; D38):
+// store (the only writer of apps/*.yaml). The YAML side of the lifecycle (docs/04, "Lifecycle"; D41):
 //
 //   start / run      expected: running (or adhoc for a job that neither starts at login nor restarts)
 //   stop             expected: stopped

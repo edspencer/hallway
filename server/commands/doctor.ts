@@ -28,16 +28,20 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
   const add = (c: Check) => checks.push(c);
 
   // ---------------- the data home ----------------
-  try {
-    fs.accessSync(ctx.home, fs.constants.R_OK | fs.constants.W_OK);
-    add({ id: 'data-home', status: 'pass', message: `data home ${show(ctx.home)} is readable and writable` });
-  } catch (e) {
-    add({ id: 'data-home', status: 'fail', message: `data home ${show(ctx.home)}: ${(e as Error).message}`, fix: `check the permissions of ${show(ctx.home)} (or point $HALLWAY_HOME somewhere else)` });
-    return checks;
-  }
+  ctx.readOnly = true;
+  if (!fs.existsSync(ctx.home))
+    add({ id: 'data-home', status: 'warn', message: `the data home ${show(ctx.home)} doesn't exist yet`, fix: 'it is created the first time the daemon runs (`hallway service install`) or a command writes to it' });
+  else
+    try {
+      fs.accessSync(ctx.home, fs.constants.R_OK | fs.constants.W_OK);
+      add({ id: 'data-home', status: 'pass', message: `data home ${show(ctx.home)} is readable and writable` });
+    } catch (e) {
+      add({ id: 'data-home', status: 'fail', message: `data home ${show(ctx.home)}: ${(e as Error).message}`, fix: `check the permissions of ${show(ctx.home)} (or point $HALLWAY_HOME somewhere else)` });
+      return checks;
+    }
   const store = ctx.store();
   const problems = store.allProblems();
-  if (!problems.length) add({ id: 'files', status: 'pass', message: `${store.apps.size} app file${store.apps.size === 1 ? '' : 's'} and ${store.groups.size} bookmark group${store.groups.size === 1 ? '' : 's'}, all valid` });
+  if (!problems.length && fs.existsSync(ctx.home)) add({ id: 'files', status: 'pass', message: `${store.apps.size} app file${store.apps.size === 1 ? '' : 's'} and ${store.groups.size} bookmark group${store.groups.size === 1 ? '' : 's'}, all valid` });
   for (const p of problems)
     add({
       id: p.key === 'port' && /also declared by/.test(p.message) ? 'port-conflict' : 'files',

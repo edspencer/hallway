@@ -1,7 +1,7 @@
 // The CLI's side of the HTTP API: commands that are richer with live data (`status`, `scan`, `claim`, `ignore`,
 // `app ls`, `doctor`) ask a running daemon, and fall back to the files when there isn't one. The daemon is looked for
 // on config.yaml's `port:` (default 4255), not on $PORT: in an agent's or a developer's shell, $PORT is usually some
-// app's port (D41).
+// app's port (D44).
 import type { ErrorResponse, HealthResponse } from '../shared/api.js';
 
 export class DaemonError extends Error {

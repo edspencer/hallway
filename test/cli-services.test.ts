@@ -68,6 +68,15 @@ describe('hallway run & co. (fake systemctl, real processes)', { skip: !linux &&
 
   let port = 0;
 
+  test('doctor on a brand-new machine: warnings, not failures, and it creates nothing', async () => {
+    const r = await hallway(['doctor', '--json']);
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    const d = JSON.parse(r.stdout);
+    assert.equal(d.ok, true);
+    assert.equal(d.checks.find((c: { id: string }) => c.id === 'data-home').status, 'warn');
+    assert.equal(fs.existsSync(DATA), false, 'doctor is read-only');
+  });
+
   test('run: registers the app, starts it as a unit, waits for the port, prints the URL, exits 0', async () => {
     const r = await hallway(['run', 'demo', '--cwd', PROJ, '--name', 'Demo', '--', 'node', 'server.js']);
     assert.equal(r.code, 0, r.stderr);

@@ -22,7 +22,7 @@ export function logFiles(home: string, name: string) {
 
 /**
  * `$PORT`, `${PORT}`, `$HOST` and `${HOST}` in a command's arguments become the app's values. launchd never expands
- * variables in ProgramArguments, and systemd's rules differ, so Hallway does it itself, the same on both (D39).
+ * variables in ProgramArguments, and systemd's rules differ, so Hallway does it itself, the same on both (D42).
  */
 export function substitute(argv: string[], vars: Record<string, string>): string[] {
   return argv.map((a) => a.replace(/\$\{([A-Z_]+)\}|\$([A-Z_]+)\b/g, (m, a1, a2) => vars[a1 ?? a2] ?? m));

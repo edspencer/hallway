@@ -3,7 +3,7 @@
 //   KeepAlive          → `Restart=always` (a `systemctl stop` is never undone by it)
 //   ThrottleInterval   → `RestartSec=10`
 //   StandardOut/ErrorPath → `StandardOutput=append:<file>` / `StandardError=append:<file>`, in the data home's logs/
-// Units are named `hallway-daemon.service` and `hallway-app-<slug>.service` (D37): the hyphenated prefix lets one
+// Units are named `hallway-daemon.service` and `hallway-app-<slug>.service` (D40): the hyphenated prefix lets one
 // drop-in directory, `hallway-.service.d/`, apply to all of them.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -128,7 +128,7 @@ export function systemdManager({ dir, run = defaultRunner }: SystemdOptions): Se
     },
     async stop(label) {
       await systemctl(['stop', unitName(label)], [0, 5]);
-      // so it doesn't come back at the next login either (D38); 1: no such unit, which is fine here
+      // so it doesn't come back at the next login either (D41); 1: no such unit, which is fine here
       if (fs.existsSync(file(label))) await systemctl(['disable', '--quiet', unitName(label)], [0, 1]);
     },
     async restart(spec) {

@@ -17,6 +17,8 @@ export interface Ctx {
   services(): Services;
   daemon(): Promise<Daemon | null>;
   platform(): Platform;
+  /** Read the data home without creating it (doctor is read-only). Set before the first `store()`. */
+  readOnly: boolean;
 }
 
 export interface CtxOptions {
@@ -42,10 +44,17 @@ export function makeCtx(o: CtxOptions = {}): Ctx {
     out: o.out ?? ((s) => process.stdout.write(s)),
     err: o.err ?? ((s) => process.stderr.write(s)),
     // the CLI's own bus: its writes reach a running daemon through the files (the watcher), not in-process events
-    store: () => (store ??= new Store(home, { bus: new EventBus() }).init()),
+    store: () => {
+      if (store) return store;
+      store = new Store(home, { bus: new EventBus() });
+      if (ctx.readOnly) store.loadAll();
+      else store.init();
+      return store;
+    },
     services: () => (services ??= new Services({ store: ctx.store(), platform: ctx.platform(), run: o.run, env, userHome: os.homedir() })),
     daemon: () => (daemon ??= findDaemon(ctx.store().currentConfig().port)),
     platform: () => o.platform ?? currentPlatform(),
+    readOnly: false,
   };
   return ctx;
 }
