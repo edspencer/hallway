@@ -6,7 +6,7 @@
 // (settings, ignore rules, the ports that belong to declared and discovered apps) and listens for results.
 import os from 'node:os';
 import path from 'node:path';
-import type { ObservedListener, ObservedResponse } from '../../shared/api.js';
+import type { Observation } from './types.js';
 import { dataPaths } from '../config.js';
 import { type Listener, type Platform, type ProcessInfo, bindScope, connectAddress, currentPlatform, mergeListeners } from '../platform/index.js';
 import { EMPTY_IGNORE, type IgnoreRules, noiseReason } from './filter.js';
@@ -28,10 +28,14 @@ export interface ScanSettings {
 
 export const DEFAULT_SCAN: ScanSettings = { enabled: true, intervalSeconds: 120, includeEphemeralPorts: false, minPort: 1024 };
 
-export interface ScanResult extends ObservedResponse {
+export interface ScanResult {
   scannedAt: string;
+  /** Web listeners that are neither declared nor discovered: to claim or ignore. */
+  listeners: Observation[];
+  /** Listeners that didn't answer HTTP (the collapsed "other listeners" group). */
+  other: Observation[];
   /** Listeners on ports that belong to declared or discovered apps, by port: they enrich the app instead. */
-  known: Map<number, ObservedListener>;
+  known: Map<number, Observation>;
   /** How many listeners were dropped as noise, by reason (for `hallway doctor` and debugging). */
   dropped: Record<string, number>;
 }
@@ -61,7 +65,7 @@ interface CachedIdentity {
   key: string;
   at: number;
   info: ProcessInfo;
-  identity: Pick<ObservedListener, 'project' | 'git'>;
+  identity: Pick<Observation, 'project' | 'git'>;
 }
 
 /** At most this many sniffs in flight. */
@@ -208,7 +212,7 @@ export function createScanner(opts: ScannerOptions) {
 
 export type Scanner = ReturnType<typeof createScanner>;
 
-function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: number): ObservedListener {
+function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: number): Observation {
   const { info, identity } = id;
   const norm = normaliseCommand(info.argv, info.command);
   const at = new Date(t).toISOString();

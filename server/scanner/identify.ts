@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ObservedListener } from '../../shared/api.js';
+import type { Observation } from './types.js';
 import { run } from '../platform/listeners.js';
 
 /** Files that mark a project's root, nearest first. */
@@ -131,7 +131,7 @@ export function repoName(commonDir: string): string {
  * Where `dir` sits in git: toplevel, branch, last commit, and whether it's a linked worktree (its git dir differs from
  * the common dir, which points at the parent repository). Null outside a repository or if git isn't installed.
  */
-export async function gitInfo(dir: string): Promise<ObservedListener['git']> {
+export async function gitInfo(dir: string): Promise<Observation['git']> {
   const paths = await git(dir, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-dir', '--git-common-dir']);
   if (!paths.ok) return null;
   const [toplevel, gitDir, commonDir] = paths.stdout.trim().split('\n');
@@ -165,7 +165,7 @@ export async function identify(
   cwd: string | null,
   argv: string[] | null,
   home = os.homedir(),
-): Promise<Pick<ObservedListener, 'project' | 'git'>> {
+): Promise<Pick<Observation, 'project' | 'git'>> {
   // no marker anywhere above (`python3 -m http.server` in a folder of files): the directory itself is the project,
   // unless it's somewhere that says nothing (`/`, the home directory)
   const root = cwd ? (projectRoot(cwd, home) ?? (cwd === home || cwd === path.dirname(cwd) ? null : cwd)) : null;

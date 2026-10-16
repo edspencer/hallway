@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ObservedListener } from '../../shared/api.js';
+import type { Observation } from './types.js';
 
 /**
  * The command, normalised so a restart produces the same id: the executable reduced to its name (`/usr/bin/node` and
@@ -26,7 +26,7 @@ export function observationId(root: string | null, port: number, normalisedComma
  * `repo @ branch`, so three copies of one dashboard on three ports can be told apart; a lone linked worktree is
  * labelled the same way. Everything else is its project name, else its process name and port.
  */
-export function labelListeners(list: ObservedListener[]): void {
+export function labelListeners(list: Observation[]): void {
   const checkouts = new Map<string, Set<string>>();
   for (const l of list) {
     if (!l.git) continue;
@@ -45,7 +45,7 @@ export function labelListeners(list: ObservedListener[]): void {
 interface ObservedFile {
   version: 1;
   updatedAt: string;
-  observations: Record<string, ObservedListener>;
+  observations: Record<string, Observation>;
 }
 
 /** Records not seen for this long are dropped from observed.json. */
@@ -60,7 +60,7 @@ function writeAtomic(file: string, data: string) {
 
 /** The observed-listener records: every listener ever seen, by id, with first-seen, last-seen and last identity. */
 export class ObservedStore {
-  private records = new Map<string, ObservedListener>();
+  private records = new Map<string, Observation>();
 
   constructor(private file: string) {
     try {
@@ -80,7 +80,7 @@ export class ObservedStore {
   }
 
   /** Merge one scan's listeners in: keeps each record's firstSeen, sets lastSeen, replaces the identity. */
-  record(listeners: ObservedListener[], now: number) {
+  record(listeners: Observation[], now: number) {
     const at = new Date(now).toISOString();
     for (const l of listeners) {
       const prev = this.records.get(l.id);

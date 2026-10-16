@@ -2,18 +2,18 @@
 // pruning on a timer. The one call the daemon makes to get probing, state transitions and history going.
 import path from 'node:path';
 import { dataPaths } from '../config.js';
-import { type AppHealth, type ProbeSettings, type ProbeTarget, createProber } from '../prober/index.js';
+import { type ProbeHealth, type ProbeSettings, type ProbeTarget, createProber } from '../prober/index.js';
 import type { AppState } from '../../shared/api.js';
 import { UptimeStore, type Window } from './uptime.js';
 
-export { UptimeStore, WINDOWS, type Window } from './uptime.js';
+export { UptimeStore, WINDOWS, type UptimeBucket, type UptimeHistory, type Window } from './uptime.js';
 
 export interface HealthOptions {
   home: string;
   targets: () => ProbeTarget[];
   settings?: () => ProbeSettings;
   /** An app's shown state changed: emit `{ type: 'state', slug, state }`. */
-  onState?: (slug: string, health: AppHealth, previous: AppState) => void;
+  onState?: (slug: string, health: ProbeHealth, previous: AppState) => void;
   /** Default state/health.sqlite in the data home. */
   file?: string;
 }

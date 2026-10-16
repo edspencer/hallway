@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
-import type { ObservedListener } from '../shared/api.ts';
+import type { Observation } from '../server/scanner/types.ts';
 import { claimDraft, slugify, suggestSlug } from '../server/scanner/claim.ts';
 import { type FilterOptions, EMPTY_IGNORE, noiseReason } from '../server/scanner/filter.ts';
 import { gitInfo, guessFramework, identify, projectName, projectRoot, readmeTitle, repoName } from '../server/scanner/identify.ts';
@@ -173,7 +173,7 @@ describe('identification', () => {
 });
 
 /** A complete observation for the pure-function tests. */
-function obs(o: Partial<ObservedListener> = {}): ObservedListener {
+function obs(o: Partial<Observation> = {}): Observation {
   return {
     id: 'x',
     port: 4567,

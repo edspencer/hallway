@@ -43,7 +43,7 @@ describe('the 24 h window', () => {
     assert.equal(h.buckets.length, 48);
     assert.equal(h.buckets.at(-1)!.start, '2026-10-16T12:00:00.000Z');
     assert.equal(h.buckets[0].start, '2026-10-15T12:30:00.000Z');
-    assert.ok(h.buckets.every((b) => b.state === null && b.uptime === null && b.samples === 0));
+    assert.ok(h.buckets.every((b) => b.state === 'nodata' && b.uptime === null && b.samples === 0));
     assert.equal(h.uptime, null);
     store.close();
   });
@@ -61,13 +61,12 @@ describe('the 24 h window', () => {
     const at = (iso: string) => h.buckets.find((b) => b.start === `2026-10-16T${iso}:00.000Z`)!;
     assert.deepEqual([at('08:00').state, at('08:00').uptime], ['healthy', 1]);
     assert.deepEqual([at('09:00').state, at('09:00').uptime, at('09:00').stopped], ['stopped', null, 30], 'all stopped: no uptime figure, not 0 %');
-    assert.deepEqual([at('10:00').state, at('10:00').samples], [null, 0], 'no data, never down');
+    assert.deepEqual([at('10:00').state, at('10:00').samples], ['nodata', 0], 'no data, never down');
     assert.deepEqual([at('11:00').state, at('11:00').down, at('11:00').uptime], ['down', 5, 25 / 30]);
     assert.equal(at('12:00').state, 'unhealthy');
     // 60 + 25 healthy out of 60 + 30 + 10 non-stopped samples
     assert.equal(h.uptime, 85 / 100);
-    assert.equal(h.latencyP50, 20);
-    assert.equal(h.latencyP95, 900);
+    assert.deepEqual(h.latency, { p50: 20, p95: 900, max: 900 });
     assert.equal(at('08:00').latencyP50, 20);
     assert.equal(store.history('other', '24h', NOW).uptime, null, 'per app');
     store.close();
@@ -104,7 +103,7 @@ describe('rollups', () => {
     assert.equal(week.uptime, 130 / 190);
     const bad = week.buckets.find((b) => b.down)!;
     assert.equal(bad.state, 'down');
-    assert.equal(week.latencyP50, 15);
+    assert.equal(week.latency.p50, 15);
 
     const quarter = store.history('a', '90d', NOW);
     assert.equal(quarter.buckets.length, 90);

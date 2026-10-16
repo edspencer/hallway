@@ -40,7 +40,7 @@ export interface Sample {
   latencyMs: number | null;
 }
 
-export interface AppHealth extends Health {
+export interface ProbeHealth extends Health {
   slug: string;
   lastProbe: (ProbeResult & { at: number }) | null;
 }
@@ -50,7 +50,7 @@ export interface ProberOptions {
   targets: () => ProbeTarget[];
   settings?: () => ProbeSettings;
   /** Called when an app's shown state changes (not on every probe). */
-  onTransition?: (slug: string, health: AppHealth, previous: AppState) => void;
+  onTransition?: (slug: string, health: ProbeHealth, previous: AppState) => void;
   onSample?: (sample: Sample) => void;
   /** Replaceable for tests. */
   probe?: (t: ProbeTarget, o: ProbeOptions) => Promise<ProbeResult>;
@@ -70,7 +70,7 @@ export function createProber(opts: ProberOptions) {
   interface Entry {
     target: ProbeTarget;
     key: string;
-    health: AppHealth;
+    health: ProbeHealth;
     timer: NodeJS.Timeout | null;
     nextAt: number;
     inFlight: boolean;
@@ -203,10 +203,10 @@ export function createProber(opts: ProberOptions) {
       const e = entries.get(slug);
       if (e) schedule(e, 0);
     },
-    health(slug: string): AppHealth | null {
+    health(slug: string): ProbeHealth | null {
       return entries.get(slug)?.health ?? null;
     },
-    all(): AppHealth[] {
+    all(): ProbeHealth[] {
       return [...entries.values()].map((e) => e.health);
     },
   };

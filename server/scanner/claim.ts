@@ -2,7 +2,7 @@
 // the observed port (never a new one: D17), is `expected: adhoc` (it was started by hand and may well stop), records
 // the project directory, and carries the observed command as a commented-out `service:` block the user can enable.
 import os from 'node:os';
-import type { ObservedListener } from '../../shared/api.js';
+import type { Observation } from './types.js';
 import { tildify } from '../config.js';
 
 /** A valid app slug: a DNS label, because it becomes `<slug>.<base>` in fronted mode (docs/02-architecture.md). */
@@ -27,7 +27,7 @@ export function slugify(s: string): string {
  * A slug for an observation: from the package (or project) name, plus the branch for a worktree sibling, made unique
  * against `taken` with a numeric suffix.
  */
-export function suggestSlug(obs: ObservedListener, taken: ReadonlySet<string> = new Set()): string {
+export function suggestSlug(obs: Observation, taken: ReadonlySet<string> = new Set()): string {
   let base = slugify(obs.project?.name ?? obs.process ?? '') || `app-${obs.port}`;
   const branch = obs.git?.branch;
   if (obs.label.includes(' @ ') && branch && !['main', 'master', 'trunk'].includes(branch))
@@ -48,7 +48,7 @@ export interface ClaimOptions {
 const str = (s: string) => (/^[A-Za-z0-9][\w .,/@()+-]*$/.test(s) && !/[:#]/.test(s) && !/^(true|false|null|yes|no|on|off|~)$/i.test(s) && !/\s$/.test(s) ? s : JSON.stringify(s));
 
 /** The host to write: omitted when it's the default 127.0.0.1 (or the app listens everywhere, which includes it). */
-function upstreamHost(obs: ObservedListener): string | null {
+function upstreamHost(obs: Observation): string | null {
   if (obs.bind === 'all' || obs.addresses.some((a) => a.startsWith('127.'))) return null;
   if (obs.addresses.includes('::1')) return '::1';
   return obs.addresses[0] ?? null;
@@ -59,7 +59,7 @@ function upstreamHost(obs: ObservedListener): string | null {
  * `expected`; the caller still has to check that the file doesn't exist.
  */
 export function claimDraft(
-  obs: ObservedListener,
+  obs: Observation,
   opts: ClaimOptions = {},
   taken: ReadonlySet<string> = new Set(),
   { home = os.homedir(), now = new Date() } = {},
