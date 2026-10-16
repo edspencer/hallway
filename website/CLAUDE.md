@@ -35,7 +35,6 @@ them (that is what Cloudflare's build does).
 - **The brand is a placeholder made here** (`brand/`, `npm run brand`), not copied from a repo-level brand kit.
 - **Fonts are self-hosted** from `@fontsource-variable` packages (all OFL) rather than loaded from Google Fonts.
 - **A pre-release banner on every docs page**, by overriding Starlight's `Banner` (`src/components/Banner.astro`).
-- **CI is a separate workflow**, `.github/workflows/website.yml`, rather than a job in the root `ci.yml`.
 
 ## Content rules
 
@@ -58,7 +57,8 @@ colon). Door-number plates and state chips are available as raw HTML: `<span cla
 `<span class="state state--down">■ down</span>` (always colour, shape and word together).
 
 **Links.** Link pages site-relative with the trailing slash (`/reference/cli/`). After a build,
-`node scripts/check-links.mjs` checks every internal link and `#fragment` in `dist/` (CI runs it too).
+`node scripts/check-links.mjs` checks every internal link and `#fragment` in `dist/` (the `website` job in the root
+`ci.yml` runs the build and this check whenever `website/**` changes).
 
 ## Sidebar
 

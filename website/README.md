@@ -83,9 +83,9 @@ Like Local Review's site, this is meant to be built and served by **Cloudflare P
    Review.)
 3. Optionally, set `PUBLIC_POSTHOG_KEY` (below) and redeploy.
 
-Every PR that touches the repo then gets a preview deployment. Until then, the `Website` GitHub Actions workflow
-(`.github/workflows/website.yml`) builds the site and checks its links on every PR that touches `website/`, which
-is what Local Review's CI does in its own `website` job.
+Every PR that touches the repo then gets a preview deployment. Until then (and after), the `website` job in the
+root `.github/workflows/ci.yml` builds the site and checks its links whenever `website/**` changes, as Local
+Review's CI does.
 
 ## Analytics (PostHog, off until you set one variable)
 

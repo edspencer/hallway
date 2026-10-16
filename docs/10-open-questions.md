@@ -54,5 +54,5 @@ relevant doc) and delete it here — or mark it **Resolved** with a one-line ans
       pull requests; optional `CI passed` ruleset; private vulnerability reporting).
 - [x] Reserve the npm name `hallway` early: the author published the placeholder `hallway@0.0.1` on 2026-10-16 and
       configured trusted publishing (D29, `RELEASING.md`).
-- [ ] When the documentation website exists (`08-roadmap.md`, "Later"), give it a short "Why the name" origins page:
-      the original name, why it was renamed, and the hallway imagery (D1, D23).
+- [x] Give the documentation website a short "Why the name" origins page: the original name, why it was renamed,
+      and the hallway imagery (D1, D23). Done in `website/src/content/docs/why-the-name.md` (2026-10-16).
