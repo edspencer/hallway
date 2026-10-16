@@ -111,6 +111,13 @@ function weighted(rows: { v: number | null; w: number }[], p: number): number | 
 }
 
 export class UptimeStore {
+  /**
+   * Every hour before this one is rolled up. Samples are written as they're taken, so an hour never gains one after it
+   * ends: `rollup` needn't look behind this again, and has nothing to do until the clock reaches a new hour. 0 until
+   * the first rollup (which looks at everything once).
+   */
+  private rolledTo = 0;
+
   private constructor(private db: DatabaseSync) {
     db.exec(`
       PRAGMA journal_mode = WAL;
@@ -168,12 +175,14 @@ export class UptimeStore {
   /** Roll up every complete hour (before `now`'s hour) that has samples and no rollup yet. Idempotent. */
   rollup(now = Date.now()) {
     const current = Math.floor(now / HOUR) * HOUR;
+    // every history() calls this: within an hour that's already rolled up it's free (D56)
+    if (current <= this.rolledTo) return 0;
     const pending = this.db
       .prepare(
         `SELECT DISTINCT s.slug AS slug, (s.ts / ${HOUR}) * ${HOUR} AS hour FROM samples s
-         WHERE s.ts < ? AND NOT EXISTS (SELECT 1 FROM rollups r WHERE r.slug = s.slug AND r.hour = (s.ts / ${HOUR}) * ${HOUR})`,
+         WHERE s.ts >= ? AND s.ts < ? AND NOT EXISTS (SELECT 1 FROM rollups r WHERE r.slug = s.slug AND r.hour = (s.ts / ${HOUR}) * ${HOUR})`,
       )
-      .all(current) as { slug: string; hour: number }[];
+      .all(this.rolledTo, current) as { slug: string; hour: number }[];
     const insert = this.db.prepare(
       `INSERT OR REPLACE INTO rollups (slug, hour, n_samples, n_healthy, n_unhealthy, n_down, n_stopped, latency_p50, latency_p95, latency_max)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -182,6 +191,7 @@ export class UptimeStore {
       const r = this.hourRollup(slug, hour);
       insert.run(slug, hour, r.n, r.healthy, r.unhealthy, r.down, r.stopped, r.p50, r.p95, r.max);
     }
+    this.rolledTo = current;
     return pending.length;
   }
 
@@ -260,8 +270,13 @@ export class UptimeStore {
     } else {
       this.rollup(now);
       const rows = this.rollupsBetween(slug, start, Math.min(end, now + 1));
+      // rows are in hour order: one pass hands each bar its own (not 90 filters over up to 2,160 rows)
+      let i = 0;
       for (let from = start; from < end; from += w.bucketMs) {
-        const inBar = rows.filter((r) => r.hour >= from && r.hour < from + w.bucketMs);
+        while (i < rows.length && rows[i]!.hour < from) i++;
+        const first = i;
+        while (i < rows.length && rows[i]!.hour < from + w.bucketMs) i++;
+        const inBar = rows.slice(first, i);
         const c = zero();
         for (const r of inBar) for (const k of ['n', 'healthy', 'unhealthy', 'down', 'stopped'] as const) c[k] += r[k];
         buckets.push(bar(from, c, weighted(inBar.map((r) => ({ v: r.p50, w: r.n })), 50), weighted(inBar.map((r) => ({ v: r.p95, w: r.n })), 95)));
