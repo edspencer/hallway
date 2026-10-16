@@ -4,28 +4,37 @@
 // arrive milestone by milestone (docs/08-roadmap.md).
 import { DEFAULT_PORT, HOME, VERSION, dataPaths, devOverrides, parsePort, tildify } from './config.js';
 import { UsageError, check, parseArgs } from './args.js';
+import { DEFAULT_URL, agentGuide, readGuide, snippet } from './guide.js';
 
 const USAGE = `Usage: hallway [serve] [--port <n>] [--quiet]
+       hallway guide [--snippet]
        hallway --version | --help
 
   serve   (the default) Run the daemon in the foreground: the dashboard and API on
           http://localhost:<port> (127.0.0.1 only).
-          --port <n>       the port (default ${DEFAULT_PORT}, or $PORT)
+          --port <n>       the port (default ${DEFAULT_PORT}, or $PORT, or port: in config.yaml)
           --quiet, -q      print just the "Hallway on <url>" line
+  guide   Print the guide for coding agents (AGENT-GUIDE.md).
+          --snippet        just the paragraph for an agent instruction file (CLAUDE.md, AGENTS.md)
 
 Data: $HALLWAY_HOME (default ~/.hallway). Exit codes: 0 ok, 1 error, 2 usage error.`;
 
 async function serve(flags: Record<string, string>) {
   const given = flags.port ?? process.env.PORT;
-  // `npm run dev`: the daemon sits next to Vite's dashboard port (see vite.config.ts)
-  const port = given === undefined || given === '' ? DEFAULT_PORT + (process.env.HALLWAY_DEV ? 1 : 0) : parsePort(given);
+  let port = given === undefined || given === '' ? undefined : parsePort(given);
   if (port === null) throw new UsageError(`${flags.port !== undefined ? '--port' : 'PORT'} must be a port number (0-65535), not '${given}'`);
   const dev = devOverrides();
   const hostname = dev.bind ?? '127.0.0.1';
-  const { startServer } = await import('./index.js');
+  const [{ startServer }, { Store }] = await Promise.all([import('./index.js'), import('./store/index.js')]);
+  // the data home is created on first run, and read before binding: config.yaml may name the port
+  const store = new Store(HOME).init();
+  // `npm run dev`: the daemon sits next to Vite's dashboard port (see vite.config.ts)
+  port ??= process.env.HALLWAY_DEV ? DEFAULT_PORT + 1 : store.currentConfig().port;
   let bound: number;
   try {
     ({ port: bound } = await startServer(port, {
+      home: HOME,
+      store,
       hostname,
       extraHosts: dev.allowedHosts,
       // under `npm run dev` Vite serves the dashboard; the daemon is the API only
@@ -38,7 +47,11 @@ async function serve(flags: Record<string, string>) {
     throw e;
   }
   let out = `Hallway on http://localhost:${bound}\n`;
-  if (!flags.quiet) out += `Data home: ${tildify(dataPaths(HOME).home)}\n`;
+  if (!flags.quiet) {
+    out += `Data home: ${tildify(dataPaths(HOME).home)}\n`;
+    const problems = store.allProblems().filter((p) => p.severity === 'error');
+    if (problems.length) out += `${problems.length} file${problems.length === 1 ? ' has' : 's have'} errors (shown on the dashboard): ${problems.map((p) => p.file).join(', ')}\n`;
+  }
   process.stdout.write(out);
   if (hostname !== '127.0.0.1' || dev.allowedHosts.length)
     process.stderr.write(
@@ -63,6 +76,12 @@ async function main(argv: string[]): Promise<number | undefined> {
       check(cmd, flags, ['port', 'quiet'], args, 0);
       await serve(flags);
       return undefined;
+    case 'guide': {
+      check(cmd, flags, ['snippet'], args, 0);
+      const guide = readGuide();
+      process.stdout.write(flags.snippet ? snippet(guide) : agentGuide({ guide, url: DEFAULT_URL, home: tildify(HOME) }));
+      return 0;
+    }
     default:
       throw new UsageError(`unknown command '${cmd}'`);
   }

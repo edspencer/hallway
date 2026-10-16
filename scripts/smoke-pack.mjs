@@ -1,7 +1,8 @@
 // `npm run smoke:pack`: check the npm package as a user gets it. Packs it (prepack builds it), installs the tarball
 // globally into a temp prefix, then runs the installed `hallway` from a temp directory with a throwaway HOME and
-// HALLWAY_HOME: --version, --help, a usage error, and the daemon (on a free port: the startup line, /api/health, the
-// dashboard's index.html and one of its assets, the favicon, the Host check). Cleans up after itself. Linux and macOS.
+// HALLWAY_HOME: --version, --help, a usage error, `guide`, and the daemon (on a free port: the startup line, the data
+// home it creates, /api/health, /api/state, /llms.txt, the dashboard's index.html and one of its assets, the favicon,
+// the Host check). Cleans up after itself. Linux and macOS.
 import { execFileSync, spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -58,7 +59,7 @@ try {
   const packed = JSON.parse(out.slice(out.search(/^\[$/m))).at(-1);
   const tarball = path.join(tmp, packed.filename);
   const files = packed.files.map((f) => f.path);
-  for (const f of ['package.json', 'LICENSE', 'README.md', 'dist/server/cli.js', 'dist/web/index.html', 'dist/web/favicon.svg'])
+  for (const f of ['package.json', 'LICENSE', 'README.md', 'AGENT-GUIDE.md', 'dist/server/cli.js', 'dist/web/index.html', 'dist/web/favicon.svg'])
     assert.ok(files.includes(f), `the package includes ${f}`);
   for (const f of files) assert.ok(!/^(src|server|test|scripts|website|docs)\//.test(f), `the package shouldn't include ${f}`);
 
@@ -75,6 +76,10 @@ try {
   assert.match(run('--help'), /^Usage: hallway \[serve\]/);
   fails(['frobnicate'], 2, /unknown command 'frobnicate'/);
   fails(['--port', 'nope'], 2, /--port must be a port number/);
+
+  step('guide');
+  assert.match(run('guide'), /^# Hallway: a guide for coding agents[\s\S]*\| `port` \| number 1–65535 \| \*\*required\*\* \|/);
+  assert.match(run('guide', '--snippet'), /^Never start a long-running dev or preview server directly/);
 
   step('serve');
   server = spawn(bin, ['--port', '0'], { cwd: work, env, stdio: ['ignore', 'pipe', 'inherit'] });
@@ -95,6 +100,17 @@ try {
   assert.ok(printed.includes(`Data home: ${data}`), `the data home: ${printed}`);
 
   assert.deepEqual(await (await get(base, '/api/health', /json/)).json(), { ok: true, version: pkg.version });
+  for (const f of ['config.yaml', 'ignore.yaml', '.gitignore', 'apps', 'bookmarks', 'state', 'backups']) assert.ok(fs.existsSync(path.join(data, f)), `the data home has ${f}`);
+  fs.writeFileSync(path.join(data, 'apps', 'smoke.yaml'), 'name: Smoke\nport: 4567\n');
+  // the watcher picks the file up (debounced)
+  let state;
+  for (let i = 0; i < 40 && !state?.apps.length; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    state = await (await get(base, '/api/state', /json/)).json();
+  }
+  assert.deepEqual(state.apps.map((a) => [a.slug, a.url]), [['smoke', 'http://localhost:4567']], 'a hand-written app file shows up');
+  const llms = await (await get(base, '/llms.txt', /^text\/plain/)).text();
+  assert.ok(llms.includes(`Data home: \`${data}\``) && llms.includes('`smoke`: Smoke, port 4567'), `llms.txt has live data: ${llms}`);
   const html = await (await get(base, '/', /html/)).text();
   assert.equal(html, fs.readFileSync(path.join(installed, 'dist', 'web', 'index.html'), 'utf8'));
   const asset = html.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];

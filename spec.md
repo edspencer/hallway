@@ -94,6 +94,11 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D29 | Release machinery as Local Review's (changesets, trusted publishing, provenance). Nothing is published until a changeset is merged; `0.0.0` is never released. |
 | D30 | The docs website lives in `website/` as its own project; root CI tolerates it and builds it in a separate job. |
 | D31 | Development-only environment overrides for the bind address and Host allowlist (never flags, never documented to users). |
+| D32 | Validation is hand-rolled, with the schemas as data; the agent guide's file reference is generated from them (resolves Q-VALIDATION). |
+| D33 | Writes edit the YAML Document: PUT replaces known keys (unknown keys stay), PATCH is a JSON merge patch, a file that doesn't parse is never written. |
+| D34 | Deletes go to `backups/removed/`; snapshots of the editable files before destructive writes and hourly. |
+| D35 | Live data (health, history, observed, discovered, thumbnails) plugs into the core through `StateProvider`s and the event bus. |
+| D36 | Daemon port: `--port`, `$PORT`, `config.yaml`, 4255. A new data home's `config.yaml` has every setting commented out at its default. |
 
 ## 5. Glossary
 

@@ -305,6 +305,73 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
 - **Rejected:** a `--host` flag (discoverable by users, contradicts the security model); tunnelling 127.0.0.1 through
   SSH for every preview (works, but not with the dev box's existing proxy).
 
+### D32 — Validation is hand-rolled, with the schemas as data (resolves Q-VALIDATION, 2026-10-16)
+
+- `server/store/schema.ts` describes each human-editable file as data (type, default, required, range, enum, a
+  one-line doc, an optional extra rule). One small walker validates against it and fills in defaults; another
+  renders the file-format reference in `AGENT-GUIDE.md` from the same descriptions, so the docs cannot drift from the
+  validator. The daemon regenerates the reference whenever it renders the guide, and `test/guide.test.ts` fails if
+  the committed copy is stale (`npm run sync:guide` rewrites it).
+- Every problem carries a key path, which the store maps to a line and column through the `yaml` Document's ranges.
+  Unknown keys are warnings (with a "did you mean" for near misses), never errors, and are kept on write.
+- Defaults the spec left implicit: an app's `name` defaults to its slug (so the minimal file is `port:` alone, though
+  the guide shows `name` too); `expected` defaults to `running`; a bookmark group's `title` defaults to its file name
+  and `order` to 100; a link's `title` defaults to its URL's host name; `config.yaml` refuses a `version` above 1.
+- **Rejected:** a schema library such as zod or ajv (a dependency for ~four small files, and its error messages and
+  reference rendering would still need wrapping); JSON Schema files (no comments in the generated docs, and the line
+  mapping is the same work).
+
+### D33 — Write semantics: PUT replaces known keys, PATCH is a JSON merge patch, broken files are never written (2026-10-16)
+
+- Every write edits the file as a `yaml` Document: a changed scalar keeps its comment and quoting, untouched keys
+  keep their place, new keys go at the end, and short scalar lists are written inline (`tags: [ a, b ]`).
+- `PUT` makes the file's **known** keys exactly the body's (absent or `null` removes them) and leaves keys the schema
+  doesn't know alone, since they're the user's. `PATCH` is a JSON merge patch (RFC 7396): mappings merge, `null`
+  removes a key, lists are replaced whole.
+- API bodies with unknown keys are refused (400): a file may carry keys Hallway doesn't know, a request has no excuse,
+  and a typo such as `expcted` would otherwise vanish silently.
+- A write whose result wouldn't validate is refused (400, with the issues) and writes nothing. A file that fails to
+  **parse** is never written (409, "fix the file by hand"); a file that parses but fails validation can be fixed by a
+  write whose result validates.
+- Concurrency: writes are serialised per file; `If-Match` (quoted, bare or weak, or `*`) gives 409 with the current
+  ETag on a mismatch; `If-None-Match: *` makes a `PUT` create-only; and the file is re-read just before the rename,
+  so a hand edit that lands mid-write wins (409) rather than being overwritten.
+- **Rejected:** regenerating the whole file from the parsed object (loses comments); PATCH as JSON Patch (RFC 6902:
+  more expressive, but awkward for agents and the dashboard alike).
+
+### D34 — Deletes go to `backups/removed/`; snapshots before destructive writes (2026-10-16)
+
+- `DELETE` moves the file to `backups/removed/<timestamp>/<its path in the data home>` (e.g.
+  `backups/removed/2026-10-16T10-00-00Z/apps/foo.yaml`), never replacing anything, so restoring is a copy back.
+  These are never pruned.
+- Snapshots (`backups/<timestamp>/`) copy `config.yaml`, `ignore.yaml`, `apps/` and `bookmarks/`, on start, hourly,
+  and before a delete or a replacing `PUT`; each only if something changed since the newest. Pruning is Local
+  Review's: the newest 50, plus the first of each UTC day for 30 days.
+- **Rejected:** a `.bak` beside the file (Local Review's per-file approach: it would clutter `apps/`, where every
+  `*.yaml` is an app); unlinking (D16, "rename, never delete").
+
+### D35 — Live data plugs in through providers; the core owns the files and the API (2026-10-16)
+
+- The prober, uptime store, scanner, discovery adapters and thumbnailer are separate modules. Each registers a
+  `StateProvider` (`server/providers.ts`): synchronous getters for an app's health, history and listener identity,
+  the observed list, discovered apps and thumbnails, plus an async `scan()`. `/api/state` merges them into the slots
+  defined in `shared/api.ts`; with no provider a slot is `unknown`, null or empty, and `daemon.providers` says which
+  are running so the dashboard can say so rather than show grey. A provider that throws is skipped for that call.
+- Producers emit `ServerEvent`s on the shared bus (`server/events.ts`); the SSE endpoint forwards them.
+- `claim` and `ignore` are implemented in the core (they write `apps/` and `ignore.yaml`, which only the store may
+  do) on top of the provider's `observation(id)`.
+- **Rejected:** the core importing the scanner and prober directly (couples the milestones, and the modules are being
+  built in parallel); pushing provider data into the store (it isn't file data and must not be persisted there).
+
+### D36 — `config.yaml`'s port, and the files a new data home starts with (2026-10-16)
+
+- The daemon's port is `--port`, else `$PORT`, else `port:` in `config.yaml`, else 4255. The data home is created and
+  read before binding, so a broken `config.yaml` still starts the daemon (on the default) and shows its error.
+- A new data home gets the directories, a `.gitignore` listing the machine-written directories (and `.*.tmp-*`), an
+  `ignore.yaml` with empty lists, and a `config.yaml` that is `version: 1` followed by every setting **commented out**
+  at its default, generated from the schema. Writing the defaults as live values would freeze them: a later release
+  could never change a default for an existing user. None of these files is ever replaced once it exists.
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |

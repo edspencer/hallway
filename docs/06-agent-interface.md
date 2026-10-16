@@ -15,8 +15,8 @@ over the *same* write module — never a separate code path, and never the only 
 
 ## Agent guide
 
-Ship `AGENT-GUIDE.md` in the package. Expose it as `hallway guide`, `GET /agent-guide.md`, and summarised in
-`GET /llms.txt` / `GET /llms-full.txt`. Like Local Review, render live context into it: daemon version and URL, data
+Ship `AGENT-GUIDE.md` in the package (implemented: `server/guide.ts`). Expose it as `hallway guide`,
+`GET /agent-guide.md`, and summarised in `GET /llms.txt` / `GET /llms-full.txt`. Like Local Review, render live context into it: daemon version and URL, data
 home path, mode (direct/fronted) and base domain, and the current app and bookmark-group slugs.
 
 Contents (outline):

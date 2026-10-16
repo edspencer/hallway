@@ -33,6 +33,7 @@ describe('parseArgs', () => {
     assert.deepEqual(parseArgs(['--port=0', '--quiet']), { pos: [], flags: { port: '0', quiet: '1' } });
     assert.deepEqual(parseArgs(['-h']), { pos: [], flags: { help: '1' } });
     assert.deepEqual(parseArgs(['-v']), { pos: [], flags: { version: '1' } });
+    assert.deepEqual(parseArgs(['guide', '--snippet']), { pos: ['guide'], flags: { snippet: '1' } });
   });
 
   test('unknown options and missing values are usage errors', () => {
@@ -56,7 +57,7 @@ describe('hallway CLI', () => {
     const h = await hallway(['--help']);
     assert.equal(h.code, 0);
     assert.match(h.stdout, /^Usage: hallway \[serve\]/);
-    assert.match(h.stdout, /--port <n> +the port \(default 4255, or \$PORT\)/);
+    assert.match(h.stdout, /--port <n> +the port \(default 4255, or \$PORT, or port: in config.yaml\)/);
     // the development-only overrides are never advertised
     assert.doesNotMatch(h.stdout, /HALLWAY_DEV|--host|--bind/);
   });
@@ -117,5 +118,47 @@ describe('hallway CLI', () => {
     } finally {
       child.kill();
     }
+  });
+  test('serve creates the data home on first run and uses port: from config.yaml', async () => {
+    const home = path.join(HOME, 'fresh');
+    const probe = net.createServer();
+    await new Promise<void>((r) => probe.listen(0, '127.0.0.1', r));
+    const free = (probe.address() as net.AddressInfo).port;
+    await new Promise((r) => probe.close(r));
+    fs.mkdirSync(home);
+    fs.writeFileSync(path.join(home, 'config.yaml'), `version: 1\nport: ${free}\n`);
+    const child = spawn(process.execPath, CLI, { env: cliEnv({ HALLWAY_HOME: home }), cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+    try {
+      const out = await new Promise<string>((resolve, reject) => {
+        let buf = '';
+        const timer = setTimeout(() => reject(new Error(`no startup line: ${buf}`)), 15000);
+        child.stdout.on('data', (d) => {
+          buf += d;
+          if (/Data home: /.test(buf)) {
+            clearTimeout(timer);
+            resolve(buf);
+          }
+        });
+        child.on('exit', (code) => reject(new Error(`exited ${code}: ${buf}`)));
+      });
+      assert.match(out, new RegExp(`^Hallway on http://localhost:${free}$`, 'm'));
+      for (const d of ['apps', 'bookmarks', 'state', 'cache', 'generated', 'logs', 'backups', '.gitignore', 'ignore.yaml']) assert.ok(fs.existsSync(path.join(home, d)), d);
+      assert.equal(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8'), `version: 1\nport: ${free}\n`, 'never replaced');
+    } finally {
+      child.kill();
+    }
+  });
+
+  test('guide prints AGENT-GUIDE.md with the reference; --snippet just the paragraph', async () => {
+    const g = await hallway(['guide']);
+    assert.equal(g.code, 0, g.stderr);
+    assert.match(g.stdout, /^# Hallway: a guide for coding agents/);
+    assert.match(g.stdout, /\| `port` \| number 1–65535 \| \*\*required\*\* \|/);
+    assert.ok(g.stdout.includes(HOME), 'names the data home');
+    const s = await hallway(['guide', '--snippet']);
+    assert.equal(s.code, 0, s.stderr);
+    assert.match(s.stdout, /^Never start a long-running dev or preview server directly/);
+    assert.equal((await hallway(['guide', 'extra'])).code, 2);
+    assert.equal((await hallway(['serve', '--snippet'])).code, 2);
   });
 });
