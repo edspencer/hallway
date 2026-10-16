@@ -63,7 +63,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
               title={connection === 'reconnecting' ? 'The Hallway daemon isn’t answering. The states shown are from before it stopped; this page reconnects by itself.' : undefined}
             >
               <span className="hw-pulse" aria-hidden="true" />
-              {connection === 'reconnecting' ? 'Daemon not answering: reconnecting…' : 'Connecting…'}
+              {connection === 'reconnecting' ? 'Daemon not answering' : 'Connecting…'}
             </span>
           )}
           {counts && counts.total > 0 && (checking ? <CountLine c={counts} /> : <span className="hw-pill" title="No prober is running in this daemon, so no app has been checked">Health checks off</span>)}
