@@ -8,7 +8,9 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+
+await exitWatchdog();
 
 const linux = process.platform === 'linux';
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-systemctl');

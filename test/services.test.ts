@@ -16,7 +16,9 @@ import { WELL_KNOWN_PORTS, assignPort } from '../server/services/ports.ts';
 import { nodeShebang, pathProblem, resolveCommand, resolveNode, servicePath, which } from '../server/services/resolve.ts';
 import { rotateFile, rotateLogs } from '../server/services/rotate.ts';
 import { appSpec, daemonSpec, substitute } from '../server/services/spec.ts';
-import { ROOT, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, tmpStore } from './fixture.ts';
+
+await exitWatchdog();
 
 const GOLDEN = path.join(ROOT, 'test', 'fixtures', 'services');
 function golden(name: string, actual: string) {

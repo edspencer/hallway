@@ -7,7 +7,9 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+
+await exitWatchdog();
 
 const ROOTDIR = tmpDir('hw-test-cmds-');
 const HOME = path.join(ROOTDIR, 'home');
