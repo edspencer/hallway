@@ -1,5 +1,26 @@
 # hallway
 
+## 0.3.0
+
+### Minor Changes
+
+- [#17](https://github.com/edspencer/hallway/pull/17) [`41ce65a`](https://github.com/edspencer/hallway/commit/41ce65a35de5b9ce7dc38d3825ebb8f6cbc451b1) Thanks [@edspencer](https://github.com/edspencer)! - Lost at last reboot: after the machine restarts, Hallway lists the servers that were running before it and didn't come back.
+  
+  - **A banner at the top of the dashboard**: "Lost at last reboot (Mon 28 Sep 20:05): 6 apps". **Review** lists each one with where it ran from (`~/Code/my-app @ main`) and the command that started it.
+  - **Restart once** starts it again the way `hallway run` does: on the port it had, owned by launchd or systemd rather than anyone's session. **Make it a service** also starts it at login and restarts it if it exits. **Dismiss** takes one off the list, or clears the whole notice. A server that wasn't an app yet becomes one (`apps/<slug>.yaml`) with the command and directory Hallway recorded while it was running.
+  - Only what was running at the end of the last boot is listed: a server you stopped the day before isn't blamed on the reboot. Services that start at login get their start-up grace period before anything is called lost. Whatever comes back is marked **back** until you dismiss it.
+  - The notice is kept in `state/lost.json`, so it survives Hallway restarting, until you dismiss it.
+  - **`hallway lost`** lists the same from a terminal; `hallway lost restart <id>`, `hallway lost service <id>` and `hallway lost dismiss <id>` (or `--all`) act on it. It's in `/api/state` (`lost`), `GET /api/lost`, `llms.txt` and MCP's `get_status` too; MCP can read it but not restart anything.
+  - A service the daemon starts (from the dashboard, or one of these actions) now shows `◐ starting` while it comes up, instead of `down`.
+
+- [#18](https://github.com/edspencer/hallway/pull/18) [`807569c`](https://github.com/edspencer/hallway/commit/807569c175fc1e9ea516ce1031dc2683f28a7a40) Thanks [@edspencer](https://github.com/edspencer)! - Screenshots on the doors, generated cards, and a faster 90-day view.
+  
+  - **Screenshots, opt-in:** `hallway thumbs enable` installs a headless browser (Chromium's headless shell, about 300 MB) into the data home, never anywhere else, and turns screenshots on. Each healthy app's door gets a pane of glass showing the app itself, re-shot when the app restarts, every six hours, or with `hallway thumbs refresh [slug]`. The drawer shows it larger. `hallway thumbs disable` turns them off and deletes the browser and the pictures; `hallway thumbs status` shows what's installed. Bookmarks are never shot, and screenshots never leave your machine.
+  - **The base install stays light:** Hallway doesn't depend on Playwright or any browser; `npm i -g hallway` downloads none.
+  - **Generated cards:** `thumbnails.mode: card` draws every door as a card with the app's name, address, framework and `repo @ branch`, rendered on the daemon with bundled fonts, so it looks the same on every machine. `GET /api/apps/:slug/thumb` serves it as a 640×400 PNG.
+  - **The 90-day uptime view is quicker:** one app's 90 days now take a few milliseconds instead of ~50, so the drawer stays snappy with dozens of apps.
+  - `AppView.thumbKind` says whether an app's thumbnail is a favicon, a screenshot or a card; `POST /api/thumbs/refresh` re-shoots from the API.
+
 ## 0.2.0
 
 ### Minor Changes
