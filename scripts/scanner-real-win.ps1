@@ -10,10 +10,11 @@ Copy-Item -Recurse -Force dist "$root\dist"
 Copy-Item -Force scripts\scanner-real-win.mjs "$root\scan.mjs"
 # New-LocalUser, not `net user`: that one stops to ask about passwords over 14 characters
 New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -AccountNeverExpires -PasswordNeverExpires | Out-Null
-# New-LocalUser puts the account in no group at all: Users is what a standard account is
-Add-LocalGroupMember -Group Users -Member $user
-# New-LocalUser adds it to no group at all: Users, as a new account normally is
-Add-LocalGroupMember -Group Users -Member $user
+# New-LocalUser may put the account in no group at all: Users is what a standard account is. Only if it isn't there
+# already, since adding a member twice is an error (and this script stops at errors)
+if (-not (Get-LocalGroupMember -Group Users -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "\\$user$" })) {
+  Add-LocalGroupMember -Group Users -Member $user
+}
 # a task that runs with a stored password is a batch logon, a right only administrators have by default
 $sid = (Get-LocalUser $user).SID.Value
 secedit /export /cfg "$root\sec.inf" /areas USER_RIGHTS | Out-Null
