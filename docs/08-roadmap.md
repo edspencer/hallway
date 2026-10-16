@@ -57,6 +57,12 @@ and custom-domain DNS via a `systemd-resolved` drop-in pointing at Hallway's use
 macOS by CI's "Fronted mode (real …)" jobs (`scripts/fronted-real.mjs`), and by hand on Linux without a redirect
 (`11-research-notes.md`); browsers on a real Mac (criterion 2's Safari and Firefox) are not yet checked.
 
+**"Lost at last reboot" is built** (D54): `server/lost/`, the banner (`src/components/Lost.tsx`), `/api/lost…` and
+`hallway lost`. Checked on Linux by a simulated reboot (`state/boot.json` and `state/observed.json` moved before the
+machine's boot time, demo servers killed, the daemon restarted under fake systemd): the banner, Review, Restart once,
+Make it a service, Dismiss and a moved project directory (`11-research-notes.md`, 2026-10-16). Not yet seen after a
+real reboot, on either OS; criterion 5's "listed under Lost at last reboot" is therefore checked in simulation only.
+
 Acceptance criteria:
 
 1. `hallway setup --print` prints every privileged command with an explanation and executes nothing. `hallway setup` runs

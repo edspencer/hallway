@@ -87,6 +87,7 @@ Mirror Local Review (D16). Keep dependencies minimal.
     health.sqlite             # probe samples + hourly rollups (node:sqlite, D37)
     observed.json             # last-known identity of every observed listener, with first/last seen
     boot.json                 # last seen boot time, to detect reboots
+    lost.json                 # "Lost at last reboot": the notice, until it's dismissed (D54)
     daemon.json               # the running daemon's pid and port, where the CLI also looks for it (D46)
   cache/                      # machine-written; regenerable
     thumbs/<slug>.<hash>.png
@@ -280,7 +281,7 @@ type ServerEvent =
   | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' | 'config' }
   | { type: 'thumb'; slug: string }
   | { type: 'config' }
-  | { type: 'reboot'; lost: string[] };                     // v1
+  | { type: 'reboot'; lost: string[] };                     // v1: the "Lost at last reboot" notice changed (D54)
 ```
 
 Reference implementation of the SSE endpoint, from Local Review's `server/index.ts` (MIT, same author):
@@ -334,6 +335,9 @@ All JSON. All under the security middleware below.
 | POST | `/api/observed/:id/claim` | Body `{ slug, name?, expected? }` → writes `apps/<slug>.yaml` from the observation |
 | POST | `/api/observed/:id/ignore` | Adds to `ignore.yaml` (by port, process, or dir) |
 | POST | `/api/scan` | Trigger a scan now |
+| GET | `/api/lost` | "Lost at last reboot" (v1, D54): `{ lost: LostNotice \| null }`, also `lost` in `/api/state` |
+| POST | `/api/lost/:id/restart`, `/api/lost/:id/service` | Body `{}` or `{ slug }` → `hallway run` it again, once or as a service; answers `{ ok, slug, url, port, persist, reason?, tail?, lost }` |
+| POST | `/api/lost/:id/dismiss`, `/api/lost/dismiss` | Dismiss one item, or the whole notice |
 | GET | `/api/events` | SSE |
 | GET | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | Agent-facing docs (see `06`) |
 | POST | `/mcp` | MCP Streamable HTTP (D50); GET and DELETE answer 405 |
