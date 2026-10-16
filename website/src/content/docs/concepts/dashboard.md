@@ -64,8 +64,10 @@ Top to bottom:
 - **The state**, as colour, shape and word: <span class="state state--healthy">● healthy</span>,
   <span class="state state--unhealthy">▲ unhealthy</span>, <span class="state state--down">■ down</span>,
   <span class="state state--stopped">○ stopped</span>, <span class="state state--unknown">◌ unknown</span>.
-- **Badges, only when relevant**: `orphaned` (the session that started it has gone), `exposed` (bound to `0.0.0.0`,
-  so reachable from your network), `managed` (a launchd or systemd service), its source, or a config error.
+- **Badges, only when relevant**: `orphaned` (the session that started it has gone and no service manager runs it),
+  `exposed` (bound to every interface, so reachable from your network; [more](/concepts/apps/#exposed)), `managed` (a
+  launchd or systemd service), its source, or a config error. Hover over or focus `orphaned` or `exposed` for what it
+  means.
 
 Click or Enter opens the app; ⌘/Ctrl-click opens a new tab. A secondary button opens the **detail drawer**: full
 identity (directory, git branch and last commit, framework, PID, start time, the command that started it), uptime and

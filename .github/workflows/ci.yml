@@ -98,6 +98,10 @@ jobs:
         env:
           HALLWAY_REAL_SERVICES: '1'
         run: node scripts/services-real.mjs
+      - name: Supervised vs orphaned, for real (D61)
+        env:
+          HALLWAY_REAL_SERVICES: '1'
+        run: node scripts/supervisors-real.mjs
 
   # ---------------------------------------------------------------------------------------------------------------
   # The Windows scanner for real (D59): as the runner's administrator, then as a new standard user through a scheduled

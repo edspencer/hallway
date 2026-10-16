@@ -72,7 +72,15 @@ Every two minutes (and on demand, with `hallway scan`), the scanner:
    primary clue**. From it Hallway walks up to the project root (the nearest `package.json`, `pyproject.toml`,
    `Cargo.toml`, `go.mod` or `.git`), takes a name and description from `package.json` or the README, reads the git
    branch and last commit, guesses the framework, notes the bind address, and checks the parent process: a parent of
-   PID 1 means the session that started it is gone, so it is flagged **orphaned**.
+   PID 1 with no service manager behind it means the session that started it is gone, so it is flagged **orphaned**.
+   A process that launchd or systemd runs (a LaunchAgent, a `brew services` job, a systemd service) has PID 1 as its
+   parent too, but it isn't orphaned: Hallway shows what supervises it instead, as `launchd: com.example.api` or
+   `systemd: api.service`.
+
+   Some directories say nothing about what runs in them: `/`, your home directory, a package manager's prefix such as
+   `/opt/homebrew` (itself a git repository), or a system directory. A server started in one has no project, so
+   Hallway names it by its supervisor's label or its executable (`api`, `my-server`), with the page's `<title>`
+   alongside.
 5. **Labels worktree siblings.** Several copies of one app running from different git worktrees show as
    `repo @ branch`, so they are no longer indistinguishable.
 6. **Remembers.** Each observation is saved under a stable ID (a hash of project root, port and normalised command,
@@ -97,3 +105,28 @@ observation:
 
 **Ignore** hides a listener for good, by port, by process name or by directory (you choose), by adding it to
 [`ignore.yaml`](/reference/bookmarks-yaml/#ignoreyaml).
+
+### Exposed
+
+A listener marked **exposed** is listening on all network interfaces (`*:4321` or `0.0.0.0:4321`), not just on this
+machine, so other devices on your network can reach it. That is sometimes what you want (testing on a phone), but a
+dev server usually doesn't need it. If it isn't intended, bind it to `127.0.0.1`: most dev servers take a `--host`
+option or a `HOST` variable. Hover over or focus the badge for the address it's bound to; the detail drawer shows it
+too.
+
+### Unfamiliar servers
+
+Sometimes the scanner finds something you don't recognise. To find out what it is, from a terminal (replace `4321`
+and `12345` with the port and the PID):
+
+```sh
+lsof -nP -iTCP:4321 -sTCP:LISTEN          # which process is listening, and its PID
+ps -o pid,ppid,command -p 12345           # its full command line and its parent
+lsof -a -p 12345 -d cwd                   # the directory it was started in
+launchctl list | grep -i <name>           # macOS: is it a launchd job (a LaunchAgent, `brew services`)?
+systemctl --user status 12345             # Linux: which systemd unit it belongs to, if any
+```
+
+On macOS, `brew services list` shows the jobs Homebrew manages, and `~/Library/LaunchAgents` holds the definitions
+of your own launchd jobs. A label there usually names the program that installed it. If it's something you want to
+keep an eye on, claim it; if not, ignore it.
