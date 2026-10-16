@@ -182,8 +182,8 @@ header.header button[data-open-modal] kbd {
 
 /*
  * Milestone badges: <span class="ms ms--v1">v1</span>. The badge says which milestone a feature belongs to
- * (docs/08-roadmap.md): v0 is released (lamplight), v1 and v2 are upcoming (quiet). A later milestone's feature that
- * has already shipped takes `ms--shipped` (lamplight too): <span class="ms ms--shipped">v1</span>.
+ * (docs/08-roadmap.md). Lamplight means available: `ms--v0` for v0, `ms--shipped` for a v1 or v2 feature that has
+ * shipped (<span class="ms ms--shipped">v1</span>). A plain `ms` (quiet) is for something not shipped yet.
  */
 .sl-markdown-content .ms {
 	display: inline-block;

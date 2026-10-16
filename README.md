@@ -12,10 +12,14 @@ Hallway gives them all a front door:
   at what's listening, identified by project, directory and git branch.
 - **Health at a glance** — state and uptime history for each, calm when things are intentionally off, loud only when
   something that should be running isn't.
-- **Memorable HTTPS hostnames** *(coming in v1)* — `https://review.localhost` instead of `localhost:5622`, with no
-  DNS setup by default.
+- **Memorable HTTPS hostnames** — `https://review.localhost` instead of `localhost:5622`, with no DNS setup by
+  default (or under your own domain). `hallway setup` runs Caddy as you, never as root, and prints each privileged
+  step before it runs it.
 - **Survives reboots** — the things you want kept alive run as native OS services (launchd on macOS, systemd on
-  Linux).
+  Linux), and after a restart Hallway lists what was running before and didn't come back, with one click to start
+  each again.
+- **A glance at each app** — favicons by default; opt in to screenshots on the doors (`hallway thumbs enable`), or
+  draw every door as a generated card.
 - **Your jumping-off page** — groups of bookmarks to the remote things you can never remember the URL of.
 - **Agent-friendly** — plain YAML files an agent can edit with the UI updating live, an agent guide and `/llms.txt`,
   and one command (`hallway run`) for an agent to start a server that won't become an orphan. An MCP server
@@ -57,16 +61,35 @@ On Linux, run `loginctl enable-linger` once if the daemon should keep running wh
 
 An agent can also read `http://localhost:4255/llms.txt`: what this Hallway has, and how to register a server.
 
+## HTTPS names (optional)
+
+```sh
+hallway setup --print      # the whole plan; runs nothing
+hallway setup              # https://<app>.localhost and https://hallway.localhost
+hallway setup --domain myname.internal    # or under your own domain
+hallway teardown           # undo it all, back to http://localhost:<port>
+```
+
+Caddy runs as you, on loopback ports 4443 and 4480. Its privileged changes are each printed and run through
+`sudo`: redirecting ports 443 and 80 to Caddy, trusting Hallway's local certificate authority, and, for a custom
+domain, a resolver entry for that domain only. It needs Caddy 2.7 or later.
+
 ## Status
 
-**v0, released as 0.1.0:** the dashboard, live YAML files, health checks with uptime history, the port scanner with
-claim and ignore, bookmarks, the agent guide, `hallway service install` and `hallway doctor`, plus managed servers
-(`hallway run`, `stop`, `start`, `restart`, `logs`, `service add`). Apps are linked as `http://localhost:<port>`
-(direct mode). Next: **v1**, fronting (`https://<slug>.localhost` via Caddy, `hallway setup`, custom domains), then
-**v2**'s screenshot thumbnails ([docs/08-roadmap.md](docs/08-roadmap.md)); v2's MCP server and agent hook have
-shipped early. Everything has been run end to end
-on Linux; on macOS it's tested on CI (including the real launchd jobs) but not yet run on a developer's Mac, so
-reports are welcome. The design is in [spec.md](spec.md) and [docs/](docs/).
+**Released** (0.3.1 is the latest). All of v0 and v1 and most of v2 are built ([docs/08-roadmap.md](docs/08-roadmap.md)):
+
+- **0.1.0 (v0):** the dashboard, live YAML files, health checks with uptime history, the port scanner with claim and
+  ignore, bookmarks, the agent guide, `hallway service install` and `hallway doctor`, plus v1's managed servers
+  (`hallway run`, `stop`, `start`, `restart`, `logs`, `service add`).
+- **0.2.0:** v1's fronted mode (`hallway setup`, HTTPS names, custom domains), and v2's MCP server and agent hook.
+- **0.3.0:** v1's "Lost at last reboot", and v2's screenshot thumbnails, generated cards and a fast 90-day view.
+- **0.3.1:** a fix: `hallway lost dismiss --all`.
+
+What's left is v2's last criterion: running everything on a real Mac. Everything has been run end to end on Linux;
+on macOS it's tested on CI (including real launchd jobs, `hallway setup` with its pf redirect and trusted
+certificate, and teardown) but not yet on a developer's Mac. In particular, no browser has been tried against
+fronted mode on a Mac, nothing has been checked across a real reboot, and whether the pf redirect survives a macOS
+update is unknown. Reports are welcome. The design is in [spec.md](spec.md) and [docs/](docs/).
 
 ## Development quick start
 
@@ -83,7 +106,7 @@ Or build and run it the way an installed copy runs, with a throwaway data home:
 
 ```sh
 HALLWAY_HOME=$(mktemp -d) npm start            # http://localhost:4255
-curl http://localhost:4255/api/health          # {"ok":true,"version":"0.0.0"}
+curl http://localhost:4255/api/health          # {"ok":true,"version":"<package.json version>"}
 ```
 
 Checks, conventions and how to send a pull request: [CONTRIBUTING.md](CONTRIBUTING.md). Agents working on this repo:

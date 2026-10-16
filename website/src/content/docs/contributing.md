@@ -9,7 +9,9 @@ Hallway is open source and developed in the open at
 ## Where things stand
 
 The project began as an exhaustive specification, written so that someone who wasn't part of the design discussion
-could build it. Implementation of v0 is starting. Until the code exists, **the spec is authoritative**:
+could build it. v0 and v1 are built and released, and so is v2 apart from its run on a real Mac (see the
+[roadmap](/roadmap/)). Where code exists, **the code and the decision log are authoritative**, and the rest of the
+spec explains why:
 
 - [`spec.md`](https://github.com/edspencer/hallway/blob/main/spec.md): the summary, document map, key decisions,
   glossary and milestones;
@@ -21,9 +23,11 @@ could build it. Implementation of v0 is starting. Until the code exists, **the s
 
 - **Try the ideas against your own machine.** Does the scanner's filtering match what you see in
   `lsof -nP -iTCP -sTCP:LISTEN`? Is there a kind of server it would miss or mislabel? Open an issue.
-- **Verify the unverified.** The [open questions](https://github.com/edspencer/hallway/blob/main/docs/10-open-questions.md)
-  list things that must be checked by experiment before Hallway relies on them, such as whether Safari resolves
-  `*.localhost`, and whether hot reload works through the proxy.
+- **Verify the unverified, especially on a Mac.** The
+  [open questions](https://github.com/edspencer/hallway/blob/main/docs/10-open-questions.md) and the research notes'
+  "unverified on macOS" list name what still needs checking by experiment: whether Safari resolves `*.localhost`,
+  whether Safari, Chrome and Firefox trust the certificate after `hallway setup`, whether services come back after a
+  logout or a reboot, and whether the pf redirect survives a macOS update.
 - **Disagree in writing.** If you think a decision is wrong, record your alternative and the reasoning in an issue or
   a PR to `docs/09-decisions.md`, rather than quietly building something different.
 
@@ -52,6 +56,7 @@ npm run build && npm run check-links   # what CI runs
 ```
 
 Pages are Markdown under `website/src/content/docs/`, and the sidebar is maintained by hand in
-`website/src/sidebar.mjs`. Every feature a page describes is marked with its milestone
-(<span class="ms ms--v0">v0</span>, <span class="ms">v1</span>, <span class="ms">v2</span>) until it ships. See
-`website/README.md` for the rest.
+`website/src/sidebar.mjs`. Every feature a page describes is marked with the milestone it belongs to: lamplit once
+it has shipped (<span class="ms ms--v0">v0</span>, <span class="ms ms--shipped">v1</span>,
+<span class="ms ms--shipped">v2</span>), grey until then (<span class="ms">v2</span>). See `website/README.md` for
+the rest.

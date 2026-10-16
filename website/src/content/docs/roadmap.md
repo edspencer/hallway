@@ -1,18 +1,26 @@
 ---
 title: Roadmap
-description: What shipped in v0 (Hallway 0.1.0), what is upcoming in v1 and v2, and the acceptance criteria each milestone is checked against.
+description: What shipped in which release (v0, v1 and most of v2 are out), what is left, and the acceptance criteria each milestone is checked against.
 ---
 
 Each milestone is useful on its own, and each is checked by **running the software** against the criteria below,
 not by reading the code.
 
 :::note[Where things stand]
-**v0 is released, as Hallway 0.1.0**, for macOS and Linux. It also includes part of v1 early: `hallway run` and the
-managed services behind it. Part of v2 has shipped early too, in the first release after 0.1.0: the MCP server and
-the dev-server hook. **v1's fronting and the rest of v2 are upcoming.** The
-[specification](https://github.com/edspencer/hallway/blob/main/spec.md) in the repository is the source of truth for
-what is still to come.
+**v0 and v1 have shipped, and so has all of v2's software**, for macOS and Linux. What is left is v2's last
+criterion: running everything on a real Mac. Fronted mode has run for real on Linux and on CI's macOS runners, but no
+browser has been driven on a Mac yet, and nothing has been checked across a real reboot or a macOS update. The
+[specification](https://github.com/edspencer/hallway/blob/main/spec.md) in the repository is the source of truth.
 :::
+
+## Releases
+
+| Release | What it shipped |
+| --- | --- |
+| **0.1.0** | All of v0: the daemon, the dashboard, health and uptime, the scanner, bookmarks, the agent guide, `hallway doctor`. From v1, early: [`hallway run`](/agents/hallway-run/), `stop`, `start`, `restart` and `logs`, managed services for apps and log rotation. |
+| **0.2.0** | The rest of v1's networking: [fronted mode](/networking/fronted-mode/) (`hallway setup` and `teardown`, Caddy, `https://<app>.localhost`), [custom domains](/networking/custom-domains/), the fallback page and doctor's networking checks. From v2: the [MCP server](/agents/mcp/) and the [dev-server hook](/agents/hook/). |
+| **0.3.0** | The last of v1: [Lost at last reboot](/concepts/services/#lost-at-last-reboot). From v2: [screenshot thumbnails and generated cards](/concepts/thumbnails/), and a fast 90-day uptime view. |
+| **0.3.1** | A fix: `hallway lost dismiss --all` was refused as an unknown option. |
 
 ## v0: The front page
 
@@ -26,8 +34,8 @@ sudo anywhere.**
 **Platforms:** macOS and Linux. On macOS the daemon is a LaunchAgent and the scanner uses `lsof`; on Linux it is a
 systemd user unit (with lingering enabled if it should run without a login session) and the scanner uses `ss` or
 `/proc`. Every criterion below was checked on Linux by running it. The macOS side is unit-tested and CI runs the real
-launchd service job on a macOS runner; a few details that need a real Mac (such as Safari) are listed as unverified in
-the repository's research notes until they have been run on one.
+launchd service job on a macOS runner. Criterion 1's "after logging out and in, and after a reboot" has not been run
+on either OS.
 
 Done when:
 
@@ -51,14 +59,19 @@ Done when:
 
 ## v1: Fronting and services
 
-<span class="ms">v1</span> **Upcoming**, except the services half, which shipped early in 0.1.0: `hallway run`,
-`stop`, `start`, `restart` and `logs`, `hallway service add`, `rm` and `regenerate`, managed launchd and systemd user
-services for apps, and log rotation. "Lost at last reboot" has shipped as well.
+<span class="ms ms--shipped">v1</span> **Released**: the services half in 0.1.0, fronted mode and custom domains in
+0.2.0, "Lost at last reboot" in 0.3.0.
 
 **Scope:** `hallway run`, `stop`, `start`, `restart` and `logs`; managed services for apps (launchd on macOS, systemd
-user units on Linux); Caddy through its admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; the fallback page; `hallway setup` and
-`teardown`; networking checks in `hallway doctor`; custom domains (dnsmasq and `/etc/resolver`); the "exposed"
-indicator; "lost at last reboot"; log rotation.
+user units on Linux); Caddy through its admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; the
+fallback page; `hallway setup` and `teardown`; networking checks in `hallway doctor`; custom domains (dnsmasq, and
+`/etc/resolver` on macOS or a `systemd-resolved` drop-in on Linux); the "exposed" indicator; "lost at last reboot";
+log rotation.
+
+**How it was checked:** criteria 1–4 and 7–11 run for real on Linux and on CI's macOS runners (setup with real
+`sudo`, a squatter on 443, a custom domain, teardown leaving nothing behind), with `curl` and the system trust store
+standing in for a browser. "Lost at last reboot" was checked on Linux with a simulated reboot. **Not yet checked:**
+Chrome, Safari and Firefox on a real Mac (criterion 2), and anything across a real reboot (criterion 5's reboot half).
 
 Done when:
 
@@ -86,23 +99,33 @@ Done when:
 
 ## v2: Agents and polish
 
-<span class="ms">v2</span> **Mostly shipped**: everything but the run on a real Mac.
+<span class="ms ms--shipped">v2</span> **Released, except criterion 5**: the MCP server and the hook in 0.2.0;
+screenshot thumbnails, generated cards and the fast 90-day view in 0.3.0.
 
-**Scope:** the MCP server (Streamable HTTP at `/mcp`, and `hallway mcp` over stdio), **available now**;
-`hallway hook check-command`, **available now**; optional screenshot thumbnails (`hallway thumbs enable`), **available
-now**; generated-card thumbnails (`thumbnails.mode: card`), **available now**; latency charts over the 7- and 90-day
-uptime views, **available now**.
-Linux support moved forward to v0 and v1. See [MCP server](/agents/mcp/) and [The dev-server hook](/agents/hook/).
+**Scope:** the [MCP server](/agents/mcp/) (Streamable HTTP at `/mcp`, and `hallway mcp` over stdio);
+[`hallway hook check-command`](/agents/hook/); optional [screenshot thumbnails](/concepts/thumbnails/)
+(`hallway thumbs enable`); generated-card thumbnails (`thumbnails.mode: card`); 7- and 90-day uptime from hourly
+rollups, with a latency chart. Linux support moved forward to v0 and v1.
 
 Done when:
 
-1. An MCP client can `add_bookmark` and the dashboard shows it live, with the YAML file's comments preserved.
-   (Available now.)
-2. `declare_app` with a `service` block is rejected; no MCP tool can start a process. (Available now.)
+1. An MCP client can `add_bookmark` and the dashboard shows it live, with the YAML file's comments preserved. (Met.)
+2. `declare_app` with a `service` block is rejected; no MCP tool can start a process. (Met.)
 3. `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots;
-   `hallway thumbs disable` removes it; the base install never depends on it. (Available now.)
-4. The 90-day view renders from rollups only and stays fast with 30 apps. (Available now.)
-5. Every v0 and v1 criterion has been run on a real Mac, with nothing left marked unverified on macOS.
+   `hallway thumbs disable` removes it; the base install never depends on it. (Met.)
+4. The 90-day view renders from rollups only and stays fast with 30 apps. (Met.)
+5. Every v0 and v1 criterion has been run on a real Mac, with nothing left marked unverified on macOS. **(Not yet.)**
+
+## What is left
+
+- **A run on a real Mac** (v2 criterion 5). Still unverified there: Safari, Chrome and Firefox accepting Hallway's
+  certificate, and Safari resolving `*.localhost`; services and the daemon coming back after a logout or a reboot
+  (`RunAtLoad`), and "Lost at last reboot" after a real one; the pf redirect surviving another tool reloading
+  `/etc/pf.conf`, and a macOS update. On Linux, a real reboot (with lingering on) hasn't been run either.
+- **Service controls in the dashboard.** The detail drawer doesn't yet have start, stop and restart buttons or a live
+  log tail; the CLI and the [HTTP API](/reference/http-api/) do.
+- **Discovery adapters.** The interface for reading another tool's registry exists, but no adapter ships yet (see
+  [Apps](/concepts/apps/#discovered-apps)).
 
 ## Later, unscheduled
 
@@ -116,7 +139,6 @@ Done when:
 
 ## Still open
 
-Some decisions are deliberately left for implementation. Among them: how Caddy gets port 443 without a reconfigurable
-root process (blocking for v1); whether a short `hw` alias ships; whether the dashboard's default hostname is
-`hallway.localhost`. The full list is in the repository's
+A few decisions are still open, among them whether a short `hw` alias ships alongside `hallway`, and the final visual
+identity (the hallway look is the working direction). The full list is in the repository's
 [open questions](https://github.com/edspencer/hallway/blob/main/docs/10-open-questions.md).

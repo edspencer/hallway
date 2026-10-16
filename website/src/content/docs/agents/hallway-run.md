@@ -3,7 +3,7 @@ title: hallway run
 description: The one command agents should use to start a dev server, so it never becomes an orphan.
 ---
 
-<span class="ms ms--v0">v0</span> `hallway run` replaces the ad-hoc `npm run dev` that leaves orphaned servers behind.
+<span class="ms ms--shipped">v1</span> `hallway run` replaces the ad-hoc `npm run dev` that leaves orphaned servers behind.
 
 ```sh
 hallway run <slug> [--cwd DIR] [--port N] [--persist] [--name "Display name"] -- <command...>
@@ -28,9 +28,8 @@ command as written, so it stays right if you edit the file later.
    stable one assigned from 5100–5999. The app is `expected: adhoc`, or `running` with `--persist`.
 2. **Hands the server to the OS's service manager** (a launchd job on macOS, a systemd user unit on Linux), so it is
    owned by that, **not by your session**, and survives the session ending.
-   - Without `--persist`, it won't come back after a reboot; it stays on the dashboard as `stopped`, and
-     `hallway run <slug>` starts it again. <span class="ms">v1</span> Upcoming: it will also be listed under
-     [Lost at last reboot](/concepts/services/#lost-at-last-reboot).
+   - Without `--persist`, it won't come back after a reboot; it stays on the dashboard as `stopped`, is listed under
+     [Lost at last reboot](/concepts/services/#lost-at-last-reboot), and `hallway run <slug>` starts it again.
    - With `--persist`, it is a full service that starts at login and restarts if it exits.
 3. **Waits until the port is listening** (up to 30 seconds), then **prints the URL and the log path, and exits 0**.
    If the server doesn't come up (or exits first), it prints the last 30 lines of its logs and exits 1, and leaves the
