@@ -598,3 +598,30 @@ Read 2026-10-14. Relevant internals:
   `GET /api/apps/app-7/history?window=90d` (21.5 kB) took 24 ms cold and 2.3 ms warm; `/api/state` with 30 apps
   45 ms warm. In Chromium over the LAN proxy, clicking "90 days" in the drawer to 90 painted bars and the latency
   chart took 40–43 ms (six apps). *Verified.*
+
+## Supervised vs orphaned, and listeners in non-project directories (D62), 2026-10-16
+
+- **The report:** 0.5.0 on a real Mac marked three listeners **orphaned**: a LaunchAgent running from its own project
+  directory, a `brew services` job (cwd `/opt/homebrew`, named "Homebrew @ stable" after the prefix's own git
+  repository), and a launchd job started in `/` that answered HTTP on `*`. All three have PPID 1 because launchd runs
+  them, which is also where a true orphan ends up.
+- **macOS, `launchctl list`:** run as the user, it prints `PID\tStatus\tLabel` under a header, with `-` for a loaded job
+  that isn't running. On GitHub's macOS runner (macos-latest, arm64), a LaunchAgent loaded with `launchctl bootstrap
+  gui/<uid>` appeared in it with its PID, and `hallway scan --json` reported the listener as
+  `supervisor: { manager: 'launchd', label: 'com.example.hallway-supervised' }`, `orphaned: false`
+  (`scripts/supervisors-real.mjs`). *Verified on GitHub's macOS runner; unverified on a real Mac* (a desktop login
+  session, `brew services` jobs and apps launched from the Dock, whose labels are `application.<bundle id>.<n>.<n>`).
+  Whether `launchctl list` from a process outside the Aqua session (an SSH login, say) lists the gui domain's jobs is
+  unverified too; the daemon runs as a LaunchAgent in that session, so its own scans are the case that matters.
+- **A shell trap found on the way:** `sh -c 'cd dir && node server &'` on macOS backgrounds the whole `&&` list as a
+  subshell, which stays alive as node's parent, so the process is *not* an orphan, and Hallway correctly said so.
+  `cd dir; node server &` gives a real one (PPID 1 once the shell exits).
+- **Linux, `/proc/<pid>/cgroup`:** on GitHub's Ubuntu runner, with lingering on, a listener started by
+  `systemd-run --user --unit=hallway-supervised-check.service` was reported `supervisor: systemd:
+  hallway-supervised-check.service`, `orphaned: false`. Its parent was the user manager (PID 1161), the subreaper the
+  old rule counted as an orphan's parent. A server whose shell exited inside `systemd-run --user --scope` (as a terminal
+  leaves one) was `orphaned: true` with no supervisor. *Verified.*
+- **Linux without systemd (this development box, a container whose PID 1 is `tini`, cgroup `0::/`, read-only
+  cgroupfs):** a fake unit couldn't be made here. A double-forked server (PPID 1) was reported `orphaned: true,
+  supervisor: null` by the built CLI, so a machine without systemd behaves as before. *Verified.*
+- **Windows:** unchanged (D62): no supervisor lookup; orphaned means the parent has exited.
