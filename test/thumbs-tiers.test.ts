@@ -14,7 +14,7 @@ import { UNKNOWN_HEALTH } from '../server/views.ts';
 import { makeCtx } from '../server/commands/index.ts';
 import { thumbs as thumbsCommand } from '../server/commands/thumbs.ts';
 import { type Exec, type PlaywrightLike, PLAYWRIGHT_VERSION, browserPaths, installedBrowser } from '../server/thumbs/browser.ts';
-import { CARD, FONT_DIR, FONT_FILES, PALETTE, ZOOM, cardEtag, cardSvg, paintIndex, svgToPng, type CardModel } from '../server/thumbs/card.ts';
+import { CARD, FONT_DIR, FONT_FILES, cardFonts, PALETTE, ZOOM, cardEtag, cardSvg, paintIndex, svgToPng, type CardModel } from '../server/thumbs/card.ts';
 import { pickThumb, shortAddress, startThumbs } from '../server/thumbs/index.ts';
 import { SHOT, Shots, shotDue } from '../server/thumbs/shots.ts';
 import { paintIndex as dashboardPaintIndex } from '../src/lib/colour.ts';
@@ -74,6 +74,11 @@ describe('the generated card', () => {
     assert.equal(inkIn(pixels(svg, false), ...band), 0, 'no font, no text: nothing fell back to a system font');
     for (const f of FONT_FILES) assert.ok(fs.statSync(path.join(FONT_DIR, f)).size > 10_000, f);
     for (const l of ['fraunces', 'inter', 'jetbrains-mono']) assert.match(fs.readFileSync(path.join(FONT_DIR, `OFL-${l}.txt`), 'utf8'), /SIL Open Font License/);
+  });
+
+  test('missing fonts are an error, not a card with no text on it', () => {
+    assert.equal(cardFonts().length, 3);
+    assert.throws(() => cardFonts(tmpDir('hw-no-fonts-')), /the card's fonts are missing .*Fraunces-SemiBold\.ttf/);
   });
 
   test('the door is painted as the dashboard paints it: same paint for a slug, same colours as tokens.css', () => {

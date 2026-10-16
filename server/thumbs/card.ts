@@ -6,6 +6,7 @@
 // The colours are tokens.css's (the door paints, the lift and shade, the plate's brass). The daemon can't read that
 // file at run time (it isn't shipped), so they are copied here and test/card.test.ts checks they still match (D28).
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import { ROOT } from '../config.js';
@@ -17,7 +18,7 @@ export const FONT_FILES = ['Fraunces-SemiBold.ttf', 'Inter-Medium.ttf', 'JetBrai
 export const CARD = { width: 320, height: 200 };
 export const ZOOM = 2;
 /** Bump when the drawing changes, so every card's ETag does too. */
-const DESIGN = 1;
+const DESIGN = 2;
 
 /** tokens.css: `--hw-paint-0` … `--hw-paint-9` (the doors with no icon colour), and what paint lightens and darkens to. */
 export const PALETTE = {
@@ -137,9 +138,17 @@ export function cardSvg(m: CardModel): string {
 
 let fontPaths: string[] | null = null;
 
+/** The card's font files in `dir`. Throws if one is missing: resvg would silently draw no text at all. */
+export function cardFonts(dir = FONT_DIR): string[] {
+  const paths = FONT_FILES.map((f) => path.join(dir, f));
+  const missing = paths.filter((p) => !fs.existsSync(p));
+  if (missing.length) throw new Error(`the card's fonts are missing (${missing.join(', ')}): reinstall Hallway`);
+  return paths;
+}
+
 /** An SVG as PNG at `zoom`×, with the bundled fonts only: the same bytes on every machine, and no system font scan. */
 export function svgToPng(svg: string, zoom = ZOOM): Buffer {
-  fontPaths ??= FONT_FILES.map((f) => path.join(FONT_DIR, f));
+  fontPaths ??= cardFonts();
   const r = new Resvg(svg, {
     fitTo: { mode: 'zoom', value: zoom },
     font: { fontFiles: fontPaths, loadSystemFonts: false, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', serifFamily: 'Fraunces', monospaceFamily: 'JetBrains Mono' },
