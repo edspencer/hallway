@@ -70,7 +70,7 @@ try {
   const packed = JSON.parse(out.slice(out.search(/^\[$/m))).at(-1);
   const tarball = path.join(tmp, packed.filename);
   const files = packed.files.map((f) => f.path);
-  for (const f of ['package.json', 'LICENSE', 'README.md', 'AGENT-GUIDE.md', 'dist/server/cli.js', 'dist/web/index.html', 'dist/web/favicon.svg'])
+  for (const f of ['package.json', 'LICENSE', 'README.md', 'AGENT-GUIDE.md', 'dist/server/cli.js', 'dist/web/index.html', 'dist/web/favicon.svg', 'assets/fonts/Inter-Medium.ttf', 'assets/fonts/OFL-inter.txt'])
     assert.ok(files.includes(f), `the package includes ${f}`);
   for (const f of files) assert.ok(!/^(src|server|test|scripts|website|docs)\//.test(f), `the package shouldn't include ${f}`);
 
@@ -81,6 +81,11 @@ try {
   const deps = fs.readdirSync(path.join(installed, 'node_modules'));
   for (const dev of ['react', 'react-dom', 'vite', 'tsx', 'typescript', '@changesets'])
     assert.ok(!deps.includes(dev), `${dev} is a build-time dependency; it shouldn't be installed`);
+  // v2 criterion 3: screenshots are opt-in (`hallway thumbs enable`, D56); a base install has no browser at all
+  for (const browser of ['playwright', 'playwright-core', 'puppeteer', 'puppeteer-core'])
+    assert.ok(!fs.existsSync(path.join(installed, 'node_modules', browser)), `${browser} shouldn't be installed`);
+  const browserDirs = (dir) => fs.readdirSync(dir, { recursive: true }).filter((f) => /(^|\/)(ms-playwright|chromium[^/]*|headless_shell)$/.test(String(f)));
+  assert.deepEqual(browserDirs(prefix), [], 'no browser was downloaded into the install');
 
   step('--version, --help, usage errors');
   assert.equal(run('--version').trim(), pkg.version);

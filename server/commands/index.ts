@@ -8,6 +8,7 @@ import { lost } from './lost.js';
 import { logs, restart, run, service, start, stop } from './services.js';
 import { setup, teardown } from './setup.js';
 import { claim, ignore, open, scan, status } from './status.js';
+import { thumbs } from './thumbs.js';
 
 export { makeCtx } from './context.js';
 
@@ -33,4 +34,5 @@ export const COMMANDS: Record<string, Command> = {
   teardown,
   mcp,
   hook: (ctx, args, flags, rest) => hook(ctx, args, flags, rest),
+  thumbs: (ctx, args, flags, rest) => thumbs(ctx, args, flags, rest),
 };

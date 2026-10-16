@@ -32,6 +32,7 @@
     "dist/server/",
     "dist/shared/",
     "dist/web/",
+    "assets/fonts/",
     "AGENT-GUIDE.md",
     "CHANGELOG.md"
   ],
@@ -62,6 +63,7 @@
     "@hono/node-server": "^2.1.4",
     "@modelcontextprotocol/hono": "^2.0.2",
     "@modelcontextprotocol/server": "^2.3.1",
+    "@resvg/resvg-js": "^2.6.2",
     "chokidar": "^5.0.0",
     "hono": "^4.13.13",
     "yaml": "^2.9.1",

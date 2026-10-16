@@ -59,6 +59,12 @@ Coding agents
   hook check-command                A pre-tool-use hook (Claude Code's PreToolUse on Bash): blocks a bare
                                     dev-server start and suggests the \`hallway run\` for it. See \`hallway guide\`.
 
+Thumbnails
+  thumbs enable                     Screenshots of your apps on their doors: installs a browser (Chromium's
+                                    headless shell, about 300 MB) into the data home and turns them on.
+  thumbs disable                    Turn them off and delete the browser and the screenshots.
+  thumbs refresh [slug]             Take the screenshots again now.  thumbs status: what's installed.
+
 Other
   doctor [--json]                   Check the daemon, the data home, the services and fronted mode, with fixes.
   guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph

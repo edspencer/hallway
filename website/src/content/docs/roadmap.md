@@ -86,11 +86,12 @@ Done when:
 
 ## v2: Agents and polish
 
-<span class="ms">v2</span> **Upcoming**, except its agent parts, which have shipped early.
+<span class="ms">v2</span> **Mostly shipped**: everything but the run on a real Mac.
 
 **Scope:** the MCP server (Streamable HTTP at `/mcp`, and `hallway mcp` over stdio), **available now**;
-`hallway hook check-command`, **available now**; optional screenshot thumbnails; generated-card thumbnails; latency
-charts over the 7- and 90-day uptime views (the views themselves, from hourly rollups, are already in v0's drawer).
+`hallway hook check-command`, **available now**; optional screenshot thumbnails (`hallway thumbs enable`), **available
+now**; generated-card thumbnails (`thumbnails.mode: card`), **available now**; latency charts over the 7- and 90-day
+uptime views, **available now**.
 Linux support moved forward to v0 and v1. See [MCP server](/agents/mcp/) and [The dev-server hook](/agents/hook/).
 
 Done when:
@@ -99,8 +100,8 @@ Done when:
    (Available now.)
 2. `declare_app` with a `service` block is rejected; no MCP tool can start a process. (Available now.)
 3. `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots;
-   `hallway thumbs disable` removes it; the base install never depends on it.
-4. The 90-day view renders from rollups only and stays fast with 30 apps.
+   `hallway thumbs disable` removes it; the base install never depends on it. (Available now.)
+4. The 90-day view renders from rollups only and stays fast with 30 apps. (Available now.)
 5. Every v0 and v1 criterion has been run on a real Mac, with nothing left marked unverified on macOS.
 
 ## Later, unscheduled

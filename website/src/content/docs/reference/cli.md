@@ -84,7 +84,9 @@ Each command is marked with its milestone: <span class="ms ms--v0">v0</span> com
 
 | Command | Description | |
 | --- | --- | --- |
-| `hallway thumbs enable` / `disable` | Install or remove the optional headless browser for screenshot thumbnails, and switch `thumbnails.mode`. | <span class="ms">v2</span> |
-| `hallway thumbs refresh [slug]` | Take new screenshots now. | <span class="ms">v2</span> |
+| `hallway thumbs enable` | Turn on screenshot thumbnails: installs a headless browser (Chromium's headless shell, about 300 MB) into the data home, never anywhere else, and sets `thumbnails.mode: screenshot`. Healthy apps get a picture within a minute. | <span class="ms ms--v0">v0</span> |
+| `hallway thumbs disable` | Turn them off: sets `thumbnails.mode: favicon` and deletes the browser and the screenshots. | <span class="ms ms--v0">v0</span> |
+| `hallway thumbs refresh [slug]` | Take new screenshots now, of one app or every healthy one (the daemon does the shooting). | <span class="ms ms--v0">v0</span> |
+| `hallway thumbs status` | The mode, whether a browser is installed and how big it is, and how many screenshots there are. | <span class="ms ms--v0">v0</span> |
 
 Environment variables are on [their own page](/reference/environment/).

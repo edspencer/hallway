@@ -33,7 +33,9 @@ function passThrough(e: React.MouseEvent) {
 export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   const state = doorState(app);
   const thumb = app.thumb ? thumbUrl(app.slug, app.thumb) : null;
-  const colour = useImageColour(thumb);
+  // a favicon is drawn small on the door; a screenshot is its glass; a generated card is the whole door (D55)
+  const kind = thumb ? (app.thumbKind ?? 'favicon') : null;
+  const colour = useImageColour(kind === 'card' ? null : thumb);
   const error = app.problems.find((p) => p.severity === 'error');
   const warnings = app.problems.filter((p) => p.severity === 'warning').length;
   const port = app.config?.port ?? null;
@@ -48,7 +50,7 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   const label = `${app.name}${sub ? `, ${sub}` : ''}: ${unchecked ? 'not checked' : STATE_META[state].label}${app.url ? `, ${displayUrl(app.url)}` : ''}`;
 
   return (
-    <article className={`hw-door hw-door--${unchecked ? 'unchecked' : state}${app.url ? '' : ' hw-door--nourl'}`} style={style} data-slug={app.slug}>
+    <article className={`hw-door hw-door--${unchecked ? 'unchecked' : state}${app.url ? '' : ' hw-door--nourl'}${kind && kind !== 'favicon' ? ` hw-door--${kind}` : ''}`} style={style} data-slug={app.slug}>
       {app.url ? (
         <a className="hw-door-link" href={app.url} data-nav="door" data-url={app.url} data-slug={app.slug} aria-label={label} title={STATE_META[state].says} />
       ) : (
@@ -58,7 +60,11 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
         <span className="hw-door-panes" />
         <span className="hw-door-light" />
         <span className="hw-door-boards" />
-        <Tile name={app.name} src={thumb} glyph={glyph} className="hw-door-tile" />
+        {kind === 'screenshot' || kind === 'card' ? (
+          <img className={kind === 'card' ? 'hw-door-card' : 'hw-door-glass'} src={thumb!} alt="" decoding="async" />
+        ) : (
+          <Tile name={app.name} src={thumb} glyph={glyph} className="hw-door-tile" />
+        )}
         <span className="hw-plate hw-door-plate">{port ?? '—'}</span>
         <span className="hw-door-knob" />
       </div>

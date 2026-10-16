@@ -469,3 +469,34 @@ Read 2026-10-14. Relevant internals:
   1.6 s later (criterion 4). Fresh uptime bars render as outlines with the first real bucket at the end. *Verified.*
 - **Unverified:** the dashboard has only been driven in Chromium. Safari and Firefox (the canvas favicon, `:has()`,
   `color-mix()`, `backdrop-filter`) are unverified; all four are supported in current releases of both.
+
+## Thumbnails and the 90-day view (v2 criteria 3 and 4), Linux, 2026-10-16
+
+- **Setup:** the daemon from this branch under a throwaway `HOME` and `HALLWAY_HOME`, with six generic demo apps on
+  loopback (five healthy, one down; two with favicons), the scanner off.
+- **The card as the no-favicon fallback, judged on screenshots:** with cards on the four favicon-less doors the
+  dashboard read worse: each card repeated the name printed beneath its door, and the address plate shrank to about
+  7 px at door size. Enlarging the plate's type made the card readable as an image on its own (the API's 640×400
+  PNG), but not better than the monogram door in the grid. Outcome: cards are `thumbnails.mode: card`, never an
+  automatic fallback (D55). The card renders in ~10 ms; the same model gives the same PNG bytes every time.
+- **`hallway thumbs enable` (criterion 3):** 26 s on this box. npm put playwright-core 1.64.1 (14 MB) in
+  `cache/browser/node_modules/`, and its installer put `chromium_headless_shell-1248` and `ffmpeg-1013` (278 MB
+  together; ffmpeg comes along even with `--only-shell`) in `cache/browser/ms-playwright/`; nothing appeared in the
+  real home's `~/.cache/ms-playwright`. The running daemon saw the config change, and `hallway thumbs refresh` shot
+  all five healthy apps in 3 s (PNGs of 3–9 kB at 640×400); the down app kept its monogram. The doors showed the
+  screenshots as glass in both themes. `hallway thumbs disable` reported "Deleted the browser (304 MB)", the daemon
+  switched the doors back to favicons and monograms without a restart, and no Chromium process was left.
+  *Verified on Linux; unverified on macOS* (Playwright's installer and `deviceScaleFactor: 0.5` are cross-platform,
+  but the run hasn't been done on a Mac).
+- **The base install (criterion 3):** `npm pack` went from 836.1 kB to 933.8 kB (1.4 → 1.6 MB unpacked; the three
+  font files are 160 kB). Installed into a throwaway prefix: no playwright, playwright-core or puppeteer in
+  `node_modules`, no browser directory anywhere under the prefix; `@resvg/resvg-js` adds 68 kB and its 4.2 MB native
+  binary for the platform. The installed package served a card in card mode in 10 ms. `smoke:pack` now asserts the
+  no-browser part.
+- **The 90-day view (criterion 4):** 30 apps and 90 days seeded through `UptimeStore.add` (four samples an hour back
+  to 48 h, then one a minute: 340 k samples), then `prune` (4.7 s, rolling up 64.8 k hours). Before D57: 90 days for
+  one app 45–54 ms (28 ms of it the rollup scan every `history()` starts with), all 30 in a row 1.25 s; 7 days 29 ms;
+  24 h 31 ms. After: 90 days 6–7 ms, all 30 160–175 ms; 7 days 0.7 ms; 24 h 3.5 ms. Through the daemon,
+  `GET /api/apps/app-7/history?window=90d` (21.5 kB) took 24 ms cold and 2.3 ms warm; `/api/state` with 30 apps
+  45 ms warm. In Chromium over the LAN proxy, clicking "90 days" in the drawer to 90 painted bars and the latency
+  chart took 40–43 ms (six apps). *Verified.*

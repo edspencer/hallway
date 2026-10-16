@@ -132,9 +132,12 @@ export interface HallwayConfig {
   ports: { assignRange: [number, number] };
   services: { startGraceSeconds: number; logMaxBytes: number; logGenerations: number };
   scan: { enabled: boolean; intervalSeconds: number; includeEphemeralPorts: boolean; minPort: number };
-  thumbnails: { mode: 'favicon' | 'screenshot' | 'card' };
+  thumbnails: { mode: ThumbKind };
   dashboard: { title: string | null; sections: DashboardSection[]; theme: 'auto' | 'dark' | 'light' };
 }
+
+/** The three tiers of thumbnail (docs/05-ui.md, D13), and `thumbnails.mode`'s values. */
+export type ThumbKind = 'favicon' | 'screenshot' | 'card';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Live data. The daemon core owns none of it: providers (server/providers.ts) fill it in. With no provider
@@ -355,6 +358,11 @@ export interface AppView {
    * monogram instead of asking. Provider: the thumbnailer. Absent from daemons older than the field.
    */
   thumb?: string | null;
+  /**
+   * What that thumbnail is (D55): a favicon (drawn small on the door), a screenshot (the door's glass) or a generated
+   * card (the whole door). Null with no thumbnail; absent from daemons older than the field (read it as `favicon`).
+   */
+  thumbKind?: ThumbKind | null;
 }
 
 /** A bookmark group: `GET /api/bookmarks` (`groups`), and `bookmarks` in `/api/state`. Sorted by order, then title. */

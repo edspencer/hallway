@@ -7,11 +7,18 @@
 // The `icon:` key of an app or bookmark picks the source: `auto` (the default) looks the site up; an `http(s)` URL is
 // fetched as the image itself; a path is read from the data home (and only from inside it); anything else (an emoji)
 // isn't an image at all, so there's no thumbnail and the dashboard draws the text.
+//
+// The other two tiers live beside it: screenshots (shots.ts, opt-in: `thumbnails.mode: screenshot` after `hallway thumbs
+// enable`) and generated cards (card.ts). `pickThumb` decides which one an app's thumbnail is (D55).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppConfig } from '../../shared/api.js';
+import type { AppConfig, ThumbKind } from '../../shared/api.js';
 import { VERSION, expandHome } from '../config.js';
+import { appUrl } from '../views.js';
+import { loadPlaywright, type PlaywrightLike } from './browser.js';
+import { type CardModel, cardEtag, cardSvg, svgToPng } from './card.js';
+import { Shots } from './shots.js';
 import type { EventBus } from '../events.js';
 import type { ProviderRegistry } from '../providers.js';
 import type { Store } from '../store/index.js';
@@ -169,6 +176,19 @@ export function iconSource(icon: string, pageUrl: string | null, home: string): 
   return null; // an emoji or other text: drawn by the dashboard
 }
 
+/**
+ * Which tier an app's thumbnail is (D55). `favicon` (the default): the favicon, else none (the dashboard draws a
+ * monogram). `screenshot`: the screenshot, else the favicon, else none. `card`: always the generated card. A card is
+ * never a silent fallback: on a door it repeats the name printed under it, and a monogram reads better (D55).
+ */
+export function pickThumb(mode: ThumbKind, have: { screenshot: boolean; favicon: boolean; card: boolean }): ThumbKind | null {
+  const order: ThumbKind[] = mode === 'screenshot' ? ['screenshot', 'favicon'] : mode === 'card' ? ['card'] : ['favicon'];
+  return order.find((k) => have[k]) ?? null;
+}
+
+/** An address as a card shows it: no scheme, no trailing slash. */
+export const shortAddress = (url: string) => url.replace(/^[a-z]+:\/\//i, '').replace(/\/$/, '');
+
 export interface ThumbsOptions {
   store: Store;
   bus: EventBus;
@@ -177,10 +197,16 @@ export interface ThumbsOptions {
   dir?: string;
   fetch?: typeof fetch;
   now?: () => number;
+  /** Defaults to `<home>/cache/thumbs` (screenshots). */
+  shotsDir?: string;
+  /** Loads playwright-core (tests pass a fake). Defaults to the copy `hallway thumbs enable` installed. */
+  playwright?: () => Promise<PlaywrightLike | null>;
+  /** How often to look for screenshots that are due (default a minute). */
+  tickMs?: number;
 }
 
 /** Plug the favicon thumbnailer into the daemon. Returns a function that unplugs it. */
-export function startThumbs({ store, bus, providers, dir = path.join(store.home, 'cache', 'favicons'), fetch: f, now }: ThumbsOptions) {
+export function startThumbs({ store, bus, providers, dir = path.join(store.home, 'cache', 'favicons'), fetch: f, now, shotsDir = path.join(store.home, 'cache', 'thumbs'), playwright, tickMs = 60_000 }: ThumbsOptions) {
   const doFetch = f ?? fetch;
   /** Source keys → the app slugs and bookmark groups that use them, for change events. */
   const users = new Map<string, { slugs: Set<string>; groups: Set<string> }>();
@@ -224,12 +250,87 @@ export function startThumbs({ store, bus, providers, dir = path.join(store.home,
     return d ? iconSource('auto', d.url ?? appPageUrl(d), store.home) : null;
   };
 
-  const thumb = (slug: string): Icon | null => {
+  const favicon = (slug: string): Icon | null => {
     const src = appSource(slug);
     if (!src) return null;
     use(src.key, { slug });
     return cache.get(src.key, lookup(src, src.kind === 'page'), src.kind === 'page' ? TTL.local : TTL.remote);
   };
+
+  const shots = new Shots(shotsDir, {
+    load: playwright ?? (() => loadPlaywright(store.home)),
+    now,
+    onChange: (slug) => bus.emit({ type: 'thumb', slug }),
+    log: (s) => process.stderr.write(s),
+  });
+  const mode = () => store.currentConfig().thumbnails.mode;
+
+  /** What a card shows for an app, or null for a slug that isn't an app. */
+  const cardModel = (slug: string): CardModel | null => {
+    const cfg = store.currentConfig();
+    const e = store.apps.get(slug);
+    const c = e?.value;
+    const d = e ? null : providers.all('discovered').find((x) => x.slug === slug);
+    if (!e && !d) return null;
+    const at = c ?? d;
+    const id = at ? providers.first('appIdentity', { slug, port: at.port, host: at.host }) : null;
+    const url = d?.url ?? (at ? appUrl(slug, at.port, at.host, cfg) : null);
+    return { slug, name: c?.name ?? d?.name ?? slug, address: url ? shortAddress(url) : null, framework: id?.framework ?? null, repo: id?.repo ?? null, branch: id?.branch ?? null };
+  };
+  /** Drawn cards by slug: drawn when first asked for, again only when what they show changes. */
+  const cards = new Map<string, { etag: string; body: Uint8Array }>();
+  const card = (slug: string) => {
+    const m = cardModel(slug);
+    if (!m) return null;
+    const etag = cardEtag(m);
+    return {
+      contentType: 'image/png',
+      etag,
+      kind: 'card' as const,
+      // drawn only when the bytes are wanted: not for the ETag in every AppView, nor for a 304
+      get body(): Uint8Array {
+        const had = cards.get(slug);
+        if (had?.etag === etag) return had.body;
+        const body = new Uint8Array(svgToPng(cardSvg(m)));
+        cards.set(slug, { etag, body });
+        return body;
+      },
+    };
+  };
+
+  const thumb = (slug: string) => {
+    const m = mode();
+    const shot = m === 'screenshot' ? shots.get(slug) : null;
+    const fav = m === 'card' ? null : favicon(slug);
+    const c = m === 'card' ? card(slug) : null;
+    const kind = pickThumb(m, { screenshot: !!shot, favicon: !!fav, card: !!c });
+    if (kind === 'screenshot') return { ...shot!, kind };
+    if (kind === 'favicon') return { ...fav!, kind };
+    return kind === 'card' ? c : null;
+  };
+
+  /** Apps a screenshot could be taken of: declared and discovered (never bookmarks), with the page and the PID behind it. */
+  const shootable = () => {
+    const out: { slug: string; url: string; pid: number | null; healthy: boolean }[] = [];
+    const add = (slug: string, port: number, host: string, url: string) => {
+      const h = providers.first('appHealth', slug);
+      const pid = providers.first('appIdentity', { slug, port, host })?.pid ?? null;
+      out.push({ slug, url, pid, healthy: h?.state === 'healthy' });
+    };
+    for (const [slug, e] of store.apps) if (e.value) add(slug, e.value.port, e.value.host, appPageUrl(e.value));
+    for (const d of providers.all('discovered')) if (!store.apps.has(d.slug)) add(d.slug, d.port, d.host, d.url ?? appPageUrl(d));
+    return out;
+  };
+  /** Queue the healthy apps whose screenshot is due (or `only` that one, regardless, when `force`). */
+  const shootDue = (only?: string, force = false) => {
+    if (mode() !== 'screenshot') return 0;
+    let n = 0;
+    for (const a of shootable()) if (a.healthy && (!only || a.slug === only) && shots.want(a.slug, a.url, a.pid, force)) n++;
+    return n;
+  };
+  let lastMode = mode();
+  const tick = setInterval(() => shootDue(), tickMs);
+  tick.unref?.();
 
   const bookmarkIcon = (link: { url: string; icon: string }, group?: string): Icon | null => {
     const src = iconSource(link.icon, link.url, store.home);
@@ -240,7 +341,7 @@ export function startThumbs({ store, bus, providers, dir = path.join(store.home,
 
   /** Look up every app's icon that hasn't been looked up yet (at start, and when apps change), ahead of the page. */
   const warmApps = () => {
-    for (const slug of store.apps.keys()) thumb(slug);
+    for (const slug of store.apps.keys()) favicon(slug);
   };
 
   /** Look up every bookmark's icon that hasn't been looked up yet, so the first visit to the page finds them. */
@@ -254,6 +355,7 @@ export function startThumbs({ store, bus, providers, dir = path.join(store.home,
   const unsub = bus.subscribe((e) => {
     // a door just opened: its favicon is worth another look straight away
     if (e.type === 'state' && e.state === 'healthy') {
+      shootDue(e.slug);
       const src = appSource(e.slug);
       if (src && !cache.peek(src.key)?.icon) {
         use(src.key, { slug: e.slug });
@@ -262,10 +364,27 @@ export function startThumbs({ store, bus, providers, dir = path.join(store.home,
     }
     if (e.type === 'bookmarks') warmBookmarks();
     if (e.type === 'apps' || (e.type === 'app' && e.reason === 'config')) warmApps();
+    if (e.type === 'config') {
+      const m = mode();
+      if (m === lastMode) return;
+      // every door's picture may change kind: tell the dashboard about each
+      for (const a of shootable()) bus.emit({ type: 'thumb', slug: a.slug });
+      // screenshots off: close the browser (disable is about to delete it) and forget the pictures
+      if (lastMode === 'screenshot') void shots.reset();
+      lastMode = m;
+      if (m === 'screenshot') shootDue();
+    }
   }, { internal: true });
   const off = providers.register({
     name: 'thumbs',
     thumb,
+    async refreshThumbs(slug?: string) {
+      if (mode() !== 'screenshot') return 0;
+      const before = new Map(shootable().map((a) => [a.slug, shots.get(a.slug)?.takenAt ?? null]));
+      shootDue(slug, true);
+      await shots.settle();
+      return [...before].filter(([s, t]) => (shots.get(s)?.takenAt ?? null) !== t).length;
+    },
     bookmarkIcon: (link, group) => bookmarkIcon(link, group),
   });
   const warm = setTimeout(() => (warmApps(), warmBookmarks()), 0);
@@ -273,8 +392,12 @@ export function startThumbs({ store, bus, providers, dir = path.join(store.home,
 
   return {
     cache,
+    shots,
+    cards,
     stop() {
       clearTimeout(warm);
+      clearInterval(tick);
+      void shots.stop();
       unsub();
       off();
     },

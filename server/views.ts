@@ -36,6 +36,12 @@ export function appUrl(slug: string, port: number, host: string, cfg: HallwayCon
   return `http://${shown}:${port}`;
 }
 
+/** An app's thumbnail ETag and kind, without drawing it. */
+function thumbOf(providers: ProviderRegistry, slug: string): Pick<AppView, 'thumb' | 'thumbKind'> {
+  const t = providers.first('thumb', slug);
+  return { thumb: t?.etag ?? null, thumbKind: t ? (t.kind ?? 'favicon') : null };
+}
+
 export interface ViewContext {
   store: Store;
   providers: ProviderRegistry;
@@ -63,7 +69,7 @@ export function declaredView({ store, providers }: ViewContext, slug: string, wi
     health: providers.first('appHealth', slug) ?? UNKNOWN_HEALTH,
     history: withHistory ? providers.first('appHistory', slug, '24h') : null,
     identity: c ? providers.first('appIdentity', { slug, port: c.port, host: c.host }) : null,
-    thumb: providers.first('thumb', slug)?.etag ?? null,
+    ...thumbOf(providers, slug),
   };
 }
 
@@ -84,7 +90,7 @@ export function discoveredView({ store, providers }: ViewContext, d: DiscoveredA
     health: providers.first('appHealth', d.slug) ?? UNKNOWN_HEALTH,
     history: withHistory ? providers.first('appHistory', d.slug, '24h') : null,
     identity: providers.first('appIdentity', { slug: d.slug, port: d.port, host: d.host }),
-    thumb: providers.first('thumb', d.slug)?.etag ?? null,
+    ...thumbOf(providers, d.slug),
   };
 }
 

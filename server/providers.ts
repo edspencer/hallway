@@ -15,7 +15,7 @@
 // /api/state must answer in milliseconds). Several providers can be registered; for each slot the first one that
 // returns a non-null answer wins, in registration order. A provider that throws is skipped for that call (and
 // logged), never taking the API down.
-import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, HistoryWindow, ListenerIdentity, LostNotice, ObservedListener } from '../shared/api.js';
+import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, HistoryWindow, ListenerIdentity, LostNotice, ObservedListener, ThumbKind } from '../shared/api.js';
 import type { LostRecord } from './lost/index.js';
 
 /** What the API tells a provider about a declared app. */
@@ -42,7 +42,9 @@ export interface StateProvider {
   /** Apps from other tools' registries (discovery adapters). */
   discovered?(): DiscoveredApp[];
   /** A thumbnail for an app (`GET /api/apps/:slug/thumb`). */
-  thumb?(slug: string): { body: Uint8Array; contentType: string; etag: string } | null;
+  thumb?(slug: string): { body: Uint8Array; contentType: string; etag: string; kind?: ThumbKind } | null;
+  /** Re-shoot screenshots now (`POST /api/thumbs/refresh`): one app, or every healthy one. Resolves with how many were taken. */
+  refreshThumbs?(slug?: string): Promise<number>;
   /** A managed service is being started by the daemon: give it the start grace period (`◐ starting`, not down). */
   serviceStarting?(slug: string): boolean;
   /** "Lost at last reboot": the notice, with each item's `back` worked out now (server/live.ts). Null: nothing lost. */
@@ -108,6 +110,12 @@ export class ProviderRegistry {
     const scanners = this.list.filter((p) => typeof p.scan === 'function');
     await Promise.all(scanners.map((p) => p.scan!()));
     return scanners.length > 0;
+  }
+
+  /** Every provider's `refreshThumbs()`, together: how many screenshots were taken. */
+  async refreshThumbs(slug?: string): Promise<number> {
+    const n = await Promise.all(this.list.filter((p) => typeof p.refreshThumbs === 'function').map((p) => p.refreshThumbs!(slug)));
+    return n.reduce((a, b) => a + b, 0);
   }
 
   observation(id: string): ObservedListener | null {

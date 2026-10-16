@@ -215,6 +215,20 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
     return image(c, t);
   });
 
+  api.post('/thumbs/refresh', async (c) => {
+    try {
+      const body = (await jsonBody(c)) as { slug?: unknown } | null;
+      const slug = body?.slug;
+      if (slug !== undefined && typeof slug !== 'string') return fail(c, 400, { error: 'slug must be a string' });
+      if (slug && !appView(ctx, slug)) return fail(c, 404, { error: `no app '${slug}'` });
+      if (store.currentConfig().thumbnails.mode !== 'screenshot') return fail(c, 409, { error: 'screenshots are off (thumbnails.mode is not screenshot): `hallway thumbs enable` turns them on' });
+      if (!providers.has('refreshThumbs')) return fail(c, 503, { error: 'screenshots are not available (no thumbnailer is running)' });
+      return c.json({ taken: await providers.refreshThumbs(slug || undefined) });
+    } catch (e) {
+      return handle(c, e);
+    }
+  });
+
   // ---------------- managed services (v1) ----------------
   api.get('/apps/:slug/logs', (c) => {
     const slug = c.req.param('slug');

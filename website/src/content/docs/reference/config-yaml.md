@@ -42,7 +42,7 @@ scan:
   minPort: 1024
 
 thumbnails:
-  mode: favicon                 # favicon | screenshot | card   (screenshot and card: v2)
+  mode: favicon                 # favicon | screenshot (after `hallway thumbs enable`) | card
 
 dashboard:
   title: null                   # defaults to the machine's hostname
@@ -69,7 +69,7 @@ dashboard:
 | `scan.intervalSeconds` | `120` | Seconds between scans. |
 | `scan.includeEphemeralPorts` | `false` | Also show listeners on 49152–65535. |
 | `scan.minPort` | `1024` | Ignore ports below this. |
-| `thumbnails.mode` | `favicon` | Card thumbnails. `screenshot` and `card` are <span class="ms">v2</span>. |
+| `thumbnails.mode` | `favicon` | The pictures on the doors. `favicon`: the app's favicon (a monogram if it has none). `screenshot`: a picture of each healthy app, as the door's glass; run `hallway thumbs enable` first, which installs the browser. `card`: every door drawn as a generated card with its name, address, framework and `repo @ branch`. |
 | `dashboard.title` | hostname | The page title. |
 | `dashboard.sections` | `[apps, observed, bookmarks]` | Which sections show, and in what order. |
 | `dashboard.theme` | `auto` | `auto` follows the system; or force `dark` or `light`. |

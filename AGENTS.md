@@ -79,7 +79,9 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
                    systemd.ts render the job definitions (pure) and run the lifecycle verbs through a mockable runner
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
-  thumbs/          tier-1 thumbnails: favicon lookup (favicon.ts) and the cached provider for apps and bookmarks
+  thumbs/          thumbnails (D13): favicon lookup (favicon.ts) and the provider for apps and bookmarks (index.ts, which
+                   also picks the tier, D55); card.ts (the generated card: SVG → PNG with resvg); shots.ts and browser.ts
+                   (opt-in screenshots, and the browser `hallway thumbs enable` installs into the data home, D56)
   scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
                    (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
@@ -89,6 +91,7 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
                    teardown: facts → plan → run), doctor.ts (networking checks), tld.ts, probe.ts, names.ts
   platform/fronting-*.ts  the privileged recipes per OS: the 443/80 redirect (pf / nftables), trust, the resolver
 shared/            types used by both server/ and src/ (no imports, no Node or DOM APIs): api.ts is the API contract
+assets/fonts/      the generated card's fonts (static OFL instances; scripts/card-fonts.py makes them)
 AGENT-GUIDE.md     the guide for coding agents (shipped; its file reference is generated: npm run sync:guide)
 src/               the dashboard (React, built by Vite into dist/web)
   App.tsx          the page: sections in `dashboard.sections` order, filter, drawer, help, empty states
