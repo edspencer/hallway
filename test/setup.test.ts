@@ -12,7 +12,10 @@ import { darwinFronting, pfAnchor, resolverText } from '../server/platform/front
 import { dnsmasqConf } from '../server/platform/fronting.ts';
 import { type Facts, SetupError, cmdLine, formatPlan, planSetup, runPlan, versionAtLeast } from '../server/proxy/setup.ts';
 import { HSTS_PRELOADED_TLDS, parseTlds, tldVerdict, delegatedTlds } from '../server/proxy/tld.ts';
-import { ROOT, tmpDir } from './fixture.ts';
+import { onWindows, ROOT, tmpDir } from './fixture.ts';
+
+// the goldens hold the POSIX paths a plan has on macOS and Linux; fronted mode is unsupported on Windows (D58)
+const POSIX_PATHS = { skip: onWindows('a plan names data-home paths in the OS\'s own form; fronted mode is unsupported on Windows') };
 
 const GOLDEN = path.join(ROOT, 'test', 'fixtures', 'proxy');
 function golden(name: string, text: string) {
@@ -62,8 +65,8 @@ function facts(over: Partial<Facts> & { os: 'darwin' | 'linux'; base?: string } 
 const plan = (f: Facts) => planSetup(f, platformFor(f.platform), HOME);
 
 describe('setup --print', () => {
-  test('golden: macOS, *.localhost', () => golden('setup-darwin.txt', formatPlan(plan(facts({ os: 'darwin' })), { printOnly: true })));
-  test('golden: macOS, a custom domain, Caddy and dnsmasq to install with Homebrew', () =>
+  test('golden: macOS, *.localhost', POSIX_PATHS, () => golden('setup-darwin.txt', formatPlan(plan(facts({ os: 'darwin' })), { printOnly: true })));
+  test('golden: macOS, a custom domain, Caddy and dnsmasq to install with Homebrew', POSIX_PATHS, () =>
     golden(
       'setup-darwin-custom.txt',
       formatPlan(
@@ -78,7 +81,7 @@ describe('setup --print', () => {
         { printOnly: true },
       ),
     ));
-  test('golden: Linux, a custom domain', () => golden('setup-linux-custom.txt', formatPlan(plan(facts({ os: 'linux', base: 'myname.internal' })), { printOnly: true })));
+  test('golden: Linux, a custom domain', POSIX_PATHS, () => golden('setup-linux-custom.txt', formatPlan(plan(facts({ os: 'linux', base: 'myname.internal' })), { printOnly: true })));
 
   test('every privileged command is a sudo command with an explanation; the files it installs are shown first', () => {
     for (const os of ['darwin', 'linux'] as const) {

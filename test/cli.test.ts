@@ -8,6 +8,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { UsageError, check, parseArgs } from '../server/args.ts';
 import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+import { tildify } from '../server/config.ts';
 
 await exitWatchdog();
 
@@ -123,7 +124,7 @@ describe('hallway CLI', () => {
       });
       const url = out.match(/^Hallway on (http:\/\/localhost:\d+)$/m)?.[1];
       assert.ok(url, out);
-      assert.match(out, new RegExp(`^Data home: ${HOME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+      assert.match(out, new RegExp(`^Data home: ${tildify(HOME).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
       const res = await fetch(`${url}/api/health`);
       assert.equal(res.status, 200);
       assert.equal(((await res.json()) as { ok: boolean }).ok, true);
@@ -166,7 +167,7 @@ describe('hallway CLI', () => {
     assert.equal(g.code, 0, g.stderr);
     assert.match(g.stdout, /^# Hallway: a guide for coding agents/);
     assert.match(g.stdout, /\| `port` \| number 1–65535 \| \*\*required\*\* \|/);
-    assert.ok(g.stdout.includes(HOME), 'names the data home');
+    assert.ok(g.stdout.includes(tildify(HOME)), 'names the data home');
     const s = await hallway(['guide', '--snippet']);
     assert.equal(s.code, 0, s.stderr);
     assert.match(s.stdout, /^Never start a long-running dev or preview server directly/);
