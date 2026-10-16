@@ -6,16 +6,47 @@ import { DEFAULT_PORT, HOME, VERSION, dataPaths, devOverrides, parsePort, tildif
 import { UsageError, check, parseArgs } from './args.js';
 import { DEFAULT_URL, agentGuide, readGuide, snippet } from './guide.js';
 
-const USAGE = `Usage: hallway [serve] [--port <n>] [--quiet]
-       hallway guide [--snippet]
-       hallway --version | --help
+const USAGE = `Usage: hallway [command] [options]
 
-  serve   (the default) Run the daemon in the foreground: the dashboard and API on
-          http://localhost:<port> (127.0.0.1 only).
+Daemon
+  serve [--port <n>] [--quiet]      (the default) Run the daemon in the foreground: the dashboard and API on
+                                    http://localhost:<port> (127.0.0.1 only).
           --port <n>       the port (default ${DEFAULT_PORT}, or $PORT, or port: in config.yaml)
           --quiet, -q      print just the "Hallway on <url>" line
-  guide   Print the guide for coding agents (AGENT-GUIDE.md).
-          --snippet        just the paragraph for an agent instruction file (CLAUDE.md, AGENTS.md)
+  open                              Open the dashboard in your browser.
+  service install                   Run the daemon as a service (a LaunchAgent / systemd user unit).
+  service uninstall | status | restart
+
+Apps and discovery
+  status [slug] [--json]            Every app's state, address, port and uptime.
+  scan [--json]                     Look for listeners nobody has named.
+  claim <port|id> [--slug S] [--name N] [--expected E]
+                                    Turn an observed listener into a declared app.
+  ignore <port|id> [--by port|process|dir]
+                                    Hide an observed listener.
+  app add <slug> [--port N] [--name N] [--expected E] [--health PATH]
+  app ls [--json] | app edit <slug> | app rm <slug>
+
+Running servers
+  run <slug> [--cwd DIR] [--port N] [--persist] [--name N] -- <command...>
+                                    Start a server as a service on a stable port, wait for it, print its URL.
+                                    $PORT in the command (quote it: '$PORT') becomes the app's port.
+  stop <slug> | start <slug> | restart <slug>
+  logs <slug> [--lines N] [--follow]
+  service add <slug> [-- <command...>]
+                                    Keep a declared app running: at login, and restarted if it exits.
+  service rm <slug>                 Stop managing it (the app stays declared).
+  service regenerate [slug]         Rewrite the generated services (e.g. after a Node upgrade).
+
+Bookmarks
+  bookmark add <group> <url> [--title T] [--description D]
+  bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
+
+Other
+  doctor [--json]                   Check the daemon, the data home and the services, with fixes.
+  guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph
+                                    for an agent instruction file (CLAUDE.md, AGENTS.md).
+  --version | --help
 
 Data: $HALLWAY_HOME (default ~/.hallway). Exit codes: 0 ok, 1 error, 2 usage error.`;
 
@@ -61,7 +92,8 @@ async function serve(flags: Record<string, string>) {
 
 /** Resolves with the exit code, or undefined while the daemon runs. */
 async function main(argv: string[]): Promise<number | undefined> {
-  const { pos, flags } = parseArgs(argv);
+  const parsed = parseArgs(argv);
+  const { pos, flags } = parsed;
   if (flags.help) {
     process.stdout.write(USAGE + '\n');
     return 0;
@@ -71,19 +103,25 @@ async function main(argv: string[]): Promise<number | undefined> {
     return 0;
   }
   const [cmd = 'serve', ...args] = pos;
+  const rest = parsed.rest;
+  const commands = () => import('./commands/index.js');
   switch (cmd) {
     case 'serve':
-      check(cmd, flags, ['port', 'quiet'], args, 0);
+      check(cmd, flags, ['port', 'quiet'], args, 0, rest);
       await serve(flags);
       return undefined;
     case 'guide': {
-      check(cmd, flags, ['snippet'], args, 0);
+      check(cmd, flags, ['snippet'], args, 0, rest);
       const guide = readGuide();
       process.stdout.write(flags.snippet ? snippet(guide) : agentGuide({ guide, url: DEFAULT_URL, home: tildify(HOME) }));
       return 0;
     }
-    default:
-      throw new UsageError(`unknown command '${cmd}'`);
+    default: {
+      const { COMMANDS, makeCtx } = await commands();
+      const run = COMMANDS[cmd];
+      if (!run) throw new UsageError(`unknown command '${cmd}'`);
+      return run(makeCtx(), args, flags, rest);
+    }
   }
 }
 

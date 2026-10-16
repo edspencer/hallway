@@ -5,13 +5,15 @@
 export class UsageError extends Error {}
 
 /** Options that take a value (`--port 5050` or `--port=5050`). */
-const VALUE_FLAGS = ['port'];
+const VALUE_FLAGS = ['port', 'cwd', 'name', 'expected', 'health', 'slug', 'by', 'title', 'description', 'lines'];
 /** Options that don't. */
-const BOOLEAN_FLAGS = ['snippet'];
+const BOOLEAN_FLAGS = ['snippet', 'json', 'persist', 'follow'];
 
 export interface ParsedArgs {
   pos: string[];
   flags: Record<string, string>;
+  /** Everything after a bare `--`, untouched (`hallway run demo -- npm run dev --port 3000`); absent without `--`. */
+  rest?: string[];
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -19,9 +21,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const flags: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === '--') return { pos, flags, rest: argv.slice(i + 1) };
     if (a === '-h' || a === '--help') flags.help = '1';
     else if (a === '-v' || a === '--version') flags.version = '1';
     else if (a === '-q' || a === '--quiet') flags.quiet = '1';
+    else if (a === '-f') flags.follow = '1';
     else if (a.startsWith('--')) {
       if (BOOLEAN_FLAGS.includes(a.slice(2))) {
         flags[a.slice(2)] = '1';
@@ -38,9 +42,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return { pos, flags };
 }
 
-/** Each command takes its own options and at most `max` arguments. */
-export function check(cmd: string, flags: Record<string, string>, allowed: string[], args: string[], max: number) {
+/** Each command takes its own options and at most `max` arguments, and a `-- <command>` only if `takesRest`. */
+export function check(cmd: string, flags: Record<string, string>, allowed: string[], args: string[], max: number, rest?: string[], takesRest = false) {
   const bad = Object.keys(flags).find((k) => !allowed.includes(k));
   if (bad) throw new UsageError(`${cmd} doesn't take --${bad}`);
   if (args.length > max) throw new UsageError(`unexpected argument '${args[max]}'`);
+  if (rest !== undefined && !takesRest) throw new UsageError(`${cmd} doesn't take a command after --`);
+}
+
+/** The arguments a command can't do without, named for the message. */
+export function need(cmd: string, args: string[], names: string[]) {
+  if (args.length < names.length) throw new UsageError(`${cmd} needs ${names.slice(args.length).map((n) => `<${n}>`).join(' ')}`);
 }

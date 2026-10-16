@@ -142,3 +142,25 @@ export function appendToList(doc: Document, key: string, value: unknown): boolea
   seq.items.push(doc.createNode(value));
   return true;
 }
+
+/** Append a mapping to the block list at `key` (creating it if missing), e.g. a bookmark to `links:`. */
+export function appendMapping(doc: Document, key: string, value: Record<string, unknown>) {
+  const map = root(doc);
+  const seq = map.get(key, true);
+  if (seq === undefined || (isScalar(seq) && seq.value === null)) {
+    map.set(key, createNode(doc, [value]));
+    return;
+  }
+  if (!isSeq(seq)) throw new Error(`"${key}" must be a list`);
+  // `links: []` is a flow list; a mapping reads better in a block one
+  if (seq.flow && !seq.items.length) seq.flow = false;
+  seq.items.push(createNode(doc, value));
+}
+
+/** Remove item `index` from the list at `key`. False if there's no such item. */
+export function removeFromList(doc: Document, key: string, index: number): boolean {
+  const seq = root(doc).get(key, true);
+  if (!isSeq(seq) || index < 0 || index >= seq.items.length) return false;
+  seq.items.splice(index, 1);
+  return true;
+}

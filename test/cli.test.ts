@@ -56,7 +56,7 @@ describe('hallway CLI', () => {
     assert.equal(v.stdout.trim(), JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version);
     const h = await hallway(['--help']);
     assert.equal(h.code, 0);
-    assert.match(h.stdout, /^Usage: hallway \[serve\]/);
+    assert.match(h.stdout, /^Usage: hallway \[command\]/);
     assert.match(h.stdout, /--port <n> +the port \(default 4255, or \$PORT, or port: in config.yaml\)/);
     // the development-only overrides are never advertised
     assert.doesNotMatch(h.stdout, /HALLWAY_DEV|--host|--bind/);

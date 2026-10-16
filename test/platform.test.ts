@@ -21,7 +21,8 @@ describe('platform', () => {
     assert.equal(p.userServiceDir({ XDG_CONFIG_HOME: '/xdg' }, '/home/someone'), '/xdg/systemd/user');
     // the XDG spec says to ignore a relative value
     assert.equal(p.userServiceDir({ XDG_CONFIG_HOME: 'rel' }, '/home/someone'), '/home/someone/.config/systemd/user');
-    assert.equal(p.serviceFileName('hallway.app.my-app'), 'hallway.app.my-app.service');
+    assert.equal(p.serviceFileName('hallway.app.my-app'), 'hallway-app-my-app.service');
+    assert.equal(p.serviceFileName('hallway.daemon'), 'hallway-daemon.service');
   });
 
   test('anything else is unsupported, with a clear message', () => {

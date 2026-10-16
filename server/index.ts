@@ -8,6 +8,7 @@ import { WEB_DIST } from './config.js';
 import { bus as defaultBus, type EventBus } from './events.js';
 import { providers as defaultProviders, type ProviderRegistry } from './providers.js';
 import { localOnly } from './security.js';
+import { startLogRotation } from './services/rotate.js';
 import { startSnapshots } from './store/backups.js';
 import { Store } from './store/index.js';
 import { startWatcher } from './watcher.js';
@@ -66,7 +67,7 @@ export interface ServerOptions extends Omit<AppOptions, 'store'> {
   home: string;
   /** An already-loaded store for `home` (the CLI reads config.yaml's port first). */
   store?: Store;
-  /** Watch the data home and take hourly snapshots (default true). */
+  /** Watch the data home, take hourly snapshots and rotate service logs (default true). */
   watch?: boolean;
 }
 
@@ -93,12 +94,14 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
   });
   const watcher = watch ? startWatcher(store) : null;
   const stopSnapshots = watch ? startSnapshots(home) : () => {};
+  const stopRotation = watch ? startLogRotation(store) : () => {};
   await watcher?.ready;
   return {
     port: bound,
     store,
     close: async () => {
       stopSnapshots();
+      stopRotation();
       await watcher?.close();
       await closeHttp();
     },

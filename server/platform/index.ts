@@ -8,6 +8,7 @@
 // docs/11-research-notes.md until someone runs it on a Mac.
 import { darwin } from './darwin.js';
 import { linux } from './linux.js';
+import type { Runner, ServiceManager } from './services.js';
 
 export type PlatformId = 'darwin' | 'linux';
 
@@ -21,7 +22,14 @@ export interface Platform {
   userServiceDir(env?: NodeJS.ProcessEnv, home?: string): string;
   /** The file name of the service definition for a job label (D19: `hallway.daemon`, `hallway.app.<slug>`). */
   serviceFileName(label: string): string;
+  /** The service manager for the daemon and managed apps (launchd.ts, systemd.ts). `run` is mocked in tests. */
+  services(opts?: { run?: Runner; env?: NodeJS.ProcessEnv; home?: string }): ServiceManager;
+  /** The command that opens a URL in the default browser (`open` / `xdg-open`). */
+  openCommand(url: string): [string, string[]];
 }
+
+export type { Runner, RunResult, ServiceManager, ServiceSpec, ServiceStatus } from './services.js';
+export { ServiceManagerError, defaultRunner } from './services.js';
 
 export class UnsupportedPlatformError extends Error {
   constructor(public platform: string) {
