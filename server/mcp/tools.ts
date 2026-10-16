@@ -151,11 +151,18 @@ const NO_SERVICE =
 // The server
 // ---------------------------------------------------------------------------------------------------------------
 
-/** One MCP server instance (the SDK makes one per request, so this must be cheap: it only registers handlers). */
-export function createMcpServer(ctx: McpContext): McpServer {
+/**
+ * One MCP server instance (the SDK makes one per request, so this must be cheap: it only registers handlers). Resource
+ * subscriptions are offered to 2026-era clients only: they arrive on a `subscriptions/listen` stream, and a 2025-era
+ * client served statelessly has no stream to receive them on.
+ */
+export function createMcpServer(ctx: McpContext, era: 'legacy' | 'modern' = 'modern'): McpServer {
   const { store, providers } = ctx;
   const vctx = { store, providers };
-  const server = new McpServer({ name: 'hallway', title: 'Hallway', version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer(
+    { name: 'hallway', title: 'Hallway', version: VERSION },
+    { instructions: INSTRUCTIONS, ...(era === 'modern' ? { capabilities: { resources: { subscribe: true, listChanged: true } } } : {}) },
+  );
 
   const written = (e: Entry<unknown>) => ({ etag: e.etag, file: e.file });
   const app = (s: string) => {

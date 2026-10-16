@@ -269,8 +269,10 @@ export function detectOne(words: string[], text: string): Detection | null {
         const rest = args.filter((a) => !/^\d+$/.test(a));
         return { segment, what: 'a static file server', command: join([w[0], '-m', mod, "'$PORT'", ...rest]), portHandled: true };
       }
-      if (TOOLS[mod]?.serves(args)) return detectOne([mod, ...args], text);
-      return null;
+      const tool = TOOLS[mod];
+      if (!tool?.serves(args)) return null;
+      const port = tool.port?.(args);
+      return { segment, what: tool.what, command: port ? `${segment} ${port.join(' ')}` : withPort(w), portHandled: port !== undefined };
     }
     if (base(w[1] ?? '') === 'manage.py' && w[2] === 'runserver') {
       const rest = w.slice(3).filter((a) => !/^[\d.:]+$/.test(a));

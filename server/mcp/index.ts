@@ -18,7 +18,7 @@ export interface McpEndpoint {
 }
 
 export function mcpEndpoint(ctx: McpContext): McpEndpoint {
-  const handler = createMcpHandler(() => createMcpServer(ctx), {
+  const handler = createMcpHandler(({ era }) => createMcpServer(ctx, era), {
     onerror: (e) => process.stderr.write(`hallway: [mcp] ${e.message}\n`),
   });
   // passive: an MCP client isn't a dashboard, so it mustn't speed the prober up (EventBus.size)
