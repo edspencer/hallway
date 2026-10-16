@@ -29,7 +29,7 @@ async function appsWithHealth(ctx: Ctx): Promise<{ apps: AppView[]; live: boolea
   await Promise.all(
     apps.map(async (a) => {
       if (!a.config) return;
-      a.health = { ...a.health, ...(await probeOnce(a.config)) } as AppHealth;
+      a.health = { ...a.health, ...(await probeOnce(a.slug, a.config)) } as AppHealth;
     }),
   );
   return { apps, live: !!daemon, observed };

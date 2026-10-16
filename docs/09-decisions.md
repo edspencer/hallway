@@ -498,8 +498,9 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
 - Commands that are richer with live data (`status`, `scan`, `claim`, `ignore`, `app ls`, `doctor`, `open`) look for the
   daemon at `127.0.0.1:<config.yaml port>` (default 4255) and check `/api/health` says Hallway. **Not `$PORT`**: in an
   agent's or a developer's shell, `$PORT` is usually some app's port (D36's `$PORT` is for `hallway serve` only).
-- Without a daemon they read the files themselves: `status` probes each app once; `ignore <port>` writes
-  `ignore.yaml` directly. Writes always go through the store (D7) in the CLI's own process; a running daemon picks them
+- Without a daemon they do the work themselves, with the daemon's own modules: `status` probes each app once with the
+  prober's probe and classification (no flap damping or history); `scan`, `claim` and `ignore` run the scanner once
+  (`server/scanner/`) and claim through the API's `claimFile`; `ignore <port>` writes `ignore.yaml` directly. Writes always go through the store (D7) in the CLI's own process; a running daemon picks them
   up through its watcher. `bookmark ls` always reads the files, which are all there is to a bookmark.
 - `hallway doctor` is read-only: on a machine where the data home doesn't exist yet it warns and creates nothing.
 - **Rejected:** writing through the daemon's HTTP API whenever it's running (two code paths for every write, and the

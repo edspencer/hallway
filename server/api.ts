@@ -69,7 +69,7 @@ const withEtag = (c: Context, e: Entry<unknown>) => {
 };
 
 /** A claimed app's file: the observation's facts, and its command as a commented-out `service:` block. */
-function claimFile(o: ObservedListener, req: ClaimRequest) {
+export function claimFile(o: ObservedListener, req: ClaimRequest) {
   const id = o.identity;
   const dir = id.projectDir ?? id.cwd;
   const value: Record<string, unknown> = {
