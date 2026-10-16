@@ -5,25 +5,21 @@ GitHub Actions (`.github/workflows/release.yml`), with npm trusted publishing an
 publishes from a laptop, and no npm token exists. This is the same pipeline as the author's sibling project
 [Local Review](https://github.com/edspencer/local-review/blob/main/RELEASING.md).
 
-> **Status: pre-release.** Only the placeholder `hallway@0.0.1` is on npm (see "How the package was bootstrapped").
-> `package.json` starts at the unreleased version `0.0.0`, which the Release workflow never publishes, so nothing
-> goes to npm until a PR adds a changeset and the version PR it produces is merged. The first real release is
-> planned as `0.1.0`, once v0 works.
+> **Status: released.** 0.1.0, 0.2.0 and 0.3.0 all went out through this pipeline on 2026-10-16. The
+> hand-published placeholder `hallway@0.0.1` (see "How the package was bootstrapped") is still on npm and not yet
+> deprecated, as is a `hallway@0.0.0-stage` published a minute before it.
 
-## Before the first release (maintainer only)
+## Maintainer settings
 
-The npm side is set up (below). What's left needs a person with admin access to the GitHub repo:
+These need a person with admin access to the GitHub repo or a logged-in npm maintainer:
 
-1. **GitHub settings** for `edspencer/hallway`:
-   - Settings → Actions → General → Workflow permissions: allow GitHub Actions to **create and approve pull
-     requests** (the Release workflow opens the "chore: version packages" PR with `GITHUB_TOKEN`).
-   - Optionally, a ruleset on `main` requiring the **CI passed** check (the one stable check name `ci.yml`
-     reports). See "The version PR's CI" for what that means for the version PR.
-   - Private vulnerability reporting on (Settings → Code security), which [SECURITY.md](SECURITY.md) points to.
-2. **First release:** merge a PR with a changeset (a `minor` makes `0.0.0` → `0.1.0`, past the placeholder), then the
-   version PR it produces. Afterwards deprecate the placeholder (it needs a logged-in maintainer):
-   `npm deprecate hallway@0.0.1 "placeholder, use the latest version"`.
-3. Delete this section once the first release is out.
+- **Done:** Settings → Actions → General → Workflow permissions allows GitHub Actions to **create and approve pull
+  requests** (the Release workflow opens the "chore: version packages" PR with `GITHUB_TOKEN`).
+- **Still to do (Ed):** deprecate the placeholders, which needs a logged-in maintainer:
+  `npm deprecate hallway@0.0.1 "placeholder, use the latest version"` (and the same for `hallway@0.0.0-stage`).
+- Optionally, a ruleset on `main` requiring the **CI passed** check (the one stable check name `ci.yml` reports).
+  See "The version PR's CI" for what that means for the version PR.
+- Private vulnerability reporting on (Settings → Code security), which [SECURITY.md](SECURITY.md) points to.
 
 ## How a release happens
 
@@ -89,9 +85,7 @@ can't be done over OIDC ([npm/cli#8544](https://github.com/npm/cli/issues/8544))
 0.0.1 is the only version that will ever have been published from a laptop, and it's permanently unattested. That's
 why it holds no code.
 
-Until the first real release, `npx hallway` resolves to the placeholder and fails ("could not determine executable
-to run"). The first release moves `latest` off it. After it, deprecate 0.0.1 by hand:
-`npm deprecate hallway@0.0.1 "placeholder, use the latest version"`.
+The first release (0.1.0) moved `latest` off the placeholder. Deprecating 0.0.1 is still to do (above).
 
 ## When something goes wrong
 
