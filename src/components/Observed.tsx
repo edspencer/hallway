@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Expected, IgnoreRequest, ObservedListener } from '../../shared/api';
 import { claim, ignore } from '../api';
-import { SLUG, duration, slugify, tildify } from '../lib/format';
+import { SLUG, duration, shorten, slugify, tildify } from '../lib/format';
 import { ChevronIcon, ExternalIcon } from './icons';
 
 export interface ObservedProps {
@@ -79,12 +79,17 @@ function ObservedRow({ o, home, takenSlugs, notify }: { o: ObservedListener; hom
         <div className="hw-observed-text">
           <div className="hw-observed-name">
             <strong>{name}</strong>
-            {dir && (
+            {dir ? (
               <span className="hw-observed-dir">
                 {tildify(dir, home)}
                 {id.branch ? <span className="hw-observed-branch"> @ {id.branch}</span> : null}
               </span>
-            )}
+            ) : id.command ? (
+              // another user's or an elevated process (or, on Windows, a 32-bit one): its directory can't be read
+              <span className="hw-observed-dir" title={`Hallway couldn't read this process's working directory, so this is its command line:\n${id.command}`}>
+                {shorten(id.command, 72)}
+              </span>
+            ) : null}
           </div>
           <div className="hw-observed-meta">
             {age && <span>up {age}</span>}
