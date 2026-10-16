@@ -1,0 +1,60 @@
+/*
+ * Hallway design tokens: every colour and font the site uses, in one place.
+ *
+ * This is the PROPOSED hallway identity (docs/05-ui.md "Visual direction", D23): a warm, dim corridor at night with
+ * lamplight amber as the one accent, and a daylit hallway (warm off-white, muted wood) as the light theme. The
+ * author approved it as the working direction, not as final branding, so everything visual hangs off these
+ * variables: to try another palette or typeface, change this file and nothing else.
+ *
+ * Both the docs (custom.css, on top of Starlight) and the landing page (landing.css, outside Starlight) import it.
+ *
+ * Fonts are all OFL-licensed and self-hosted from @fontsource-variable packages (imported in astro.config.mjs and
+ * LandingLayout.astro): Fraunces for nameplates and headings, Inter for text, JetBrains Mono for door numbers and
+ * other figures.
+ */
+
+:root {
+	/* ---- night: the dark theme, and the landing page --------------------------------------------------------- */
+	--hw-night-ground: #14110d; /* the page: warm near-black, never blue-black */
+	--hw-night-raised: #1f1a14; /* cards, doors */
+	--hw-night-sunken: #0d0b08; /* terminal wells */
+	--hw-night-hover: #2a231b;
+	--hw-night-text: #f3ece2;
+	--hw-night-text-muted: #c9bca9;
+	--hw-night-text-subtle: #a39580;
+	--hw-night-border-subtle: #2c251d;
+	--hw-night-border: #3d3328;
+	--hw-night-border-strong: #6b5a45;
+
+	/* ---- day: the light theme ---------------------------------------------------------------------------------- */
+	--hw-day-ground: #f8f3eb;
+	--hw-day-raised: #fffaf3;
+	--hw-day-text: #2a221a;
+	--hw-day-text-muted: #5b4d3d;
+	--hw-day-border: #e3d7c5;
+
+	/* ---- the accent: lamplight -------------------------------------------------------------------------------- */
+	--hw-amber: #f0b45a; /* lamplight; on dark grounds only */
+	--hw-amber-rgb: 240 180 90;
+	--hw-amber-bright: #f7c87e;
+	--hw-amber-deep: #8a5a14; /* the accent as text on light grounds (amber itself is ~1.8:1 on white) */
+	--hw-amber-wash: #3a2a14; /* a low, warm tint behind amber things on dark */
+	--hw-ink: #24180a; /* text on amber */
+
+	/* ---- wood and brass: the corridor itself --------------------------------------------------------------------- */
+	--hw-wood: #5a4330;
+	--hw-wood-dark: #2b2017;
+	--hw-brass: #d9a55b; /* door-number plates on dark */
+
+	/* ---- door states (docs/04 "Health states"); always paired with a shape and a word ---------------------------- */
+	--hw-state-healthy: #8fc27a; /* door ajar, warm light */
+	--hw-state-unhealthy: #f0a040; /* flickering */
+	--hw-state-down: #e5675a; /* dark or boarded up: the only alarm */
+	--hw-state-stopped: #8d8273; /* closed: calm, neutral */
+	--hw-state-unknown: #6b6257; /* in shadow */
+
+	/* ---- type --------------------------------------------------------------------------------------------------- */
+	--hw-font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+	--hw-font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+	--hw-font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

@@ -1,0 +1,110 @@
+---
+/**
+ * ValueProps — the six-card grid.
+ *
+ * Each card carries the milestone it is planned for (docs/08-roadmap.md), so
+ * nothing on the page reads as shipped. v0 badges are lamplight; later ones are
+ * quiet.
+ */
+import Icon from './Icon.astro';
+import { VALUE_PROPS } from './copy';
+---
+
+<section class="props section">
+	<div class="container">
+		<header class="props-head" data-reveal>
+			<p class="eyebrow">What it will do</p>
+			<h2 class="h2">A home page for your own machine.</h2>
+			<p class="lede">
+				A home-lab dashboard for one laptop: self-populating, so it never needs maintaining, and calm, so you
+				can leave it open as your new-tab page.
+			</p>
+		</header>
+
+		<div class="props-grid">
+			{
+				VALUE_PROPS.map((p) => (
+					<article class="prop card" data-reveal>
+						<div class="prop-top">
+							<span class="prop-icon">
+								<Icon name={p.icon} />
+							</span>
+							<span class={`ms ms--${p.ms}`} title={`Planned for ${p.ms}`}>
+								{p.ms}
+							</span>
+						</div>
+						<h3>{p.title}</h3>
+						<p>{p.body}</p>
+					</article>
+				))
+			}
+		</div>
+	</div>
+</section>
+
+<style>
+	.props-head {
+		margin-bottom: clamp(2rem, 5vw, 3.5rem);
+	}
+
+	.props-head .lede {
+		margin-top: 1.1rem;
+	}
+
+	.props-grid {
+		display: grid;
+		gap: 1rem;
+	}
+
+	@media (min-width: 640px) {
+		.props-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
+	@media (min-width: 1000px) {
+		.props-grid {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+
+	.prop {
+		padding: 1.5rem 1.5rem 1.65rem;
+	}
+
+	.prop-top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+	}
+
+	.prop-icon {
+		display: inline-grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		background: var(--hw-amber-wash);
+		border: 1px solid color-mix(in oklab, rgb(var(--accent)) 35%, transparent);
+		color: rgb(var(--accent));
+	}
+
+	.prop-icon :global(svg) {
+		width: 20px;
+		height: 20px;
+	}
+
+	.prop h3 {
+		margin: 1rem 0 0.5rem;
+		font-size: 1.1rem;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+
+	.prop p {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		line-height: 1.65;
+	}
+</style>

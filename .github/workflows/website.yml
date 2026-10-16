@@ -1,0 +1,46 @@
+name: Website
+
+# Builds the docs site (website/) and checks its internal links. Cloudflare Pages builds and deploys website/ on its
+# own (see website/README.md), so this only catches a broken docs build before it merges. It is a separate workflow
+# rather than a job in ci.yml so the site and the app can change independently; Local Review runs the same steps as
+# a `website` job in its ci.yml.
+
+on:
+  pull_request:
+    paths:
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Docs site build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # `npm install`, not `npm ci`: it's what Cloudflare Pages runs.
+      - name: Install docs-site deps
+        run: npm install
+      - name: Build docs site
+        run: npm run build
+      # Every site-relative link (and #fragment) in the built pages resolves (no dependencies; scripts/check-links.mjs).
+      - name: Check internal links
+        run: node scripts/check-links.mjs

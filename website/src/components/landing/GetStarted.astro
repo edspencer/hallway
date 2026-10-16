@@ -1,0 +1,85 @@
+---
+/**
+ * GetStarted — the closing section: the command again, then the buttons again.
+ *
+ * Repeating both is the reference page's move and it is a sound one: a reader
+ * who has scrolled past the whole pitch should not have to scroll back up to
+ * find the next step. For Hallway, pre-release, the next step is mostly
+ * "follow along", so the copy says when the command will start working.
+ */
+import Icon from './Icon.astro';
+import CommandTabs from './CommandTabs.astro';
+import { HERO_LINKS } from './copy';
+---
+
+<section class="start section">
+	<div class="container start-inner">
+		<header data-reveal>
+			<p class="eyebrow">Coming soon</p>
+			<h2 class="h2">Leave a light on for your next side project</h2>
+			<p class="lede start-lede">
+				The first release, <strong>v0</strong>, is the front page: a dashboard of everything listening on your
+				machine, health checks, bookmarks and a scanner that names what it finds. No proxy, no DNS and
+				<strong>no sudo</strong>. Watch the repository to hear when it lands.
+			</p>
+		</header>
+
+		<div class="start-card card" data-reveal>
+			<CommandTabs idPrefix="start" />
+		</div>
+
+		<div class="btn-row start-btns" data-reveal>
+			{
+				HERO_LINKS.map((l) => (
+					<a
+						class={`btn ${l.primary ? 'btn--primary' : ''}`}
+						href={l.href}
+						rel={l.href.startsWith('http') ? 'noopener' : undefined}
+					>
+						<Icon name={l.icon as any} />
+						{l.text}
+					</a>
+				))
+			}
+		</div>
+	</div>
+</section>
+
+<style>
+	.start {
+		border-top: 1px solid var(--border-subtle);
+		background:
+			radial-gradient(60% 100% at 50% 0%, rgb(var(--accent) / 0.12), transparent 70%),
+			var(--ground);
+	}
+
+	.start-inner {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+	}
+
+	.start-lede {
+		margin-top: 1.1rem;
+		margin-inline: auto;
+		max-width: 58ch;
+	}
+
+	.start-lede strong {
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.start-card {
+		width: min(640px, 100%);
+		margin-top: 2.75rem;
+		padding: 1.1rem 1.25rem 1.35rem;
+		text-align: start;
+	}
+
+	.start-btns {
+		margin-top: 2.5rem;
+		justify-content: center;
+	}
+</style>

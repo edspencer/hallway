@@ -1,0 +1,100 @@
+---
+title: "Apps: declared, discovered, observed"
+description: Where every app on the dashboard comes from, how the scanner identifies unknown servers, and claiming.
+---
+
+An **app** is a local HTTP server Hallway knows about, identified by a **slug** such as `slides` or `data-api`
+(lowercase letters, digits and hyphens; it becomes a hostname in [fronted mode](/concepts/modes/)).
+
+Every app comes from exactly one of three sources, and the dashboard always shows which:
+
+| Source | Where it comes from | Durable? | Editable in Hallway? |
+| --- | --- | --- | --- |
+| **Declared** <span class="ms ms--v0">v0</span> | A file, `apps/<slug>.yaml`, in the data home, written by you, your editor, an agent, the CLI, the API or MCP | Yes | Yes |
+| **Discovered** <span class="ms ms--v0">v0</span> | An adapter that reads another tool's registry | As durable as that registry | No, but it can be **adopted** into a declared app |
+| **Observed** <span class="ms ms--v0">v0</span> | The port scanner: something is listening, and it is neither declared nor discovered | Remembered in `state/observed.json` | No, but it can be **claimed** or **ignored** |
+
+When an observed listener's port matches a declared or discovered app, it is not shown twice: it *enriches* that app
+with live detail (process ID, working directory, bind address, start time).
+
+## Declared apps
+
+The durable kind. The smallest possible declaration is a name and a port:
+
+```yaml
+# ~/.hallway/apps/slides.yaml
+name: Slides
+port: 4321
+```
+
+Everything else is optional: a description, what you expect of it (`expected`), a health-check path, deep links,
+tags, an icon, proxy options, and a `service:` block if Hallway should keep it running. The full format is in
+[apps/&lt;slug&gt;.yaml](/reference/app-yaml/).
+
+A declared app can describe a server Hallway does *not* manage. If something already runs under its own launchd job,
+declare it without a `service:` block and Hallway will front and monitor it without creating a second job:
+
+```yaml
+# apps/notes.yaml: already runs as its own launchd service
+name: Notes
+description: A notes app that manages its own service
+port: 7233
+expected: running
+```
+
+## Discovered apps
+
+Some tools keep their own registry of servers and ports. A **discovery adapter** reads one, read-only, so those apps
+appear without being declared twice. Adapters switch themselves on only when their tool is present on the machine,
+and config can force them on or off.
+
+The first adapter reads the port registry of `pm`, the dev-server wrapper in the author's other project
+[Paddock](https://github.com/edspencer/paddock), mainly as a worked example of the interface. Candidates for later:
+plain PM2, Docker's published ports, and process-compose.
+
+**Adopt** a discovered app to turn it into a declared one you own.
+
+## Observed listeners: the scanner
+
+This is the feature that sells the project: *"Something has been listening on :4666 for nine days and you have
+never named it. What is it?"*
+
+Every two minutes (and on demand, with `hallway scan`), the scanner:
+
+1. **Lists listening TCP sockets** with `lsof`. Without root it sees only your own processes, which is the intended
+   scope.
+2. **Filters out the noise.** On a typical development machine, IDE language servers and agent-tool helpers outnumber
+   real dev servers about ten to one. Hallway skips ports below 1024, the ephemeral range 49152–65535 (where those
+   helpers live), known non-web daemons (`postgres`, `redis-server`, `sshd` and the like), itself, Caddy, anything in
+   `ignore.yaml`, and ports that belong to declared or discovered apps.
+3. **Sniffs for HTTP.** It sends `GET /`. Anything that answers in HTTP, with any status, is a web app; Hallway keeps
+   its status, `<title>` and favicon link. Non-HTTP listeners go into a collapsed "other listeners" group.
+4. **Identifies it.** Command lines are often useless (`node dist/index.js`), so **the working directory is the
+   primary clue**. From it Hallway walks up to the project root (the nearest `package.json`, `pyproject.toml`,
+   `Cargo.toml`, `go.mod` or `.git`), takes a name and description from `package.json` or the README, reads the git
+   branch and last commit, guesses the framework, notes the bind address, and checks the parent process: a parent of
+   PID 1 means the session that started it is gone, so it is flagged **orphaned**.
+5. **Labels worktree siblings.** Several copies of one app running from different git worktrees show as
+   `repo @ branch`, so they are no longer indistinguishable.
+6. **Remembers.** Each observation is saved under a stable ID (a hash of project root, port and normalised command,
+   since PIDs change on every restart), with when it was first and last seen.
+
+That last step matters more than it looks. Once a process dies, its working directory can't be recovered. Recording
+it *while it is alive* is the only way Hallway can later tell you what was
+[lost at the last reboot](/concepts/services/#lost-at-last-reboot).
+
+### Claim
+
+**Claim** (a button in the dashboard, `hallway claim`, the API, or MCP) writes `apps/<slug>.yaml` from the
+observation:
+
+- the slug, suggested from the package name;
+- `port`: the port it is already on. **Never a new one** (see [Your ports stay put](/guarantees/ports/));
+- `expected: adhoc`;
+- `project.dir`, from the observed working directory;
+- the command that started it, as a **commented-out** `service:` block you can switch on later.
+
+### Ignore
+
+**Ignore** hides a listener for good, by port, by process name or by directory (you choose), by adding it to
+[`ignore.yaml`](/reference/bookmarks-yaml/#ignoreyaml).
