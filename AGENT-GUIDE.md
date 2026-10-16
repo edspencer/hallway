@@ -15,13 +15,20 @@ A dev or preview server started inside your session (`npm run dev`, `vite`, `ast
 `python -m http.server`, …) is hard for the user to find once the session ends, and it dies silently on the next
 reboot. So:
 
-- **If this Hallway has `hallway run`** (check `hallway --help`), start long-running servers with
-  `hallway run <slug> -- <command>`. The server is then owned by the operating system's service manager rather than
-  your session; it gets a stable port and a URL, which the command prints before exiting. Pass the port through:
-  `vite --port $PORT --strictPort` (without `--strictPort`, Vite silently moves to another port when its own is
-  busy), `astro dev --port $PORT`, `next dev -p $PORT`.
-- **Otherwise**, start it however you normally would, then **register it** (next section) so the user can find it
-  on the dashboard. Use `expected: adhoc` for a server that won't always be running.
+- Start long-running servers with **`hallway run <slug> -- <command>`**. The server is then owned by the operating
+  system's service manager (launchd on macOS, systemd on Linux) rather than your session; it gets a stable port and a
+  URL, which the command prints before exiting (exit 0; exit 1, with the last log lines, if it didn't come up within
+  30 s). Pass the port through, **quoted** so your shell leaves it for Hallway to fill in:
+  `hallway run my-app -- npx vite --port '$PORT' --strictPort` (without `--strictPort`, Vite silently moves to
+  another port when its own is busy), `astro dev --port '$PORT'`, `next dev -p '$PORT'`,
+  `python3 -m http.server '$PORT'`. `PORT` and `HOST=127.0.0.1` are in its environment too.
+- It's not kept across reboots unless you add `--persist` (which makes it a real service: started at login,
+  restarted if it exits). Leave that choice to the user.
+- Then: `hallway logs <slug>` (`--follow` to keep watching), `hallway restart <slug>`, `hallway stop <slug>`.
+  `hallway run <slug>` again, with no command, starts it again the same way.
+- **If `hallway run` isn't available** (an old version; check `hallway --help`), start the server however you
+  normally would, then **register it** (next section) so the user can find it on the dashboard. Use
+  `expected: adhoc` for a server that won't always be running.
 
 ## Registering a server
 
@@ -83,7 +90,8 @@ Bookmarks are inert: Hallway never fetches anything from them except, perhaps, a
   (`healthy`, `unhealthy`, `down`, `stopped`, `unknown`), the listeners Hallway found that nobody has named yet
   (`observed`), bookmarks, and every problem in the data home's files.
 - `curl -s http://localhost:4255/api/apps/<slug>` for one app.
-- `hallway status --json`, where this version has it.
+- `hallway status --json` (or `hallway status <slug> --json`): the same, from the command line; it works without
+  the daemon too, probing each app once.
 
 ## The HTTP API
 

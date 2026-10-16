@@ -5,6 +5,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import type { Platform } from './index.js';
+import { launchdManager } from './launchd.js';
 import { type ProcessInfo, type RawListener, run, splitHostPort } from './listeners.js';
 
 /**
@@ -71,6 +72,8 @@ export const darwin: Platform = {
   // LaunchAgents start at login, not boot: right for a laptop.
   userServiceDir: (_env = process.env, home = os.homedir()) => path.join(home, 'Library', 'LaunchAgents'),
   serviceFileName: (label) => `${label}.plist`,
+  services: ({ run, env = process.env, home = os.homedir() } = {}) => launchdManager({ dir: darwin.userServiceDir(env, home), uid: process.getuid?.() ?? 501, run }),
+  openCommand: (url) => ['open', [url]],
 
   // Without root, lsof sees only the current user's processes: the intended scope.
   async listListeners() {
