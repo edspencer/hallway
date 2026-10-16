@@ -465,29 +465,9 @@ Node 22.13, 22 and 24. **Nothing has been run on a real Windows desktop**; each 
   test, though not run as such; 32-bit (WOW64) processes, which are skipped and report no directory; and a
   non-English Windows, where the parsers deliberately use columns and addresses rather than words. That last point is
   tested only against a synthetic German sample.
-
-**Stage B, the scanner (D59):**
-
-- `netstat -ano -p TCP` / `-p TCPv6` and `tasklist /FO CSV /NH`: ~0.3–0.4 s together. The runner listens on 22
-  (sshd), 80/445/5985/5986/47001 (`System`, PID 4: HTTP.sys and SMB), 135 and 3389 (svchost), 1801/2103–2107
-  (MSMQ), 2179 (vmms) and the 4966x service hosts in the dynamic range. `netsh int ipv4 show dynamicport tcp`: the
-  default 49152, 16384 ports. All captured in `test/fixtures/platform/win32-*` by `scripts/capture-win32.mjs`.
-- The PowerShell call (Win32_Process + the PEB reader): **4–13 s the first time on a fresh runner**, 0.55–0.62 s
-  after that (CIM, .NET and `Add-Type`'s C# compile are what the first call pays for). Once per scan.
-- The working directory from the PEB, for real:
-  - as the runner's administrator (elevated): its own listener's directory, and 10 of 13 other listeners' (the
-    rest are protected processes);
-  - **as a fresh standard user** (created by CI, running through a scheduled task with a stored password, in Users
-    only): its own listener's directory, read without administrator rights, and **none** of the other 13 (SYSTEM's,
-    services' and the administrator's), each still described by command line where visible, without errors.
-    `scripts/scanner-real-win.ps1`; the job is "Scanner (real Windows, standard user)".
-- Setting up that user, learned the hard way: `net user <name> <password> /add` stops to ask about passwords over 14
-  characters (no stdin on CI: it fails); `New-LocalUser` may leave the account in no group; and a task that runs with
-  a stored password is a *batch* logon, a right only administrators have by default (`schtasks` warns, then the task
-  never runs: result 0x41303, "has not yet run"). `secedit` grants `SeBatchLogonRight`.
-- Unverified on a real Windows desktop: a user's own servers started from an elevated terminal (the PEB is then out of
-  reach of a non-elevated daemon, and the tray shows the command line instead); 32-bit servers (skipped by design);
-  WSL's servers (their listeners show up as `wslrelay` or `wsl`, with no Windows directory).
+- Also unverified there: servers started from an *elevated* terminal (their PEB is out of reach of a non-elevated
+  daemon, so the tray shows the command line instead), and WSL's servers (their listeners show up as `wslrelay` or
+  `wsl`, with no Windows directory).
 
 ## Prior art status (checked 2026-09-16 via GitHub API / npm)
 
