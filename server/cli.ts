@@ -49,6 +49,12 @@ Fronted mode (https://<app>.localhost, or your own domain)
   teardown [--uninstall-packages] [--print]
                                     Undo setup and go back to http://localhost:<port> links.
 
+Coding agents
+  mcp                               An MCP server on stdio, for agents that want one: a bridge to the running
+                                    daemon's http://localhost:<port>/mcp.
+  hook check-command                A pre-tool-use hook (Claude Code's PreToolUse on Bash): blocks a bare
+                                    dev-server start and suggests the \`hallway run\` for it. See \`hallway guide\`.
+
 Other
   doctor [--json]                   Check the daemon, the data home, the services and fronted mode, with fixes.
   guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph

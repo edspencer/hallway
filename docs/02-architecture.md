@@ -9,7 +9,7 @@
    │       mode          │    /            dashboard (React SPA)                                                  │
    │                     │    /api/*       JSON API                                                               │
    │                     │    /api/events  SSE stream of change events                                            │
-   │                     │    /mcp         MCP (Streamable HTTP)                     (v2)                         │
+   │                     │    /mcp         MCP (Streamable HTTP, stateless)          (v2, built: D50)             │
    │                     │    /llms.txt, /agent-guide.md                                                          │
    │                     │                                                                                         │
    │                     │  file watcher (chokidar) on the data home ──▶ in-process event bus ──▶ SSE             │
@@ -24,7 +24,7 @@
                                                                                  └─▶ dashboard host → 127.0.0.1:<daemon port>
 
  CLI `hallway …` ── reads/writes the same files via the same write module; asks the daemon (HTTP) for live state.
- `hallway mcp`  ── stdio MCP bridge to the daemon.                                              (v2)
+ `hallway mcp`  ── stdio MCP bridge to the daemon.                                    (v2, built: D51)
 ```
 
 Rules:
@@ -52,7 +52,7 @@ Mirror Local Review (D16). Keep dependencies minimal.
 | File watching | chokidar | |
 | Config format | `yaml` package | Preserve comments on round-trip writes where possible (the `yaml` package's Document API supports this). |
 | Health/uptime store | `node:sqlite` | `state/health.sqlite`; decided in D37 (was Q-STORE). |
-| MCP | the official MCP TypeScript SDK | v2. Streamable HTTP transport mounted in Hono, plus stdio. |
+| MCP | the official MCP TypeScript SDK (v2, `@modelcontextprotocol/server`) | Its stateless `createMcpHandler` mounted at `/mcp` in Hono; `hallway mcp` forwards stdio to it (D50, D51). |
 | Image rendering | `@resvg/resvg-js` + `opentype.js` | Only for generated cards (v2), reusing Local Review's approach. |
 | Screenshots | Playwright, **optional, lazily installed** | v2. Never a hard dependency. |
 | Tests | `node --test` with tsx | As Local Review. |
@@ -336,7 +336,7 @@ All JSON. All under the security middleware below.
 | POST | `/api/scan` | Trigger a scan now |
 | GET | `/api/events` | SSE |
 | GET | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | Agent-facing docs (see `06`) |
-| * | `/mcp` | MCP Streamable HTTP (v2) |
+| POST | `/mcp` | MCP Streamable HTTP (D50); GET and DELETE answer 405 |
 
 The response types are in `shared/api.ts`. Writes return the entity and its `ETag`; errors are `{ error, issues?,
 etag? }` with 400 (invalid), 404, 409 (stale `If-Match`, broken file, changed on disk, exists under
@@ -360,8 +360,8 @@ daemon can also start and stop launchd jobs, and in v2 it speaks MCP, so this ma
   present on a write, it must be an allowed host. `DELETE` has no body and is exempt from the content-type rule but
   not from the Origin rule.
 - **No CORS headers, ever.**
-- **No authentication in v1.** Anything running as the user can already edit the data home. Whether MCP needs a token
-  is Q-MCP-AUTH.
+- **No authentication.** Anything running as the user can already edit the data home. `/mcp` has no token either
+  (D52).
 
 Reference implementation, from Local Review's `server/security.ts` (MIT, same author). Hallway's version
 must additionally accept the configured dashboard host:

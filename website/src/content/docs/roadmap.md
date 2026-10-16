@@ -8,7 +8,8 @@ not by reading the code.
 
 :::note[Where things stand]
 **v0 is released, as Hallway 0.1.0**, for macOS and Linux. It also includes part of v1 early: `hallway run` and the
-managed services behind it. **v1's fronting and v2 are upcoming.** The
+managed services behind it. Part of v2 has shipped early too, in the first release after 0.1.0: the MCP server and
+the dev-server hook. **v1's fronting and the rest of v2 are upcoming.** The
 [specification](https://github.com/edspencer/hallway/blob/main/spec.md) in the repository is the source of truth for
 what is still to come.
 :::
@@ -85,16 +86,18 @@ Done when:
 
 ## v2: Agents and polish
 
-<span class="ms">v2</span> **Upcoming.**
+<span class="ms">v2</span> **Upcoming**, except its agent parts, which have shipped early.
 
-**Scope:** the MCP server (Streamable HTTP at `/mcp`, and `hallway mcp` over stdio); optional screenshot thumbnails;
-generated-card thumbnails; latency charts over the 7- and 90-day uptime views (the views themselves, from hourly
-rollups, are already in v0's drawer); `hallway hook check-command`. Linux support moved forward to v0 and v1.
+**Scope:** the MCP server (Streamable HTTP at `/mcp`, and `hallway mcp` over stdio), **available now**;
+`hallway hook check-command`, **available now**; optional screenshot thumbnails; generated-card thumbnails; latency
+charts over the 7- and 90-day uptime views (the views themselves, from hourly rollups, are already in v0's drawer).
+Linux support moved forward to v0 and v1. See [MCP server](/agents/mcp/) and [The dev-server hook](/agents/hook/).
 
 Done when:
 
 1. An MCP client can `add_bookmark` and the dashboard shows it live, with the YAML file's comments preserved.
-2. `declare_app` with a `service` block is rejected; no MCP tool can start a process.
+   (Available now.)
+2. `declare_app` with a `service` block is rejected; no MCP tool can start a process. (Available now.)
 3. `hallway thumbs enable` downloads a browser into the data home and healthy apps get screenshots;
    `hallway thumbs disable` removes it; the base install never depends on it.
 4. The 90-day view renders from rollups only and stays fast with 30 apps.

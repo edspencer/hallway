@@ -19,7 +19,7 @@ A file watcher turns every edit into a live update, so the dashboard changes wit
 from you, your editor, an agent, the CLI or the API. That works with every agent, needs no configuration, and makes a
 hand edit behave exactly like an agent's.
 
-The CLI, the HTTP API and (in v2) the MCP server are all thin wrappers over **one write module** that validates and writes
+The CLI, the HTTP API and the MCP server are all thin wrappers over **one write module** that validates and writes
 those same files atomically. None of them is a separate path, and none is the only way to do something.
 
 ## The habit to change
@@ -31,8 +31,8 @@ one of those becomes an orphan when the session ends. So Hallway gives agents:
    the server to launchd or systemd so it outlives the session, keeps a stable port, prints the URL and exits.
 2. <span class="ms ms--v0">v0</span> **A guide and a snippet**: [`hallway guide`](/agents/agent-guide/) explains the
    rules, and `hallway guide --snippet` prints a short paragraph for your `AGENTS.md` or `CLAUDE.md`.
-3. <span class="ms">v2</span> **An optional hook** that catches a bare dev-server start before it runs and suggests the
-   `hallway run` equivalent.
+3. <span class="ms ms--v0">v0</span> **An optional hook**, [`hallway hook check-command`](/agents/hook/), that catches
+   a bare dev-server start before it runs and suggests the `hallway run` equivalent.
 
 ## Etiquette for agents
 
@@ -46,5 +46,6 @@ These are in the agent guide too:
 
 ## MCP
 
-<span class="ms">v2</span> For clients that prefer typed tools, an [MCP server](/agents/mcp/) runs on the same port as the dashboard. It can
-describe apps and fully manage bookmarks, but by design it can't start, stop or install anything.
+<span class="ms ms--v0">v0</span> For clients that prefer typed tools, an [MCP server](/agents/mcp/) runs on the same port
+as the dashboard, at `/mcp`. It can describe apps and fully manage bookmarks, but by design it can't start, stop or
+install anything.

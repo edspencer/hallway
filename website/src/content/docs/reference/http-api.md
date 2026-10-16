@@ -30,7 +30,7 @@ All routes are in <span class="ms ms--v0">v0</span>, available now, unless marke
 | `POST` | `/api/scan` | Run a scan now. |
 | `GET` | `/api/events` | The live event stream (below). |
 | `GET` | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | The [agent guide](/agents/agent-guide/), with live data. |
-| `*` | `/mcp` | The [MCP server](/agents/mcp/), Streamable HTTP. <span class="ms">v2</span> |
+| `*` | `/mcp` | The [MCP server](/agents/mcp/), Streamable HTTP. |
 
 ## Concurrency
 

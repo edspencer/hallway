@@ -11,10 +11,13 @@ change within a second, exactly as if it had been made through the API.
 
 ## What this version does
 
-This is Hallway's first milestone (v0, released as 0.1.0), on macOS and Linux: the dashboard, the YAML files, health
-checks with uptime history, the port scanner, bookmarks, this guide, and `hallway run` for managed servers. It runs in
-**direct mode** only: every app's address is `http://localhost:<port>`. The `https://<slug>.localhost` names (fronted
-mode, `hallway setup`) and the MCP server are planned, not built: don't use or suggest them yet.
+On macOS and Linux: the dashboard, the YAML files, health checks with uptime history, the port scanner, bookmarks,
+this guide, `hallway run` for managed servers, an MCP server (below) and an optional hook that stops agents starting
+dev servers directly. In **direct mode** (the default) every app's address is `http://localhost:<port>`. In
+**fronted mode**, which the user turns on with `hallway setup`, each app also gets `https://<slug>.localhost` (or
+`<slug>.<base>` on their own domain). The live facts above (when this guide comes from a running daemon) say which
+mode is on, and each app's `url` in `/api/state` is the address to give the user. Don't run `hallway setup` or `hallway teardown` yourself: they need sudo, so they're the
+user's to run.
 
 ## The rule: don't leave servers running in your session
 
@@ -123,6 +126,57 @@ Every app and group comes with an `etag`. Send it back as `If-Match` on a write 
 the file changed since you read it (re-read and try again), rather than overwriting someone else's edit. A write that
 would make the file invalid fails with **400** and lists the problems; nothing is written. Unknown keys in a request
 body are refused; unknown keys already in a file are kept.
+
+## MCP
+
+If your client speaks MCP, the same operations are typed tools on the daemon's own port. Register it once (Claude
+Code shown; other clients take the URL, transport Streamable HTTP; use the daemon's port if it isn't 4255):
+
+```sh
+claude mcp add --transport http hallway http://localhost:4255/mcp
+# or, for clients that want stdio (a bridge to the running daemon):
+claude mcp add hallway -- hallway mcp
+```
+
+In fronted mode the dashboard's own address works too: `https://hallway.localhost/mcp` (or `https://<base>/mcp` on a
+custom domain; it's `domain.dashboard` in `config.yaml`). The `localhost` URL keeps working in both modes, and doesn't
+depend on Caddy running, so prefer it.
+
+| Tool | What it does |
+|------|--------------|
+| `get_status`, `list_apps`, `get_app`, `get_history` | Apps with their state, URL and uptime; one app in full; uptime bars for `24h`, `7d`, `90d` |
+| `list_observed`, `claim_observed`, `ignore_observed` | Listeners nobody has named yet; name one (writes `apps/<slug>.yaml`) or hide it |
+| `declare_app` | Create `apps/<slug>.yaml` (fails if it exists: use `update_app`) |
+| `update_app`, `remove_app` | Merge-patch an app (`null` removes a key); move its file to `backups/removed/` |
+| `list_bookmarks`, `upsert_bookmark_group`, `add_bookmark`, `update_bookmark`, `remove_bookmark`, `remove_bookmark_group` | Bookmarks, a link at a time or a group at a time |
+
+Every write keeps the file's comments, returns its new `etag`, and takes an optional `etag`: pass the one you read and
+the write fails with a conflict (and the current etag) if the file changed meanwhile. The resources
+`hallway://state` and `hallway://apps/<slug>` say when they change.
+
+**MCP never starts, stops or installs a process.** `declare_app` and `update_app` refuse a `service` block,
+`update_app` refuses a different `port`, and `remove_app` refuses an app Hallway runs as a service. To run a server,
+use `hallway run` in the shell, as above.
+
+## The pre-tool-use hook
+
+`hallway hook check-command` is an optional Claude Code `PreToolUse` hook for the Bash tool. When a command would
+start a dev server directly (`npm run dev`, `pnpm dev`, `vite`, `astro dev`, `next dev`, `python -m http.server`, …),
+it blocks it and says which `hallway run` to use instead; builds, tests, installs and `hallway run` itself pass. The
+user installs it (Hallway never does), in `.claude/settings.json` or `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "hallway hook check-command" }] }
+    ]
+  }
+}
+```
+
+If it blocks you, run the command it suggests. If it's wrong (a `start` script that isn't a server, say), tell the
+user rather than working around it.
 
 ## Etiquette
 

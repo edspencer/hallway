@@ -39,12 +39,10 @@ What it covers:
 
 ## The optional hook
 
-<span class="ms">v2</span> For agents that support hooks before a tool runs, such as Claude Code's `PreToolUse` hook on its shell tool,
-`hallway hook check-command` reads the hook's payload from stdin. If the command looks like a bare dev-server start,
-it blocks it with a message suggesting the equivalent `hallway run` invocation.
-
-It is documented, never installed automatically. (The exact payload format and blocking convention are checked
-against each agent's documentation when this is built.)
+<span class="ms ms--v0">v0</span> For Claude Code, `hallway hook check-command` is a `PreToolUse` hook on its Bash tool. It
+reads the hook's payload from stdin and, if the command starts a dev server directly, denies it with a message giving
+the equivalent `hallway run` invocation. It is documented, never installed automatically: see
+[The dev-server hook](/agents/hook/) for what it catches and how to add it.
 
 ## This site's llms.txt
 

@@ -109,6 +109,34 @@ export function claimFile(o: ObservedListener, req: ClaimRequest) {
   return { value, header, footer };
 }
 
+/**
+ * Claim an observed listener: write `apps/<slug>.yaml` from what was observed (the dashboard's Claim, `POST
+ * /api/observed/:id/claim`, MCP's `claim_observed`). Resolves with the slug; throws the store's errors.
+ */
+export async function claimObserved({ store, bus, providers }: Pick<ApiOptions, 'store' | 'bus' | 'providers'>, id: string, body: Partial<ClaimRequest> | null | undefined) {
+  if (!body || typeof body !== 'object' || typeof body.slug !== 'string') throw new ValidationError('the body must be {"slug": "...", "name"?: "...", "expected"?: "running"|"stopped"|"adhoc"}');
+  if (!SLUG.test(body.slug)) throw new ValidationError(`"${body.slug}" is not a valid slug`, [{ key: 'slug', message: 'invalid slug' }]);
+  if (body.expected !== undefined && !['running', 'stopped', 'adhoc'].includes(body.expected)) throw new ValidationError('expected must be running, stopped or adhoc', [{ key: 'expected', message: 'invalid' }]);
+  if (body.name !== undefined && typeof body.name !== 'string') throw new ValidationError('name must be text', [{ key: 'name', message: 'invalid' }]);
+  const o = providers.observation(id);
+  if (!o) throw new NotFoundError(`no observed listener '${id}'`);
+  const { value, header, footer } = claimFile(o, body as ClaimRequest);
+  await store.createApp(body.slug, value, { header, footer });
+  bus.emit({ type: 'observed', reason: 'claimed' });
+  return body.slug;
+}
+
+/** Hide an observed listener by its port, process name or directory (`ignore.yaml`). Resolves with ignore.yaml's entry. */
+export async function ignoreObserved({ store, providers }: Pick<ApiOptions, 'store' | 'providers'>, id: string, by: unknown) {
+  if (by !== 'port' && by !== 'process' && by !== 'dir') throw new ValidationError('the body must be {"by": "port" | "process" | "dir"}', [{ key: 'by', message: 'invalid' }]);
+  const o = providers.observation(id);
+  if (!o) throw new NotFoundError(`no observed listener '${id}'`);
+  const dir = o.identity.projectDir ?? o.identity.cwd;
+  const value = by === 'port' ? o.port : by === 'process' ? o.identity.process : dir ? tildify(dir) : null;
+  if (value === null || value === '') throw new ValidationError(`the ${by === 'dir' ? 'directory' : 'process name'} of this listener isn't known; ignore it by port instead`, [{ key: 'by', message: 'unknown' }]);
+  return store.addIgnore(by, value);
+}
+
 export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOptions) {
   const ctx = { store, providers };
   let svc: Services | undefined;
@@ -275,17 +303,9 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
   api.post('/observed/:id/claim', async (c) => {
     try {
       const body = (await jsonBody(c)) as Partial<ClaimRequest> | null;
-      if (!body || typeof body !== 'object' || typeof body.slug !== 'string') throw new ValidationError('the body must be {"slug": "...", "name"?: "...", "expected"?: "running"|"stopped"|"adhoc"}');
-      if (!SLUG.test(body.slug)) throw new ValidationError(`"${body.slug}" is not a valid slug`, [{ key: 'slug', message: 'invalid slug' }]);
-      if (body.expected !== undefined && !['running', 'stopped', 'adhoc'].includes(body.expected)) throw new ValidationError('expected must be running, stopped or adhoc', [{ key: 'expected', message: 'invalid' }]);
-      if (body.name !== undefined && typeof body.name !== 'string') throw new ValidationError('name must be text', [{ key: 'name', message: 'invalid' }]);
-      const o = providers.observation(c.req.param('id'));
-      if (!o) return fail(c, 404, { error: `no observed listener '${c.req.param('id')}'` });
-      const { value, header, footer } = claimFile(o, body as ClaimRequest);
-      const e = await store.createApp(body.slug, value, { header, footer });
-      bus.emit({ type: 'observed', reason: 'claimed' });
-      withEtag(c, e);
-      return c.json(declaredView(ctx, body.slug), 201);
+      const slug = await claimObserved({ store, bus, providers }, c.req.param('id'), body);
+      if (store.apps.get(slug)) withEtag(c, store.apps.get(slug)!);
+      return c.json(declaredView(ctx, slug), 201);
     } catch (e) {
       return handle(c, e);
     }
@@ -294,14 +314,7 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
   api.post('/observed/:id/ignore', async (c) => {
     try {
       const body = (await jsonBody(c)) as Partial<IgnoreRequest> | null;
-      const by = body?.by;
-      if (by !== 'port' && by !== 'process' && by !== 'dir') throw new ValidationError('the body must be {"by": "port" | "process" | "dir"}', [{ key: 'by', message: 'invalid' }]);
-      const o = providers.observation(c.req.param('id'));
-      if (!o) return fail(c, 404, { error: `no observed listener '${c.req.param('id')}'` });
-      const dir = o.identity.projectDir ?? o.identity.cwd;
-      const value = by === 'port' ? o.port : by === 'process' ? o.identity.process : dir ? tildify(dir) : null;
-      if (value === null || value === '') throw new ValidationError(`the ${by === 'dir' ? 'directory' : 'process name'} of this listener isn't known; ignore it by port instead`, [{ key: 'by', message: 'unknown' }]);
-      const e = await store.addIgnore(by, value);
+      const e = await ignoreObserved({ store, providers }, c.req.param('id'), body?.by);
       withEtag(c, e);
       return c.json({ ok: true, ignore: store.currentIgnore() });
     } catch (e) {

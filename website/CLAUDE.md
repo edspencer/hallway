@@ -42,7 +42,8 @@ them (that is what Cloudflare's build does).
 **v0 is released** (Hallway 0.1.0 on npm, macOS and Linux); v1 and v2 are upcoming.
 
 - **Mark features with their milestone**: `<span class="ms ms--v0">v0</span>` (available now; this includes
-  `hallway run` and managed services, shipped early from v1), `<span class="ms">v1</span>`,
+  `hallway run` and managed services, shipped early from v1, and the MCP server and
+  `hallway hook check-command`, shipped early from v2 in the first release after 0.1.0), `<span class="ms">v1</span>`,
   `<span class="ms">v2</span>` (styled in `custom.css`). **Never write a v1 or v2 feature as if it has shipped**: say
   "upcoming" or "coming in v1" in the words too. Keep badges **out of headings** (they end up in the anchor slugs):
   put them at the start of the paragraph below.

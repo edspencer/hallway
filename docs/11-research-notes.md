@@ -206,6 +206,63 @@ scan, `open` explains), usage errors exiting 2 with the usage, two apps on one p
 `doctor`), and a 100-character name and description (ellipsis on the card, wrapped in the drawer). *Verified on Linux
 (Chromium); unverified on macOS.*
 
+## MCP and agent hooks (2026-10-16)
+
+- **MCP TypeScript SDK.** *Verified* on npm and in the installed packages: v2 is the stable line, split into
+  `@modelcontextprotocol/server` **2.3.1** (depends only on `zod` ^4.2 and `@modelcontextprotocol/core`),
+  `@modelcontextprotocol/client` 2.3.1, and adapters (`@modelcontextprotocol/hono` 2.0.2, `/node`, `/express`). The v1
+  package `@modelcontextprotocol/sdk` is at 1.32.1 and depends on Express, CORS, Hono, `jose`, rate limiting and more.
+  v2 implements protocol revision **2026-07-28**. Hallway uses `createMcpHandler(factory, options)`, which returns a
+  web-standard `{ fetch, close, notify, bus }`: one server instance per request, `legacy: 'stateless'` (the default)
+  answering 2025-era traffic statelessly, `responseMode: 'auto'` (a JSON body unless the handler emits a related
+  message first, then SSE). The factory receives `{ era: 'legacy' | 'modern' }`. The Hono adapter package wasn't
+  needed: `c.req.raw` is already a web `Request`. TypeScript 7 needs `types: ["node"]`, which `tsconfig.server.json` already has.
+- **Streamable HTTP in 2026-07-28** (`https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http`,
+  fetched 2026-10-16): every message is its own POST; **no sessions and no GET stream** (servers answer GET and
+  DELETE with 405 and ignore `Mcp-Session-Id`); the answer is a JSON object or a request-scoped SSE stream; long-lived
+  change notifications arrive on the SSE response of a `subscriptions/listen` request (which replaces
+  `resources/subscribe`); clients send `MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name` (`params.name`/`uri`,
+  Base64 in a `=?base64?…?=` sentinel when not header-safe), which servers check against the body (`-32020
+  HeaderMismatch`); closing the response stream cancels the request. "Servers **MUST** validate the `Origin` header
+  … If the `Origin` header is present and invalid, servers **MUST** respond with HTTP 403"; local servers "SHOULD
+  bind only to localhost". *Verified by reading the spec.*
+- **Both eras checked against Hallway** with the SDK's own client (`test/mcp.test.ts`, `test/mcp-bridge.test.ts`): its
+  default `versionNegotiation: 'legacy'` negotiates `2025-11-25` through `initialize`; `{ mode: 'auto' }` uses
+  2026-07-28 and `subscriptions/listen`. `resources.subscribe` has to be in the server's capabilities for a listen
+  filter's `resourceSubscriptions` to be honoured (the SDK drops them otherwise, silently). *Verified.*
+- **`claude mcp add`** syntax used in the docs (`claude mcp add --transport http hallway http://localhost:4255/mcp`;
+  `claude mcp add hallway -- hallway mcp`) is Claude Code's documented form, and was checked with a throwaway
+  configuration (see the acceptance run below).
+- **Claude Code `PreToolUse` hooks** (`https://code.claude.com/docs/en/hooks`, fetched 2026-10-16; resolves Q-HOOK):
+  the payload is JSON on stdin with `session_id`, `cwd`, `hook_event_name: "PreToolUse"`, `tool_name: "Bash"` and
+  `tool_input: { command, description, timeout, run_in_background }`. To block: either exit 2 with the reason on
+  stderr, or exit 0 printing `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+  "permissionDecisionReason": "…"}}` (`allow`, `ask` and `defer` are the other decisions). Configured in
+  `settings.json` under `hooks.PreToolUse[]` with `matcher: "Bash"` and `hooks: [{ "type": "command", "command": … }]`.
+  *Reported from the docs*; the hook's own behaviour is tested with payloads of that shape. Other agents' hook formats
+  (Codex, Gemini CLI, Cursor) are unverified.
+
+## The v2 MCP acceptance run (2026-10-16, Linux)
+
+Run against the packed tarball installed into a throwaway prefix, with a throwaway `HOME` and `HALLWAY_HOME`, the
+daemon under a process manager (`hallway serve`, D31's development bind so a browser on the LAN could watch it):
+
+1. **Criterion 1: met.** An SDK client (`@modelcontextprotocol/client` 2.3.1) over Streamable HTTP called
+   `add_bookmark` on a group file holding four comments (a file header, a trailing comment on `title:`, one above a
+   link). The dashboard, open in a browser beforehand, showed the new link without reloading (a marker set on
+   `window` survived), and the file kept all four comments. The same through the installed `hallway mcp` over stdio,
+   in the 2026-07-28 era, and over HTTP in both eras.
+2. **Criterion 2: met.** `declare_app` with a `service` block was refused and wrote nothing; `update_app` with a new
+   `port` was refused. The tool list (16 tools) has nothing that runs, starts, stops or installs a process.
+3. **Security:** a POST to `/mcp` with `Host: evil.example.com` or `Origin: http://evil.example.com` got 403; with
+   `Content-Type: text/plain`, 415; a GET, 405; the same request with a loopback Host, 200.
+4. **Notifications:** a `subscriptions/listen` stream for `hallway://apps/my-app`, opened through `hallway mcp`,
+   heard `notifications/resources/updated` within 1.5 s of the file being edited by hand.
+5. **Claude Code** 2.1.292, with a throwaway `HOME` and `CLAUDE_CONFIG_DIR` and no credentials:
+   `claude mcp add --transport http hallway http://localhost:<port>/mcp` and `claude mcp add hallway-stdio -- hallway
+   mcp` were accepted, and `claude mcp list` reported both "✔ Connected". Not run: the hook inside a real Claude Code
+   session (it would need a model; tested with payloads of the documented shape). On macOS: unverified, though
+   nothing in either is platform-specific.
 ## Caddy
 
 *From https://caddyserver.com/docs/automatic-https, fetched 2026-10-14.*

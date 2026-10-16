@@ -164,7 +164,7 @@ export const AGENTS = {
 		},
 		{
 			title: 'MCP, without the risk',
-			body: 'Coming in v2: an MCP server on the same port describes apps and edits bookmarks, through the same write path as everything else. It never starts a process.',
+			body: 'An MCP server on the same port describes apps and edits bookmarks, through the same write path as everything else. It never starts a process.',
 		},
 	],
 	link: { text: 'Read about agents', href: '/agents/overview/' },

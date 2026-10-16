@@ -145,6 +145,7 @@ export function llmsTxt(i: GuideInput): string {
     `- [Agent guide](${i.url}/agent-guide.md): the whole guide: bookmarks, status, the HTTP API, etiquette and the file-format reference. Also \`hallway guide\`.`,
     `- [llms-full.txt](${i.url}/llms-full.txt): this file followed by the whole agent guide`,
     `- [State](${i.url}/api/state): everything the dashboard shows, as JSON`,
+    `- MCP: \`${i.url}/mcp\` (Streamable HTTP), or \`hallway mcp\` on stdio: the same operations as typed tools (the "MCP" section of the agent guide)`,
     '',
   ].join('\n');
 }

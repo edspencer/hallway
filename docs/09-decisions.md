@@ -684,6 +684,92 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   `macos-latest`, with the runners' passwordless sudo): setup, the v1 criteria with `curl` and the system trust store,
   a squatter on 443, a custom domain, teardown leaving nothing behind.
 
+### D50 — MCP: the SDK's stateless handler at `/mcp`; tools as thin wrappers over the store (2026-10-16)
+
+- **Transport.** `/mcp` is served by the official MCP TypeScript SDK **v2** (`@modelcontextprotocol/server`
+  2.3.x, protocol revision 2026-07-28; versions and sources in `11-research-notes.md`) through its `createMcpHandler`,
+  mounted with `app.all('/mcp')` in the daemon's Hono app behind `localOnly` (Host, Origin, JSON). The 2026 revision
+  removed sessions and the GET stream, so the handler is **stateless**: a fresh `McpServer` per request (cheap: it only
+  registers handlers), and 2025-era clients (the `initialize` handshake) are answered statelessly by the same
+  factory. GET and DELETE on `/mcp` get 405, as the spec says. A daemon restart therefore breaks no client: there is
+  no session to lose. The SDK v1 package (`@modelcontextprotocol/sdk`) was not used: v2 is the stable line, and the
+  server package depends only on `zod` and the SDK's core (v1 pulled in Express, CORS, rate limiting and more).
+- **Notifications.** Resources `hallway://state` and `hallway://apps/<slug>` (the optional part of `06`) are read from
+  the same views as `/api/state` and `/api/apps/:slug`. The daemon's event bus drives `notifications/resources/updated`
+  (and `resources/list_changed` on an `apps` event) through the handler's `notify`, delivered on a
+  `subscriptions/listen` stream. `resources.subscribe` is advertised to **2026-era clients only**: a 2025-era client
+  served statelessly has no stream to receive them on. The MCP endpoint subscribes to the bus as an
+  **internal** listener (the flag D47's proxy introduced), which `EventBus.size` doesn't count, so an MCP server never
+  looks like an open dashboard to the prober (D38's live mode).
+- **Tools** are those of `06`, each a thin wrapper over `Store` (D7) and `views.ts`; claim and ignore share
+  `claimObserved`/`ignoreObserved` with the HTTP API. Semantics the table left open:
+  - `declare_app` **creates only** (`If-None-Match: *`): replacing an existing app could drop its `service:` block or
+    change its port, which MCP must never do. So it takes no `etag`; an existing slug is a conflict pointing at
+    `update_app`. It also accepts `host` and `icon` (harmless fields of the file format).
+  - `update_app` is a JSON merge patch (D33). `service` in the patch (even `null`) is refused; `port` is refused unless
+    it equals the current port (so echoing an app's config back is fine).
+  - `remove_app` is refused for an app with a `service:` block (removing it would orphan the job; `hallway app rm`
+    stops it first, D41).
+  - `update_bookmark` (new `Store.updateBookmark`) merge-patches one link in place, keeping its position and comments.
+  - Inputs are loose objects, so a `service` key reaches the handler and is refused with a reason (D10) rather than
+    silently stripped by the schema; any other unknown key is refused by the store (D33).
+  - Results are the written entity plus `etag` and `file`, as JSON text and `structuredContent`. Failures are tool
+    errors (`isError`), prefixed `Conflict:` (with the current etag), `Invalid:` (with the issues) or `Refused:`.
+- **Rejected:** sessions with the 2025-era SDK transport (state to lose on every daemon restart, and a GET stream the
+  current spec has dropped); a hand-written JSON-RPC server (the SDK handles both eras, header validation and
+  cancellation); `outputSchema` per tool (every result is already typed in `shared/api.ts`; schemas would duplicate them).
+
+### D51 — `hallway mcp` is a byte-level bridge; `hallway hook check-command` denies with Claude Code's JSON (2026-10-16; resolves Q-HOOK)
+
+- **The bridge** reads newline-delimited JSON-RPC on stdin and POSTs each message to the daemon's `/mcp`, writing back
+  the JSON body or each event of an SSE response. It knows nothing about the tools, so it can't drift from them, and
+  it works for both protocol eras. What it adds is what the HTTP binding asks of a client: `MCP-Protocol-Version`
+  (from the request's `_meta`, else the version a 2025-era `initialize` negotiated), `Mcp-Method`, and `Mcp-Name`
+  (Base64-sentinel-encoded when not header-safe); and stdio's `notifications/cancelled` becomes aborting that request's
+  HTTP response. It finds the daemon as every command does (D44, D46); with none it exits 1 with a message saying how
+  to start one (the MCP client shows it in its logs). If the daemon goes away later, each request gets a JSON-RPC
+  error saying so, rather than hanging.
+- **The hook** reads Claude Code's `PreToolUse` payload (`tool_input.command`; source and date in
+  `11-research-notes.md`) and, for a command that starts a dev server directly, prints
+  `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": …}}`
+  and exits 0. The reason gives the `hallway run <slug> -- <command>` to use, with the slug from the working
+  directory's name, `'$PORT'` added in the flag the tool needs (`--port '$PORT' --strictPort` for Vite, `-p` for
+  Next, an argument for `http.server`), or a fixed port in the command replaced by `'$PORT'`.
+- Detection splits the command line the way a shell would (quotes, `&&`, `;`, `|`, `&`, subshells, comments,
+  redirections), strips wrappers (`VAR=x`, `env`, `nohup`, `timeout`, `exec`, `time`, `sudo`) and runners (`npx`,
+  `pnpm exec`/`dlx`, `bunx`, `uv run`, `bundle exec`), then matches package scripts named like servers (`dev`,
+  `start`, `serve`, `preview`, `watch`, `develop`, and `dev:web`-style variants) and a table of tools with their
+  serving subcommands (so `vite build`, `next build`, `astro check` pass). `hallway …` itself, `--help`/`--version`
+  and mentions inside strings pass. A payload it can't read is let through: a hook must never block work it doesn't
+  understand. Known false positive: `npm start` in a package whose start script isn't a server.
+- Never installed automatically (`06`); the guide and the website show the `settings.json` entry.
+- **Rejected:** the SDK's client and server in the bridge (two protocol stacks to keep in step, for no gain over
+  forwarding); exit code 2 with the reason on stderr (also honoured by Claude Code, but the JSON decision is the
+  structured form and leaves stderr for real errors); blocking backgrounded starts only (a foreground `npm run dev`
+  is the same orphan once the session ends).
+
+### D52 — No token on `/mcp` (resolves Q-MCP-AUTH, 2026-10-16)
+
+- `/mcp` has the same trust boundary as the rest of the daemon: 127.0.0.1 only, loopback `Host`, a local `Origin`
+  when one is sent, JSON bodies (so a cross-site form post can't reach it). The MCP spec's own requirement for local
+  servers is Origin validation against DNS rebinding, which this is. Anything that can reach loopback as this user can
+  already edit the data home directly, which is everything MCP can do, and MCP can't start processes (D10, D53). A
+  token would protect nothing those files don't already give away, and every client would need configuring with it.
+- Revisit if MCP ever gains process control, or if the daemon ever listens beyond loopback.
+- **Rejected:** a bearer token in `state/` (no protection, real friction); OAuth (the spec's authorisation flow is
+  for remote servers).
+
+### D53 — No `restart_app` (or any process control) in MCP (resolves Q-MCP-RESTART, 2026-10-16)
+
+- v2's acceptance criterion is that **no MCP tool can start a process**; a restart starts one. The "middle ground"
+  relied on the command coming from a file the user approved, but `apps/<slug>.yaml` is writable by any agent with
+  file access (files first, D7), and `hallway service regenerate` rewrites the job from it, so "installed via the CLI"
+  doesn't prove the user approved the command that would run. A KeepAlive job already restarts itself when it exits.
+- An agent with a shell can run `hallway restart <slug>` under its own permission model, which is where the user
+  decides what it may run. MCP stays a description layer: one simple invariant a user can rely on.
+- **Rejected:** `restart_app` for services with `keepAlive` only, or only when the installed job matches the YAML
+  (still starts a process; the check is subtle and easy to get wrong in a later change).
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |

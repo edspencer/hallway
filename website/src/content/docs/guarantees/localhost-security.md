@@ -6,7 +6,7 @@ description: How the daemon defends against other web pages, DNS rebinding and c
 Hallway is local-only: the daemon listens on `127.0.0.1` and nothing is exposed to your network. But "only on
 localhost" isn't the same as "only reachable by you". Any web page you visit can try to talk to a local server, either
 through **DNS rebinding** (a hostile domain that resolves to 127.0.0.1) or by sending a cross-site "simple" request.
-Since the daemon can edit your config, start and stop services and (in v2) speak MCP, it defends against both, the same way Local Review does.
+Since the daemon can edit your config, start and stop services and speak MCP, it defends against both, the same way Local Review does.
 
 ## The rules
 
@@ -18,7 +18,8 @@ Since the daemon can edit your config, start and stop services and (in v2) speak
   CORS preflight, and **no CORS headers are ever sent**, so the preflight always fails. A `DELETE` has no body, so it is
   exempt from the content-type rule but not from the next one.
 - **Origin check.** If a write carries an `Origin` header, it must be one of the allowed hosts.
-- **The MCP endpoint follows the same rules**, as MCP's own guidance for HTTP servers asks.
+- **The [MCP endpoint](/agents/mcp/) follows the same rules**, as MCP's own guidance for HTTP servers asks: a foreign
+  `Host` or `Origin` gets `403`, and requests must be JSON.
 
 There is no login. Anything that runs as you can already edit the data home directly, so a password on the API would
 add friction without adding protection.

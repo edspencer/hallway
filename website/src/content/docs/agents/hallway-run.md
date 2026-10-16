@@ -77,3 +77,6 @@ boot-integration problems. See [Services and reboots](/concepts/services/).
 `hallway run` executes a command. That is safe in your shell, or in an agent's shell under that agent's own
 permission prompts. It is deliberately **not** available over [MCP](/agents/mcp/), where any agent with the server
 configured could use it to run arbitrary code.
+
+To catch an agent that starts a server directly anyway, add the optional [dev-server hook](/agents/hook/): it blocks
+the command and tells the agent the `hallway run` equivalent.
