@@ -53,7 +53,7 @@ Done when:
 
 <span class="ms">v1</span> **Upcoming**, except the services half, which shipped early in 0.1.0: `hallway run`,
 `stop`, `start`, `restart` and `logs`, `hallway service add`, `rm` and `regenerate`, managed launchd and systemd user
-services for apps, and log rotation. Everything else here, including "lost at last reboot", is still to come.
+services for apps, and log rotation. "Lost at last reboot" has shipped as well.
 
 **Scope:** `hallway run`, `stop`, `start`, `restart` and `logs`; managed services for apps (launchd on macOS, systemd
 user units on Linux); Caddy through its admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; the fallback page; `hallway setup` and
