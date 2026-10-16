@@ -87,7 +87,7 @@ export const linuxFronting: Fronting = {
   installHelper: (tool) => ({
     advice:
       tool === 'caddy'
-        ? 'install Caddy 2.8 or later: a release binary from https://caddyserver.com/download (or https://github.com/caddyserver/caddy/releases) on your PATH, or set proxy.caddy in config.yaml to where it is. Distribution packages may be older, and start a system Caddy on port 80 that you would need to disable'
+        ? 'install Caddy 2.7 or later: a release binary from https://caddyserver.com/download (or https://github.com/caddyserver/caddy/releases) on your PATH, or set proxy.caddy in config.yaml to where it is. Distribution packages may be older, and start a system Caddy on port 80 that you would need to disable'
         : 'install dnsmasq (on Debian and Ubuntu the `dnsmasq-base` package, which starts no system service: `sudo apt install dnsmasq-base`), then run `hallway setup` again',
   }),
 
