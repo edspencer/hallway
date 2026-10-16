@@ -722,8 +722,9 @@ kbd {
 /* a screenshot is the door's glass: set in the panels' frame, the paint, knob and plate around it (D54) */
 .hw-door-glass {
   position: absolute;
-  inset: 14px 16px 10px;
-  width: calc(100% - 32px);
+  /* clear of the knob, on the stile to the right */
+  inset: 14px 34px 10px 18px;
+  width: calc(100% - 52px);
   height: calc(100% - 24px);
   object-fit: cover;
   object-position: top center;

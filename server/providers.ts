@@ -101,6 +101,12 @@ export class ProviderRegistry {
     return scanners.length > 0;
   }
 
+  /** Every provider's `refreshThumbs()`, together: how many screenshots were taken. */
+  async refreshThumbs(slug?: string): Promise<number> {
+    const n = await Promise.all(this.list.filter((p) => typeof p.refreshThumbs === 'function').map((p) => p.refreshThumbs!(slug)));
+    return n.reduce((a, b) => a + b, 0);
+  }
+
   observation(id: string): ObservedListener | null {
     return this.first('observation', id) ?? this.all('observed').find((o) => o.id === id) ?? null;
   }
