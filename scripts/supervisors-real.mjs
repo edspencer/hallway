@@ -80,15 +80,16 @@ try {
     cleanups.push(() => (sh('launchctl', ['bootout', `gui/${uid}/${label}`]), fs.rmSync(plist, { force: true })));
     sh('launchctl', ['bootstrap', `gui/${uid}`, plist]);
     step(`loaded the LaunchAgent ${label} on :${supPort}`);
-    // a true orphan: the shell that starts it exits, and launchd (PID 1) adopts it
+    // a true orphan: the shell that starts it exits, and launchd (PID 1) adopts it. Only node is backgrounded: with
+    // `cd … && node … &`, macOS's sh backgrounds the whole list as a subshell that stays alive as node's parent
     step('starting the orphan');
-    execFileSync('/bin/sh', ['-c', `cd "${work}" && "${node}" "${server}" ${orphanPort} </dev/null >/dev/null 2>&1 &`], { stdio: 'ignore', timeout: 30_000 });
+    execFileSync('/bin/sh', ['-c', `cd "${work}" || exit 1; "${node}" "${server}" ${orphanPort} </dev/null >/dev/null 2>&1 &`], { stdio: 'ignore', timeout: 30_000 });
   } else {
     sh('systemd-run', ['--user', `--unit=${label}`, `--working-directory=${work}`, node, server, String(supPort)]);
     cleanups.push(() => sh('systemctl', ['--user', 'stop', label]));
     step(`started the transient user service ${label} on :${supPort}`);
     // a true orphan, as a terminal makes one: in a scope (not a service), its shell exits, the user manager adopts it
-    sh('systemd-run', ['--user', '--scope', '--unit=hallway-orphan-check', '/bin/sh', '-c', `cd "${work}" && "${node}" "${server}" ${orphanPort} </dev/null >/dev/null 2>&1 &`]);
+    sh('systemd-run', ['--user', '--scope', '--unit=hallway-orphan-check', '/bin/sh', '-c', `cd "${work}" || exit 1; "${node}" "${server}" ${orphanPort} </dev/null >/dev/null 2>&1 &`]);
   }
   step('waiting for both to listen');
   await until(`:${supPort}`, () => listening(supPort));
