@@ -7,7 +7,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,17 +64,19 @@ async function until(what, fn, ms = 30000) {
   }
 }
 
-// a well-behaved local app: like Local Review, it answers 403 to any Host that isn't its own (DNS-rebinding defence)
+// A well-behaved local app: like Local Review, it answers 403 to any Host that isn't its own (DNS-rebinding defence).
+// A process of its own: this script runs curl and the CLI synchronously, which would starve a server in-process.
+const STRICT_APP = `
+const http = require('node:http');
+const s = http.createServer((req, res) => {
+  const host = req.headers.host ?? '';
+  if (!/^(localhost|127\\.0\\.0\\.1)(:\\d+)?$/.test(host)) return res.writeHead(403).end('forbidden host\\n');
+  res.end(JSON.stringify({ host, forwardedHost: req.headers['x-forwarded-host'] ?? null }));
+});
+s.listen(0, '127.0.0.1', () => console.log(s.address().port));`;
 function strictApp() {
-  const s = http.createServer((req, res) => {
-    const host = req.headers.host ?? '';
-    if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) {
-      res.writeHead(403).end('forbidden host\n');
-      return;
-    }
-    res.end(JSON.stringify({ host, forwardedHost: req.headers['x-forwarded-host'] ?? null }));
-  });
-  return new Promise((r) => s.listen(0, '127.0.0.1', () => r({ server: s, port: s.address().port })));
+  const child = spawn(process.execPath, ['-e', STRICT_APP], { stdio: ['ignore', 'pipe', 'inherit'] });
+  return new Promise((r) => child.stdout.once('data', (d) => r({ child, port: Number(String(d).trim()) })));
 }
 
 const leftovers = () =>
@@ -132,6 +133,7 @@ try {
   await check('https://hallway.localhost serves the dashboard with a certificate the system trusts', async () => {
     const r = curl('https://hallway.localhost/api/health');
     assert.equal(status(r), 200, r.out);
+    assert.match(must('setup', '--print'), /already done/, 'nothing left to do');
     assert.match(r.out, /"ok":true/);
     if (darwin) assert.equal(sh('security', ['verify-cert', '-c', ca, '-p', 'ssl', '-s', 'hallway.localhost']).code, 0, 'security verify-cert');
   });
@@ -227,8 +229,11 @@ try {
     assert.notEqual(status(curl('https://hallway.localhost/')), 200);
   });
   await check('the dashboard on http://localhost:4255, in direct mode', async () => {
-    const s = await (await fetch('http://localhost:4255/api/state')).json();
-    assert.equal(s.config.config.mode, 'direct');
+    // the daemon reads config.yaml through its watcher, a moment after teardown wrote it
+    const s = await until('direct mode', async () => {
+      const x = await (await fetch('http://localhost:4255/api/state')).json();
+      return x.config.config.mode === 'direct' ? x : null;
+    }, 10000);
     assert.match(s.apps.find((a) => a.slug === 'review').url, /^http:\/\/localhost:/);
   });
   await check('teardown again: nothing to undo', async () => assert.match(must('teardown'), /Nothing to undo/));
@@ -236,8 +241,8 @@ try {
   step('clean up');
   hw('teardown');
   hw('service', 'uninstall');
-  review.server.close();
-  other.server.close();
+  review.child.kill();
+  other.child.kill();
   const left = leftovers();
   if (left.length) {
     console.log(`left behind: ${left.join(', ')}`);

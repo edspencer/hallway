@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 import tls from 'node:tls';
 import { CA_NAME } from './caddy.js';
 
@@ -80,3 +81,16 @@ export async function resolve(name: string): Promise<string[]> {
 }
 
 export const isLoopback = (a: string) => a === '::1' || a.startsWith('127.');
+
+/** `GET https://<host>:<port><path>` dialled on 127.0.0.1, trusting only `rootPem`: the status, or null. */
+export function httpsStatus(port: number, host: string, path: string, rootPem: string, timeoutMs = 2000): Promise<number | null> {
+  return new Promise((resolve) => {
+    const req = https.request({ host: '127.0.0.1', port, servername: host, path, headers: { host }, ca: [rootPem], timeout: timeoutMs }, (res) => {
+      res.resume();
+      resolve(res.statusCode ?? null);
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}

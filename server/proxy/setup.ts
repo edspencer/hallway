@@ -24,7 +24,7 @@ import { CA_NAME, caddyConfig, caddyPaths, caddyText } from './caddy.js';
 import { fallbackHtml } from './fallback.js';
 import { ipv6Loopback, proxyApps } from './index.js';
 import { httpsUrl } from './names.js';
-import { httpProbe, readRoot, tlsProbe } from './probe.js';
+import { httpProbe, httpsStatus, readRoot, tlsProbe } from './probe.js';
 import { type TldVerdict, delegatedTlds, tldVerdict } from './tld.js';
 
 /** The oldest Caddy that understands the config (2.6 ignores the admin socket's `|0600` mode: research notes). */
@@ -450,6 +450,12 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
       else lines.push(`   ✗ ${httpsUrl(facts.dashboard, https)}: ${t ? `a certificate from ${t.issuer ?? 'someone else'} (${t.error})` : 'nothing answered'}`);
       if (h?.status === 308 && h.location?.startsWith(`https://${facts.dashboard}`)) lines.push(`   ✓ ${plain} redirects to HTTPS`);
       else lines.push(`   ✗ ${plain}: ${h ? `HTTP ${h.status}` : 'nothing answered'}`);
+      // the daemon reads config.yaml through its file watcher, a moment after it changed: give it that moment
+      const root = readRoot(paths.rootCert);
+      if (t?.ours && root && (await isListening(store.currentConfig().port))) {
+        const ok = await until(async () => (await httpsStatus(https, facts.dashboard, '/api/health', root.pem)) === 200, 10_000);
+        lines.push(ok ? `   ✓ the dashboard answers at ${httpsUrl(facts.dashboard, https)}` : `   ✗ the daemon doesn't answer at ${httpsUrl(facts.dashboard, https)} yet (is it running an older Hallway? \`hallway service restart\`)`);
+      }
       deps.out(lines.join('\n') + '\n');
       if (!t?.ours) throw new SetupError(`fronted mode is set up but not answering on ${https}; \`hallway doctor\` says why`);
     },
