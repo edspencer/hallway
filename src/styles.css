@@ -908,6 +908,23 @@ kbd {
   text-overflow: ellipsis;
   padding-left: 2px;
 }
+.hw-door-direct {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 2px 0 8px;
+  font-family: var(--hw-font-mono);
+  font-size: 11px;
+  color: var(--hw-text-subtle);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hw-door-direct:hover,
+.hw-door-direct:focus-visible {
+  color: var(--hw-text-muted);
+  text-decoration: underline;
+}
 .hw-door--nourl .hw-door-url {
   color: var(--hw-text-subtle);
   font-family: var(--hw-font-ui);

@@ -83,6 +83,12 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
               <CopyIcon />
             </button>
           )}
+          {/* fronted mode: the hostname is the address; the port is the way round the proxy */}
+          {app.url && app.directUrl && app.directUrl !== app.url && (
+            <a className="hw-door-direct" href={app.directUrl} aria-label={`${app.name} on ${displayUrl(app.directUrl)}, not through the proxy`} title={`Straight to the app, not through the proxy: ${displayUrl(app.directUrl)}`}>
+              :{port}
+            </a>
+          )}
         </div>
         <UptimeBar history={app.history} label={`${app.name}, last 24 hours`} onClick={passThrough} />
         <div className="hw-door-foot">

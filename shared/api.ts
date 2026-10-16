@@ -264,6 +264,8 @@ export interface AppView {
   name: string;
   /** Where to open it: `http://localhost:<port>` in direct mode, `https://<slug>.<base>` in fronted mode. */
   url: string | null;
+  /** `http://localhost:<port>`, in both modes: in fronted mode the card shows it as the secondary address (D47). */
+  directUrl: string | null;
   /**
    * The validated contents (declared apps). While the file is broken this is the last good version, or null if it has
    * never been valid since the daemon started.
