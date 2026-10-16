@@ -221,3 +221,31 @@ describe('the PATH trap: PATHEXT', () => {
     assert.equal(which('vite', bin), path.join(bin, 'vite'));
   });
 });
+
+describe('specs from the YAML, on a Windows machine', { skip: process.platform !== 'win32' && 'Windows paths, PATHEXT and a ;-separated PATH' }, () => {
+  test("npm's .cmd shim, not its sh script; node's directory first on PATH; per-shell directories dropped", async () => {
+    const { appSpec } = await import('../server/services/spec.ts');
+    const { tmpStore } = await import('./fixture.ts');
+    const root = tmp('hw-test-winspec-');
+    const nodeDir = path.join(root, 'nodejs');
+    const npmBin = path.join(root, 'npm');
+    const shell = path.join(root, 'fnm_multishells', '123_456');
+    for (const d of [nodeDir, npmBin, shell]) fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(nodeDir, 'node.exe'), '');
+    for (const f of ['vite', 'vite.cmd', 'vite.ps1']) fs.writeFileSync(path.join(npmBin, f), '');
+    const s = await tmpStore();
+    cleanups.push(s.cleanup);
+    await s.store.createApp('demo', { port: 5173, service: { command: ['vite', '--port', '$PORT'], cwd: root, runAtLoad: false, keepAlive: false } });
+    const node = { path: path.join(nodeDir, 'node.exe'), version: 'v24.0.0' };
+    const env = { PATH: [shell, npmBin, nodeDir, 'C:\\Windows\\System32'].join(';'), PATHEXT: '.COM;.EXE;.BAT;.CMD;.VBS;.JS;.PS1' };
+    const spec = appSpec('demo', s.store.apps.get('demo')!.value!, s.home, { env, node });
+    assert.deepEqual(spec.program, [path.join(npmBin, 'vite.cmd'), '--port', '5173']);
+    const p = spec.env.PATH.split(';');
+    assert.equal(p[0], nodeDir);
+    assert.ok(p.includes(npmBin) && p.includes('C:\\Windows\\System32'));
+    assert.ok(!p.some((d) => d.includes('fnm_multishells')), spec.env.PATH);
+    // and `node server.js` is the resolved Node, `node.exe` too
+    await s.store.patchApp('demo', { service: { command: ['node.exe', 'server.js'], cwd: root, runAtLoad: false, keepAlive: false } });
+    assert.deepEqual(appSpec('demo', s.store.apps.get('demo')!.value!, s.home, { env, node }).program, [node.path, 'server.js']);
+  });
+});
