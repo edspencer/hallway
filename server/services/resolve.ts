@@ -54,7 +54,8 @@ export function pathProblem(dir: string): string | null {
 export function servicePath(nodeBin: string | null, inherited: string | undefined): string {
   const out: string[] = [];
   const add = (d: string) => {
-    const clean = d.length > 1 ? d.replace(/\/+$/, '') : d;
+    // trailing separators off, but never a root's own (`/`, `C:\`)
+    const clean = /^([A-Za-z]:)?[\\/]$/.test(d) ? d : d.replace(/[\\/]+$/, '');
     if (!out.includes(clean) && pathProblem(clean) === null) out.push(clean);
   };
   if (nodeBin) add(nodeBin);
@@ -63,12 +64,25 @@ export function servicePath(nodeBin: string | null, inherited: string | undefine
   return out.join(path.delimiter);
 }
 
+/**
+ * The file names `name` can be on PATH. With a PATHEXT (Windows: `.COM;.EXE;.BAT;.CMD;…`) a bare name is looked for
+ * only with one of those extensions, as cmd.exe does; that matters because npm puts an extensionless `#!/bin/sh`
+ * script beside every `.cmd` shim, and Windows can't run it. A name that already has one of them is taken as it is.
+ */
+export function candidates(name: string, pathExt?: string): string[] {
+  const exts = (pathExt ?? '').split(';').map((e) => e.trim().toLowerCase()).filter((e) => e.startsWith('.'));
+  if (!exts.length || exts.includes(path.extname(name).toLowerCase())) return [name];
+  return exts.map((e) => name + e);
+}
+
 /** `which`: the first executable called `name` on `pathVar` (absolute entries only), or null. Not resolved. */
-export function which(name: string, pathVar: string | undefined): string | null {
+export function which(name: string, pathVar: string | undefined, pathExt?: string): string | null {
   for (const dir of (pathVar ?? '').split(path.delimiter)) {
     if (!dir || !path.isAbsolute(dir)) continue;
-    const p = path.join(dir, name);
-    if (isExecutableFile(p)) return p;
+    for (const n of candidates(name, pathExt)) {
+      const p = path.join(dir, n);
+      if (isExecutableFile(p)) return p;
+    }
   }
   return null;
 }
@@ -100,11 +114,12 @@ export interface ResolvedNode {
 }
 
 /** The Node the user's shell would run (`node` on PATH, resolved), else the one running Hallway. */
-export function resolveNode(pathVar: string | undefined): ResolvedNode {
-  const found = which('node', pathVar);
-  const real = fs.realpathSync(found ?? process.execPath);
+export function resolveNode(pathVar: string | undefined, pathExt?: string): ResolvedNode {
+  const found = which('node', pathVar, pathExt);
+  // .native: resolves Windows junctions too (fnm's per-shell links are junctions there)
+  const real = fs.realpathSync.native(found ?? process.execPath);
   let version = process.version;
-  if (real !== fs.realpathSync(process.execPath)) {
+  if (real !== fs.realpathSync.native(process.execPath)) {
     try {
       version = execFileSync(real, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim();
     } catch {
@@ -120,16 +135,16 @@ export class ResolveError extends Error {}
  * The argv a job runs: `command[0]` made absolute and real (relative to `cwd` if it has a slash, else found on
  * `pathVar`), and Node scripts run by `node` explicitly.
  */
-export function resolveCommand(command: string[], cwd: string, pathVar: string | undefined, node: ResolvedNode): string[] {
+export function resolveCommand(command: string[], cwd: string, pathVar: string | undefined, node: ResolvedNode, pathExt?: string): string[] {
   const [first, ...rest] = command;
   if (!first) throw new ResolveError('the command is empty');
   // a bare `node` is the Node the job's PATH starts with, not whichever one `which` finds first
-  if (first === 'node' || first === 'nodejs') return [node.path, ...rest];
-  const found = first.includes('/') ? path.resolve(cwd, first) : which(first, pathVar);
+  if (first === 'node' || first === 'nodejs' || (pathExt && /^node(js)?\.exe$/i.test(first))) return [node.path, ...rest];
+  const found = first.includes('/') || first.includes(path.sep) ? path.resolve(cwd, first) : which(first, pathVar, pathExt);
   if (!found) throw new ResolveError(`can't find \`${first}\` on your PATH; give its full path`);
   let real: string;
   try {
-    real = fs.realpathSync(found);
+    real = fs.realpathSync.native(found);
   } catch {
     throw new ResolveError(`\`${first}\` (${found}) doesn't exist`);
   }

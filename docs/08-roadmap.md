@@ -132,8 +132,9 @@ out of scope on Windows, and `hallway setup` refuses with the reason.
 - **B, the scanner:** ✅ listeners, process details and working directories, boot time and the ephemeral range on
   Windows, with the observed tray and Claim working (D59). Checked on a runner as its administrator and as a fresh
   standard user; an elevated, another user's or a 32-bit process shows its command line instead of a directory.
-- **C, if feasible:** the daemon and managed apps as per-user scheduled tasks, with a real-Windows CI job like the
-  launchd and systemd ones.
+- **C:** ✅ the daemon and managed apps as per-user scheduled tasks running `hallway supervise` (D60), checked by CI's
+  "Services (real Task Scheduler)" job like the launchd and systemd ones. They run while the user is logged on (no
+  equivalent of lingering without a stored password or administrator rights).
 
 ## Later (unscheduled ideas)
 

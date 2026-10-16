@@ -115,6 +115,9 @@ export function systemdManager({ dir, run = defaultRunner }: SystemdOptions): Se
 
   return {
     kind: 'systemd',
+    noun: 'systemd user unit',
+    lifetime:
+      "It starts with your user session and is restarted if it exits. To keep it running while you're logged out, and start it at boot, enable lingering once: `loginctl enable-linger $USER`.",
     file,
     render: renderUnit,
     readPath: unitPath,

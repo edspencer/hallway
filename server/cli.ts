@@ -145,6 +145,13 @@ async function main(argv: string[]): Promise<number | undefined> {
       process.stdout.write(flags.snippet ? snippet(guide) : agentGuide({ guide, url: DEFAULT_URL, home: tildify(HOME) }));
       return 0;
     }
+    // what a Windows scheduled task runs (server/platform/supervise.ts, D60); internal, so not in --help
+    case 'supervise': {
+      check(cmd, flags, [], args, 1, rest);
+      if (!args[0]) throw new UsageError('supervise needs a job file');
+      const { supervise } = await import('./platform/supervise.js');
+      return supervise(args[0], { log: (s) => process.stderr.write(`hallway: ${s}\n`) });
+    }
     default: {
       const { COMMANDS, makeCtx } = await commands();
       const run = COMMANDS[cmd];

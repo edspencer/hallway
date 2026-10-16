@@ -49,7 +49,7 @@ describe('service routes', () => {
     assert.equal((await req('/api/apps/demo/logs?lines=x')).status, 400);
   });
 
-  test('start / stop / restart a managed app, updating expected', { skip: onWindows('POSIX executables (exec bits, #! lines); Windows has no managed services yet') }, async () => {
+  test('start / stop / restart a managed app, updating expected', { skip: onWindows("a POSIX machine: a ':'-separated PATH, exec bits and #! lines (the Windows equivalent is in schtasks.test.ts)") }, async () => {
     const { req, calls, store } = await setup();
     let r = await req('/api/apps/demo/service/stop', { method: 'POST', body: '{}' });
     assert.equal(r.status, 200, await r.clone().text());

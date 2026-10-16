@@ -7,6 +7,8 @@ $pass = 'Hw-' + [guid]::NewGuid().ToString('N').Substring(0, 16) + '!a1'
 $root = 'C:\hwscan'
 New-Item -ItemType Directory -Force -Path "$root\work" | Out-Null
 Copy-Item -Recurse -Force dist "$root\dist"
+# the platform module finds the package root (server/config.ts) by its package.json
+Copy-Item -Force package.json "$root\package.json"
 Copy-Item -Force scripts\scanner-real-win.mjs "$root\scan.mjs"
 # New-LocalUser, not `net user`: that one stops to ask about passwords over 14 characters
 New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -AccountNeverExpires -PasswordNeverExpires | Out-Null

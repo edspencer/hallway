@@ -67,6 +67,10 @@ export class ServiceManagerError extends Error {}
 
 export interface ServiceManager {
   kind: 'launchd' | 'systemd' | 'schtasks';
+  /** What a job is called, for people: `LaunchAgent`, `systemd user unit`, `scheduled task`. */
+  noun: string;
+  /** For people, after an install: when the daemon's job runs, and what keeps it running. */
+  lifetime: string;
   /** Set where this OS has no managed services yet (D58): why, so callers refuse before writing anything. */
   unsupported?: string;
   /** Where a label's definition lives. */

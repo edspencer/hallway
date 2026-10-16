@@ -44,11 +44,11 @@ export function appSpec(slug: string, app: AppConfig, home: string, ctx: SpecCon
   const userHome = ctx.userHome ?? os.homedir();
   const cwd = path.resolve(expandHome(svc.cwd ?? app.project?.dir ?? '~', userHome));
   if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new ResolveError(`the working directory ${cwd} doesn't exist`);
-  const node = ctx.node ?? resolveNode(ctx.env.PATH);
+  const node = ctx.node ?? resolveNode(ctx.env.PATH, ctx.env.PATHEXT);
   const port = String(app.port);
   const host = app.host;
   const command = substitute(svc.command, { PORT: port, HOST: host });
-  const program = resolveCommand(command, cwd, ctx.env.PATH, node);
+  const program = resolveCommand(command, cwd, ctx.env.PATH, node, ctx.env.PATHEXT);
   const logs = logFiles(home, slug);
   return {
     label: appLabel(slug),
@@ -67,12 +67,12 @@ export function appSpec(slug: string, app: AppConfig, home: string, ctx: SpecCon
 
 /** The daemon's own job: `node <cli.js> serve --quiet`, always running (`hallway service install`). */
 export function daemonSpec(home: string, cliScript: string, ctx: SpecContext): ServiceSpec {
-  const node = ctx.node ?? { path: fs.realpathSync(process.execPath), version: process.version };
+  const node = ctx.node ?? { path: fs.realpathSync.native(process.execPath), version: process.version };
   const logs = logFiles(home, 'daemon');
   return {
     label: DAEMON_LABEL,
     description: 'Hallway: the dashboard daemon',
-    program: [node.path, fs.realpathSync(cliScript), 'serve', '--quiet'],
+    program: [node.path, fs.realpathSync.native(cliScript), 'serve', '--quiet'],
     cwd: home,
     // a data home other than the default has to be passed on: the job's environment is otherwise empty
     env: { PATH: servicePath(path.dirname(node.path), ctx.env.PATH), ...(ctx.env.HALLWAY_HOME ? { HALLWAY_HOME: home } : {}) },

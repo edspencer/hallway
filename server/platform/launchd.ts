@@ -109,6 +109,8 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
 
   return {
     kind: 'launchd',
+    noun: 'LaunchAgent',
+    lifetime: 'It starts at login and is restarted if it exits.',
     file,
     render: renderPlist,
     readPath: plistPath,

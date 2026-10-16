@@ -138,8 +138,7 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
         throw new Error(`port ${port} is already in use (is \`hallway serve\` running in a terminal?). Stop that first, or set another port: in config.yaml.`);
       const r = await svc.installDaemon();
       const w = await waitForPort(port, '127.0.0.1', { timeoutMs: 15_000 });
-      const kind = svc.manager.kind;
-      ctx.out(`Installed Hallway's daemon as a ${kind === 'launchd' ? 'LaunchAgent' : 'systemd user unit'}: ${show(r.file)}\n`);
+      ctx.out(`Installed Hallway's daemon as a ${svc.manager.noun}: ${show(r.file)}\n`);
       if (w.ok) ctx.out(`It's running: http://localhost:${port}\n`);
       else {
         ctx.err(`hallway: the daemon was started, but ${w.reason}.\n`);
@@ -147,11 +146,7 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
         if (tail) ctx.err(`\nThe last lines of its logs:\n${tail}`);
         return 1;
       }
-      ctx.out(
-        kind === 'launchd'
-          ? 'It starts at login and is restarted if it exits.\n'
-          : "It starts with your user session and is restarted if it exits. To keep it running while you're logged out, and start it at boot, enable lingering once: `loginctl enable-linger $USER`.\n",
-      );
+      ctx.out(`${svc.manager.lifetime}\n`);
       return 0;
     }
     case 'uninstall': {

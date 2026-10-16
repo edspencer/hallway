@@ -344,7 +344,7 @@ function fakeMachine() {
   return { root, stable, shell, tools, PATH };
 }
 
-describe('the PATH trap', { skip: onWindows('POSIX executables (exec bits, #! lines, symlinked version managers); Windows has no managed services yet') }, () => {
+describe('the PATH trap', { skip: onWindows("a POSIX machine: a ':'-separated PATH, exec bits and #! lines (the Windows equivalent is in schtasks.test.ts)") }, () => {
   test("node resolves through fnm's per-shell symlink to its stable install, with its version", () => {
     const m = fakeMachine();
     const node = resolveNode(m.PATH);
@@ -388,7 +388,7 @@ describe('the PATH trap', { skip: onWindows('POSIX executables (exec bits, #! li
   });
 });
 
-describe('specs from the YAML', { skip: onWindows('POSIX executables (exec bits, #! lines, symlinked version managers); Windows has no managed services yet') }, () => {
+describe('specs from the YAML', { skip: onWindows("a POSIX machine: a ':'-separated PATH, exec bits and #! lines (the Windows equivalent is in schtasks.test.ts)") }, () => {
   test('an app: resolved program, cwd, PATH, injected PORT/HOST/HOSTNAME, user env, logs', async () => {
     const m = fakeMachine();
     const { home, store, cleanup } = await tmpStore();
@@ -425,7 +425,7 @@ describe('specs from the YAML', { skip: onWindows('POSIX executables (exec bits,
   });
 });
 
-describe('Services: the lifecycle and the YAML (runner mocked)', { skip: onWindows('POSIX executables (exec bits, #! lines, symlinked version managers); Windows has no managed services yet') }, () => {
+describe('Services: the lifecycle and the YAML (runner mocked)', { skip: onWindows("a POSIX machine: a ':'-separated PATH, exec bits and #! lines (the Windows equivalent is in schtasks.test.ts)") }, () => {
   async function setup() {
     const m = fakeMachine();
     const t = await tmpStore();

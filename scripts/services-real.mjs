@@ -1,6 +1,7 @@
 // `node scripts/services-real.mjs`: the managed-service lifecycle against the machine's REAL service manager
-// (launchd on macOS, systemd's user instance on Linux), with the built CLI (dist/server/cli.js). CI only: it writes
-// into the real ~/Library/LaunchAgents or ~/.config/systemd/user and loads jobs into the real launchd / systemd, so
+// (launchd on macOS, systemd's user instance on Linux, Task Scheduler on Windows), with the built CLI
+// (dist/server/cli.js). CI only: it writes into the real ~/Library/LaunchAgents, ~/.config/systemd/user or
+// %LOCALAPPDATA%\hallway\tasks and loads jobs into the real launchd / systemd / Task Scheduler, so
 // it refuses to run unless CI=true and HALLWAY_REAL_SERVICES=1. It removes everything it installs. The data home is a
 // throwaway; the jobs' labels are the real ones (hallway.daemon, hallway.app.*), which is why it must not run on a
 // machine that uses Hallway.
@@ -66,21 +67,27 @@ const down = async (url) => {
 };
 
 const darwin = process.platform === 'darwin';
-const uid = process.getuid();
-const unitDir = darwin ? path.join(os.homedir(), 'Library', 'LaunchAgents') : path.join(os.homedir(), '.config', 'systemd', 'user');
-const unitFile = (label) => path.join(unitDir, darwin ? `${label}.plist` : `${label.replace(/\./g, '-')}.service`);
+const windows = process.platform === 'win32';
+const uid = process.getuid?.();
+const unitDir = darwin
+  ? path.join(os.homedir(), 'Library', 'LaunchAgents')
+  : windows
+    ? path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'hallway', 'tasks')
+    : path.join(os.homedir(), '.config', 'systemd', 'user');
+const unitFile = (label) => path.join(unitDir, darwin ? `${label}.plist` : windows ? `${label}.json` : `${label.replace(/\./g, '-')}.service`);
 const managerSays = (label) => {
   try {
-    return darwin
-      ? execFileSync('launchctl', ['print', `gui/${uid}/${label}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-      : execFileSync('systemctl', ['--user', 'show', label.replace(/\./g, '-') + '.service', '--property=ActiveState,LoadState'], { encoding: 'utf8' });
+    if (darwin) return execFileSync('launchctl', ['print', `gui/${uid}/${label}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    // the task's definition (its state words are localised; the supervisor's state file says whether it runs)
+    if (windows) return execFileSync('schtasks', ['/Query', '/TN', `\\${label}`, '/XML'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return execFileSync('systemctl', ['--user', 'show', label.replace(/\./g, '-') + '.service', '--property=ActiveState,LoadState'], { encoding: 'utf8' });
   } catch {
     return null;
   }
 };
 
 try {
-  step(`${darwin ? 'launchd (gui/' + uid + ')' : 'systemd --user'}; data home ${data}`);
+  step(`${darwin ? 'launchd (gui/' + uid + ')' : windows ? 'Task Scheduler' : 'systemd --user'}; data home ${data}`);
   hw('app', 'ls'); // creates the data home
   const port = await freePort();
   // a small log limit, so the rotation step below doesn't need 10 MB of output
@@ -92,6 +99,7 @@ try {
   assert.ok(fs.existsSync(unitFile('hallway.daemon')));
   console.log(hw('service', 'status'));
   if (darwin) assert.match(managerSays('hallway.daemon') ?? '', /state = running/);
+  else if (windows) assert.match(managerSays('hallway.daemon') ?? '', /<LogonTrigger>/);
   else assert.match(managerSays('hallway.daemon') ?? '', /ActiveState=active/);
 
   step('service restart');
@@ -116,7 +124,7 @@ try {
   assert.match(hw('start', 'real-demo'), /real-demo started/);
   assert.match(hw('restart', 'real-demo'), /real-demo restarted/);
 
-  step('--persist: KeepAlive / Restart=always brings it back after a crash');
+  step('--persist: KeepAlive / Restart=always / the supervisor brings it back after a crash');
   const kept = hw('run', 'real-kept', '--persist', '--', 'node', 'server.js');
   const keptUrl = kept.match(/real-kept is up: (http:\/\/localhost:\d+)/)?.[1];
   assert.ok(keptUrl, kept);
@@ -154,6 +162,9 @@ try {
   const doc = JSON.parse(execFileSync(process.execPath, [cli, 'doctor', '--json'], { cwd: work, env, encoding: 'utf8' }));
   const failed = doc.checks.filter((c) => c.status === 'fail');
   assert.deepEqual(failed, [], 'doctor finds no problems');
+  // the jobs' PATHs are what Hallway itself wrote: doctor must find nothing wrong with them (on Windows it once split
+  // them on `:`, which cut every `C:\…` entry in two)
+  assert.deepEqual(doc.checks.filter((c) => c.id === 'job-path'), [], 'no PATH warnings');
   console.log(doc.checks.map((c) => `${c.status} ${c.message}`).join('\n'));
 
   step('clean up');
@@ -164,7 +175,7 @@ try {
   await until('the persistent app to go', () => down(keptUrl));
   for (const l of ['hallway.daemon', 'hallway.app.real-demo', 'hallway.app.real-kept']) {
     assert.equal(fs.existsSync(unitFile(l)), false, `${unitFile(l)} is removed`);
-    if (darwin) assert.equal(managerSays(l), null, `${l} is unloaded`);
+    if (darwin || windows) assert.equal(managerSays(l), null, `${l} is unloaded`);
   }
   step('ok');
 } finally {

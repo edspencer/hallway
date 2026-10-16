@@ -170,11 +170,9 @@ try {
   }
 
   if (windows) {
-    // no managed services on Windows yet (D58): refused up front, nothing registered; fronted mode is refused too
-    step('Windows: run, service install and setup refuse with the reason');
-    fails(['run', 'smoke-run', '--', 'node', 'server.js'], 1, /managed services aren't supported on Windows yet/);
-    assert.ok(!fs.existsSync(path.join(data, 'apps', 'smoke-run.yaml')), 'a refused run registers nothing');
-    fails(['service', 'install'], 1, /managed services aren't supported on Windows yet/);
+    // fronted mode is out of scope on Windows (D58): refused before anything is looked for or written. (Managed
+    // services there are real scheduled tasks, D60: CI's "Services (real Task Scheduler)" job drives them.)
+    step('Windows: setup refuses with the reason');
     fails(['setup', '--print'], 1, /fronted mode isn't supported on Windows/);
   }
 
