@@ -37,6 +37,29 @@ describe('parseArgs', () => {
     assert.deepEqual(parseArgs(['-h']), { pos: [], flags: { help: '1' } });
     assert.deepEqual(parseArgs(['-v']), { pos: [], flags: { version: '1' } });
     assert.deepEqual(parseArgs(['guide', '--snippet']), { pos: ['guide'], flags: { snippet: '1' } });
+    assert.deepEqual(parseArgs(['lost', 'dismiss', '--all']), { pos: ['lost', 'dismiss'], flags: { all: '1' } });
+  });
+
+  test('every option a command accepts is one the parser knows', () => {
+    // a command's check() allowing a flag the parser rejects first makes the flag unusable (`lost dismiss --all` was)
+    const dir = path.join(ROOT, 'server', 'commands');
+    const allowed = new Set<string>();
+    for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.ts'))) {
+      for (const m of fs.readFileSync(path.join(dir, f), 'utf8').matchAll(/check\([^,]+,\s*flags,\s*\[([^\]]*)\]/g)) {
+        for (const q of m[1].matchAll(/'([^']+)'/g)) allowed.add(q[1]);
+      }
+    }
+    assert.ok(allowed.size > 10, `found only ${allowed.size} options`);
+    for (const flag of allowed) {
+      const parsed = (() => {
+        try {
+          return parseArgs([`--${flag}`, 'x']);
+        } catch (e) {
+          return e as Error;
+        }
+      })();
+      assert.ok(!(parsed instanceof Error), `--${flag} is accepted by a command but the parser says: ${(parsed as Error).message}`);
+    }
   });
 
   test('unknown options and missing values are usage errors', () => {
