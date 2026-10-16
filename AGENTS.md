@@ -24,7 +24,7 @@ Before writing any code, read, in order:
 - **Build in milestone order** (`docs/08-roadmap.md`). v0 must be useful on its own with no sudo and no DNS. Check each
   milestone's acceptance criteria by running the software, not by reading the code.
 - **Visual design is core scope**, not polish (`docs/05-ui.md`). Iterate on the dashboard with real screenshots.
-- **Never require root in the daemon.** Privileged steps belong only in `sj setup` / `sj teardown`, printed before
+- **Never require root in the daemon.** Privileged steps belong only in `hallway setup` / `hallway teardown`, printed before
   they run.
 - **Keep it generic.** Examples, defaults and docs must not assume any particular employer, machine, username or
   network. Use `example.com`, `myname.internal`, `~/Code/my-app` and similar placeholders.

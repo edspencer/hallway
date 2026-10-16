@@ -37,7 +37,7 @@ Observed on the author's own machine (macOS) while designing this project:
   pushed onto 4670 and 4671 by hand. They were distinguishable only by branch name.
 - One app's build config bakes its own URL in (`site: "http://127.0.0.1:4321"`); another app's helper scripts and
   dev proxy hardcode `http://127.0.0.1:7333`. **Moving these to new ports would break them** — a direct input to the
-  rule that Spaghetti Junction must never silently reassign an app's existing port.
+  rule that Hallway must never silently reassign an app's existing port.
 - The machine was later **rebooted**. All six died. Nothing restarted them, nothing noticed, and the user did not find
   out for two days. Once the processes are gone, their working directories are unrecoverable — so the only way to
   say afterwards "these six things were running and are now gone" is to have **recorded what was observed while it
@@ -64,7 +64,7 @@ Each goal should be testable. Milestone mapping is in `08-roadmap.md`.
 - **G3 — Never remember a port again.** Each app gets a stable, memorable URL. In fronted mode that is an HTTPS
   hostname; in direct mode it is at least one click from the dashboard.
 - **G4 — Survive reboots.** Apps marked as services come back after a restart without the user doing anything, as
-  does Spaghetti Junction itself.
+  does Hallway itself.
 - **G5 — Zero-maintenance discovery.** Registering an app is one command or one small YAML file; unregistered
   listeners are surfaced automatically and can be claimed in one action. The dashboard never needs hand-editing to
   stay accurate.
@@ -75,8 +75,8 @@ Each goal should be testable. Milestone mapping is in `08-roadmap.md`.
   not become an orphan.
 - **G8 — Beautiful.** The dashboard should be a pleasure to look at and fast to use — something you would set as a
   browser home page. This is an explicit requirement, not polish.
-- **G9 — Simple to install.** `npm i -g spaghetti-junction && sj service install` gets the dashboard running
-  permanently. Fronted mode adds one guided `sj setup` step.
+- **G9 — Simple to install.** `npm i -g hallway && hallway service install` gets the dashboard running
+  permanently. Fronted mode adds one guided `hallway setup` step.
 - **G10 — Generic.** Nothing specific to any one company, tool or user. Opinionated defaults; everything
   user-specific lives in the data home.
 
@@ -97,7 +97,7 @@ Each goal should be testable. Milestone mapping is in `08-roadmap.md`.
 
 > **The front door for everything you vibe-coded on a random port.**
 
-The dashboard-and-bookmarks space is crowded (see prior art). Spaghetti Junction's differentiators are:
+The dashboard-and-bookmarks space is crowded (see prior art). Hallway's differentiators are:
 
 1. **Self-populating.** It reads a live registry and *scans for listeners*, so the dashboard reflects reality without
    anyone maintaining it. Every comparable dashboard requires a hand-maintained config, which recreates the original
@@ -118,7 +118,7 @@ Status checked during design (dates in `11-research-notes.md`).
 | **localias** (peterldowns/localias) | Caddy-based local aliases (`app.test → :3000`), manages `/etc/hosts`, auto-trusts TLS, serves `.local` over mDNS. Active. | No wildcard subdomains, no boot persistence, explicitly no process management, no dashboard. |
 | **Homepage / Homer / Dashy / Heimdall / Flame** | Home-lab dashboards: service tiles, bookmarks, widgets. | Hand-maintained YAML; no discovery; usually Docker-first; no proxying or process management. |
 | **puma-dev** | `.test` domains with lazy app start, own resolver. | Ruby/Rack-centric. |
-| **dnsmasq + Caddy (hand-rolled)** | The classic macOS recipe for wildcard local domains. | A recipe, not a product: no registry, no dashboard, no health. Spaghetti Junction automates it. |
+| **dnsmasq + Caddy (hand-rolled)** | The classic macOS recipe for wildcard local domains. | A recipe, not a product: no registry, no dashboard, no health. Hallway automates it. |
 | **PM2** | Mature Node process manager with save/resurrect. | Its macOS boot integration has a history of reported failures; adds a second supervisor on top of launchd. See D3. |
 | **process-compose / Overmind / Foreman** | Procfile/YAML dev runners. | Foreground dev tools; no boot persistence, no dashboard. |
 | **Coolify / Dokploy / Dokku** | Self-hosted PaaS with dashboards and domains. | Far too heavy for a laptop; server/container-oriented. |
@@ -126,12 +126,12 @@ Status checked during design (dates in `11-research-notes.md`).
 
 ## Related projects by the same author
 
-Spaghetti Junction should feel like a sibling of these, and borrow their conventions (see `02-architecture.md`):
+Hallway should feel like a sibling of these, and borrow their conventions (see `02-architecture.md`):
 
 - **Local Review** — `npm i -g local-review`, https://github.com/edspencer/local-review. A local-only web app for
   reviewing stacks of local commits. MIT. Its data-home layout, YAML-per-entity storage, chokidar → SSE live updates,
   loopback-only security middleware, agent guide / `llms.txt`, and release pipeline (changesets, npm provenance) are
-  the template for this project. It is also one of the apps Spaghetti Junction will front (default port 5622).
+  the template for this project. It is also one of the apps Hallway will front (default port 5622).
 - **Paddock** — `@edspencer/paddock`, https://github.com/edspencer/paddock. A server for persistent coding-agent
   sessions, which the author runs as a launchd service. Its launchd plist is the template for service generation, and
-  it is another app Spaghetti Junction will front.
+  it is another app Hallway will front.

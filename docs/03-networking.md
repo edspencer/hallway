@@ -5,9 +5,9 @@
 | | **Direct mode** (v0, default) | **Fronted mode** (v1) |
 |---|---|---|
 | App URLs | `http://localhost:<port>` | `https://<slug>.<base-domain>` |
-| Dashboard URL | `http://localhost:7724` | `https://junction.localhost` (or the custom apex) — and still `http://localhost:7724` |
+| Dashboard URL | `http://localhost:4255` | `https://hallway.localhost` (or the custom apex) — and still `http://localhost:4255` |
 | Needs | nothing | Caddy; for custom domains also dnsmasq + `/etc/resolver`; one-time CA trust |
-| Sudo | never | once, during `sj setup` |
+| Sudo | never | once, during `hallway setup` |
 
 The dashboard must work in both modes and render links appropriate to the current mode. Direct mode is not a
 degraded fallback: it is the whole of v0 and it is immediately valuable on its own. When fronted mode is on, cards
@@ -17,7 +17,7 @@ show the hostname as primary and the port as secondary detail.
 
 ### Default: `localhost` (D5)
 
-Apps are served at `<slug>.localhost`; the dashboard at `junction.localhost`.
+Apps are served at `<slug>.localhost`; the dashboard at `hallway.localhost`.
 
 Why this is the default:
 
@@ -37,7 +37,7 @@ Users can set `domain.base` to something else; **the recommended choice is a nam
 live underneath (`https://app.myname.internal`). Custom domains need dnsmasq and a resolver file (below). The examples
 throughout this spec use `myname.internal`.
 
-Guidance the docs and `sj doctor` must give:
+Guidance the docs and `hallway doctor` must give:
 
 | Base domain | Verdict | Why |
 |-------------|---------|-----|
@@ -59,12 +59,12 @@ Guidance the docs and `sj doctor` must give:
   forcing HTTPS onto HTTP-only setups) does not apply. The only loss is being unable to reach the real public name.
 - ICANN's 2026 new-gTLD round is in progress (application window closed 12 Aug 2026; Reveal Day 7 Oct 2026; String
   Confirmation Day 17 Nov 2026; delegations would follow years later). Details in `11-research-notes.md`.
-- `sj doctor` should fetch IANA's TLD list (`https://data.iana.org/TLD/tlds-alpha-by-domain.txt`) and warn if the
+- `hallway doctor` should fetch IANA's TLD list (`https://data.iana.org/TLD/tlds-alpha-by-domain.txt`) and warn if the
   configured base domain's TLD is delegated. Cache the list; failure to fetch is a warning, not an error.
 
 ### Hostname scheme
 
-- Dashboard: `domain.dashboard` (default `junction.localhost`; the apex for custom domains).
+- Dashboard: `domain.dashboard` (default `hallway.localhost`; the apex for custom domains).
 - Apps: `<slug>.<base>`, plus any `proxy.aliases`.
 - Name a resolver file after the **full base domain** (`/etc/resolver/myname.internal`), never just the TLD
   (`/etc/resolver/internal`), so only your own names are captured.
@@ -90,8 +90,8 @@ Guidance the docs and `sj doctor` must give:
 - Binding Caddy to `0.0.0.0:443` as the user would avoid root but **expose every fronted app to the local network**
   (anyone on the same Wi-Fi sending the right `Host`). Not acceptable as a default. If ever offered, it must be paired
   with a `remote_ip` matcher that rejects non-loopback clients and documented as weaker (Q-CADDY-UNPRIVILEGED).
-- **Provisional (see the security caveat below):** `sj setup` installs a dedicated LaunchDaemon, label
-  `spaghetti-junction.caddy`, rather than using `brew services start caddy`. Reasons: (1) don't hijack a Homebrew Caddy service the user may already use for
+- **Provisional (see the security caveat below):** `hallway setup` installs a dedicated LaunchDaemon, label
+  `hallway.caddy`, rather than using `brew services start caddy`. Reasons: (1) don't hijack a Homebrew Caddy service the user may already use for
   something else; (2) control the exact arguments (`caddy run --resume …`); (3) clean teardown.
 - Caddy's **admin API** listens on `localhost:2019`. The unprivileged daemon pushes config there (`POST /load` with
   JSON), so routine changes — adding an app — **never need sudo**. Caddy's `--resume` flag restores the last
@@ -103,7 +103,7 @@ Guidance the docs and `sj doctor` must give:
   it**. If Caddy runs as root, that config can, for example, add a `file_server` rooted at `/`, letting any process
   running as the user read root-only files without a password prompt — a local privilege escalation (a malicious
   package install script would be enough). Options to evaluate, in rough order of preference:
-  1. **No root Caddy at all:** run Caddy as the user on `127.0.0.1:8443`/`:8080`, and have `sj setup` install a
+  1. **No root Caddy at all:** run Caddy as the user on `127.0.0.1:8443`/`:8080`, and have `hallway setup` install a
      one-time **pf redirect on `lo0`** from 443→8443 and 80→8080 (loaded at boot by a tiny root LaunchDaemon that only
      runs `pfctl`). The only root component then has a fixed, non-configurable job. Unverified; check that pf `rdr`
      on loopback works on current macOS and survives OS updates (which can rewrite `/etc/pf.conf` — use an anchor
@@ -113,13 +113,13 @@ Guidance the docs and `sj doctor` must give:
   3. Root Caddy with a fixed config file and **no admin API** (`admin off`), reloaded via a privileged helper — needs
      sudo for every app change, defeating "no sudo after setup".
 - Conflict detection: if something else already uses `localhost:2019`, ports 80/443, or a Caddy instance is already
-  running, `sj setup` and `sj doctor` must say so and stop rather than fight it.
+  running, `hallway setup` and `hallway doctor` must say so and stop rather than fight it.
 
 ### Port 80/443 conflicts are real
 
 On the author's machine, **ports 80 and 443 were already held** by an `ssh` process owned by the user — the
 port-forwarding of a container-runtime VM (Docker Desktop, Rancher Desktop, Lima, Colima and similar do this).
-`sj doctor` must report the process name, PID and owner holding 80/443 and suggest the fix (usually disabling that
+`hallway doctor` must report the process name, PID and owner holding 80/443 and suggest the fix (usually disabling that
 tool's port-forward of 80/443). Fronted mode cannot start until this is resolved.
 
 ### Route generation
@@ -140,8 +140,8 @@ review.localhost {
     }
 }
 
-junction.localhost {
-    reverse_proxy 127.0.0.1:7724 {
+hallway.localhost {
+    reverse_proxy 127.0.0.1:4255 {
         header_up Host {upstream_hostport}
     }
     handle_errors {
@@ -169,7 +169,7 @@ junction.localhost {
 
 If the daemon is down, Caddy serves `generated/fallback.html`: a static page the daemon rewrites on every change,
 listing every app with its link, so a dead dashboard still answers "what do I have?". It should say clearly that the
-daemon is down and how to restart it (`sj service restart` or `launchctl kickstart -k gui/<uid>/spaghetti-junction.daemon`).
+daemon is down and how to restart it (`hallway service restart` or `launchctl kickstart -k gui/<uid>/hallway.daemon`).
 
 ### TLS details
 
@@ -177,8 +177,8 @@ daemon is down and how to restart it (`sj service restart` or `launchctl kicksta
   its CA lives in root's Caddy data directory, so trust must target that instance (e.g. `caddy trust --address
   localhost:2019`) — verify (Q-CADDY-TRUST).
 - Caddy's docs warn that automatic trust installation is best-effort and can fail when Caddy runs as an unprivileged
-  service; `sj setup` must run `caddy trust` explicitly and `sj doctor` must verify the root is trusted.
-- Firefox uses its own store: set `security.enterprise_roots.enabled = true` (or import the root manually). `sj
+  service; `hallway setup` must run `caddy trust` explicitly and `hallway doctor` must verify the root is trusted.
+- Firefox uses its own store: set `security.enterprise_roots.enabled = true` (or import the root manually). `hallway
   doctor` should mention this if Firefox is installed.
 - Internal leaf certificates are short-lived and renewed automatically by Caddy as long as it runs.
 - `caddy untrust` on teardown.
@@ -195,7 +195,7 @@ trustworthy by modern browsers — verify per browser, Q-SECURE-CONTEXT — but 
 Only needed when `domain.base` is not `localhost`.
 
 - Install: `brew install dnsmasq`.
-- Config (a drop-in owned by Spaghetti Junction, e.g. `$(brew --prefix)/etc/dnsmasq.d/spaghetti-junction.conf`, with
+- Config (a drop-in owned by Hallway, e.g. `$(brew --prefix)/etc/dnsmasq.d/hallway.conf`, with
   `conf-dir` enabled in the main config):
   ```
   address=/myname.internal/127.0.0.1
@@ -219,26 +219,26 @@ for *every new app* and cannot express wildcards. dnsmasq needs sudo once.
   should bind `127.0.0.1`.
 - Managed services (v1) get `HOST=127.0.0.1` injected (and `HOSTNAME=127.0.0.1` for frameworks that read that).
 - The scanner records each listener's bind address; the dashboard shows a subtle "exposed on network" indicator for
-  apps on `*`/`0.0.0.0`, and `sj doctor` lists them.
+  apps on `*`/`0.0.0.0`, and `hallway doctor` lists them.
 
-## Privileged setup: `sj setup`
+## Privileged setup: `hallway setup`
 
 All root-requiring steps live in one command, so the daemon never needs privileges.
 
-- `sj setup` (fronted mode on `localhost`): check prerequisites → install Caddy if missing (`brew install caddy`, with
-  consent) → install the `spaghetti-junction.caddy` LaunchDaemon → start it → push config → `caddy trust` → set
-  `mode: fronted` → run `sj doctor`.
-- `sj setup --domain <base>`: additionally install dnsmasq, write the drop-in, start its LaunchDaemon, write
+- `hallway setup` (fronted mode on `localhost`): check prerequisites → install Caddy if missing (`brew install caddy`, with
+  consent) → install the `hallway.caddy` LaunchDaemon → start it → push config → `caddy trust` → set
+  `mode: fronted` → run `hallway doctor`.
+- `hallway setup --domain <base>`: additionally install dnsmasq, write the drop-in, start its LaunchDaemon, write
   `/etc/resolver/<base>`, set `domain.base`.
 - **Before each privileged command, print it and a one-line explanation, then run it via `sudo`** so the user sees
-  and approves exactly what happens. `sj setup --print` prints the full plan without executing anything.
+  and approves exactly what happens. `hallway setup --print` prints the full plan without executing anything.
 - **Idempotent:** re-running is safe and only fixes what is missing.
-- **`sj teardown`** reverses everything it installed (LaunchDaemons, drop-ins, resolver file, `caddy untrust`) and
+- **`hallway teardown`** reverses everything it installed (LaunchDaemons, drop-ins, resolver file, `caddy untrust`) and
   sets `mode: direct`. It never removes Homebrew packages unless asked (`--uninstall-packages`).
-- Never write outside: the data home, `/etc/resolver/<base>`, the dnsmasq drop-in, `/Library/LaunchDaemons/spaghetti-junction.*.plist`,
-  `~/Library/LaunchAgents/spaghetti-junction.*.plist`.
+- Never write outside: the data home, `/etc/resolver/<base>`, the dnsmasq drop-in, `/Library/LaunchDaemons/hallway.*.plist`,
+  `~/Library/LaunchAgents/hallway.*.plist`.
 
-## `sj doctor`
+## `hallway doctor`
 
 Read-only diagnostics, each with a pass/warn/fail line and a suggested fix:
 
