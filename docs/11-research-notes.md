@@ -253,7 +253,7 @@ daemon under a process manager (`hallway serve`, D31's development bind so a bro
    `Content-Type: text/plain`, 415; a GET, 405; the same request with a loopback Host, 200.
 4. **Notifications:** a `subscriptions/listen` stream for `hallway://apps/my-app`, opened through `hallway mcp`,
    heard `notifications/resources/updated` within 1.5 s of the file being edited by hand.
-5. **Claude Code** (2.1.292 (Claude Code)), with a throwaway `HOME` and `CLAUDE_CONFIG_DIR` and no credentials:
+5. **Claude Code** 2.1.292, with a throwaway `HOME` and `CLAUDE_CONFIG_DIR` and no credentials:
    `claude mcp add --transport http hallway http://localhost:<port>/mcp` and `claude mcp add hallway-stdio -- hallway
    mcp` were accepted, and `claude mcp list` reported both "✔ Connected". Not run: the hook inside a real Claude Code
    session (it would need a model; tested with payloads of the documented shape). On macOS: unverified, though
