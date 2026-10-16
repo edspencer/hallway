@@ -24,6 +24,10 @@ Apps and discovery
                                     Turn an observed listener into a declared app.
   ignore <port|id> [--by port|process|dir]
                                     Hide an observed listener.
+  lost [--json]                     What was running before the last reboot and isn't now.
+  lost restart|service <id|port> [--slug S]
+                                    Start one again: once, or as a service. (Like \`hallway run\`.)
+  lost dismiss <id|port> | --all    Clear one, or the whole notice.
   app add <slug> [--port N] [--name N] [--expected E] [--health PATH]
   app ls [--json] | app edit <slug> | app rm <slug>
 

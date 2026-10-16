@@ -4,11 +4,12 @@
 // `update_app` refuse `service`, `update_app` refuses a port change (D17), `remove_app` refuses a managed app.
 import { McpServer, ResourceTemplate, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import type { AppState, AppView, HistoryWindow, LostNotice } from '../../shared/api.js';
+import type { AppState, AppView, HistoryWindow } from '../../shared/api.js';
 import { claimObserved, ignoreObserved } from '../api.js';
 import { VERSION, tildify } from '../config.js';
 import type { EventBus } from '../events.js';
 import type { ProviderRegistry } from '../providers.js';
+import { lostSummary } from '../lost/index.js';
 import { ConflictError, NotFoundError, ValidationError, type Entry, type Store } from '../store/index.js';
 import { appView, appViews, declaredView, groupView, groupViews, stateView } from '../views.js';
 
@@ -71,24 +72,6 @@ const opts = (etag: string | undefined) => ({ ifMatch: etag ?? null });
 // ---------------------------------------------------------------------------------------------------------------
 // Views: compact for lists, full for one app
 // ---------------------------------------------------------------------------------------------------------------
-
-/** "Lost at last reboot" for get_status: what each was, where it ran and its command, and whether it's back. */
-function lostSummary(n: LostNotice | null) {
-  if (!n) return null;
-  return {
-    bootTime: n.bootTime,
-    items: n.items.map((i) => ({
-      id: i.id,
-      label: i.label,
-      port: i.port,
-      slug: i.slug,
-      dir: i.identity.projectDir ?? i.identity.cwd ?? i.cwd,
-      branch: i.identity.branch,
-      command: i.command?.join(' ') ?? i.identity.command,
-      back: i.back,
-    })),
-  };
-}
 
 function summary(a: AppView) {
   return {

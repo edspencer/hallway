@@ -10,7 +10,6 @@ import type {
   HistoryWindow,
   IgnoreRequest,
   LostActionRequest,
-  LostNotice,
   LostResponse,
   ObservedListener,
   ObservedResponse,
@@ -21,6 +20,7 @@ import { agentGuide, llmsFullTxt, llmsTxt, readGuide, type GuideInput } from './
 import type { ProviderRegistry } from './providers.js';
 import { ServiceManagerError } from './platform/index.js';
 import { dismissLost, reviveLost } from './lost/actions.js';
+import { lostSummary } from './lost/index.js';
 import { ServiceError, Services } from './services/index.js';
 import { appLogs } from './services/logs.js';
 import { ResolveError } from './services/resolve.js';
@@ -341,7 +341,7 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
       } catch {
         throw new ValidationError('the body is not valid JSON');
       }
-      return c.json(await reviveLost({ services: getServices(), providers, bus }, c.req.param('id'), c.req.param('action') === 'service', body));
+      return c.json(await reviveLost({ services: getServices(), providers, bus, run: { timeoutMs: 20_000 } }, c.req.param('id'), c.req.param('action') === 'service', body));
     } catch (e) {
       return handle(c, e);
     }
@@ -369,24 +369,6 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
   return api;
 }
 
-/** The lost notice, as the guide and llms.txt list it. */
-function lostFacts(n: LostNotice | null) {
-  if (!n) return null;
-  return {
-    bootTime: n.bootTime,
-    items: n.items.map((i) => ({
-      id: i.id,
-      label: i.label,
-      port: i.port,
-      slug: i.slug,
-      dir: i.identity.projectDir ?? i.identity.cwd ?? i.cwd,
-      branch: i.identity.branch,
-      command: i.command?.join(' ') ?? i.identity.command,
-      back: i.back,
-    })),
-  };
-}
-
 /** /agent-guide.md, /llms.txt, /llms-full.txt: read-only, and nothing the dashboard doesn't already show to localhost. */
 export function agentRoutes({ store, providers }: Pick<ApiOptions, 'store' | 'providers'>) {
   const ctx = { store, providers };
@@ -410,7 +392,7 @@ export function agentRoutes({ store, providers }: Pick<ApiOptions, 'store' | 'pr
           error: a.problems.some((p) => p.severity === 'error'),
         })),
         groups: groupViews(store).map((g) => ({ group: g.group, title: g.config?.title ?? g.group, links: g.config?.links.length ?? 0 })),
-        lost: lostFacts(providers.first('lost')),
+        lost: lostSummary(providers.first('lost')),
       },
     };
   };

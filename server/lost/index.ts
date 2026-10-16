@@ -9,7 +9,7 @@
 // This file is the pure part and the file; server/live.ts wires it to the scanner, server/lost/actions.ts restarts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppState } from '../../shared/api.js';
+import type { AppState, LostNotice } from '../../shared/api.js';
 import type { Observation } from '../scanner/types.js';
 
 /** A declared app, as computeLost needs it. */
@@ -183,4 +183,22 @@ export class LostStore {
     }
     writeAtomic(this.file, JSON.stringify(this.current, null, 2) + '\n');
   }
+}
+
+/** The notice in brief, for llms.txt, the agent guide and MCP's get_status: what, where, the command, back or not. */
+export function lostSummary(n: LostNotice | null) {
+  if (!n) return null;
+  return {
+    bootTime: n.bootTime,
+    items: n.items.map((i) => ({
+      id: i.id,
+      label: i.label,
+      port: i.port,
+      slug: i.slug,
+      dir: i.identity.projectDir ?? i.identity.cwd ?? i.cwd,
+      branch: i.identity.branch,
+      command: i.command?.join(' ') ?? i.identity.command,
+      back: i.back,
+    })),
+  };
 }
