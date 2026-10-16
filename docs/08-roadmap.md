@@ -120,6 +120,20 @@ Acceptance criteria:
 5. Every v0 and v1 criterion has been run on a real Mac, and nothing is left marked "unverified on macOS" in
    `11-research-notes.md`.
 
+## Windows (D58): supported where feasible, best effort
+
+Checked only on CI's hosted Windows runners (`11-research-notes.md`, "Windows (D58)"). Direct mode only: fronted mode is
+out of scope on Windows, and `hallway setup` refuses with the reason.
+
+- **A, the baseline:** ✅ the daemon, dashboard, store, watcher, prober, uptime history, API, MCP and the CLI's file
+  commands run natively, with no administrator rights; unit tests run on `windows-latest` (Node 22.13 and 24) and
+  `smoke:pack` installs and runs the packed tarball there. The scanner sees nothing yet, and `hallway run` /
+  `hallway service` refuse with a message.
+- **B, the scanner:** listeners, process details and working directories, boot time and the ephemeral range on
+  Windows, with the observed tray and Claim working.
+- **C, if feasible:** the daemon and managed apps as per-user scheduled tasks, with a real-Windows CI job like the
+  launchd and systemd ones.
+
 ## Later (unscheduled ideas)
 
 - Lazy start: a stopped managed app is started on first request to its hostname (puma-dev style); Caddy would route

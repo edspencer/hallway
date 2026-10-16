@@ -3,7 +3,8 @@
 // bootout, kickstart, print), plus enable/disable so that a stopped job stays stopped at the next login (D41).
 // Behaviour checked only with the runner mocked is listed as "unverified on macOS" in docs/11-research-notes.md.
 import fs from 'node:fs';
-import path from 'node:path';
+// POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
+import { posix as path } from 'node:path';
 import { type Runner, type ServiceManager, ServiceManagerError, type ServiceSpec, type ServiceStatus, defaultRunner, removeFile, writeIfChanged } from './services.js';
 
 const xml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

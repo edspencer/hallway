@@ -10,9 +10,12 @@ import type { FrontingEnv } from '../server/platform/fronting.ts';
 import { linuxFronting, nftRules, resolvedDropin } from '../server/platform/fronting-linux.ts';
 import { darwinFronting, pfAnchor, resolverText } from '../server/platform/fronting-darwin.ts';
 import { dnsmasqConf } from '../server/platform/fronting.ts';
-import { type Facts, SetupError, cmdLine, formatPlan, planSetup, runPlan, versionAtLeast } from '../server/proxy/setup.ts';
+import { type Facts, type SetupDeps, SetupError, cmdLine, formatPlan, planSetup, runPlan, setup, teardown, versionAtLeast } from '../server/proxy/setup.ts';
 import { HSTS_PRELOADED_TLDS, parseTlds, tldVerdict, delegatedTlds } from '../server/proxy/tld.ts';
-import { ROOT, tmpDir } from './fixture.ts';
+import { onWindows, ROOT, tmpDir } from './fixture.ts';
+
+// the goldens hold the POSIX paths a plan has on macOS and Linux; fronted mode is unsupported on Windows (D58)
+const POSIX_PATHS = { skip: onWindows('a plan names data-home paths in the OS\'s own form; fronted mode is unsupported on Windows') };
 
 const GOLDEN = path.join(ROOT, 'test', 'fixtures', 'proxy');
 function golden(name: string, text: string) {
@@ -62,8 +65,8 @@ function facts(over: Partial<Facts> & { os: 'darwin' | 'linux'; base?: string } 
 const plan = (f: Facts) => planSetup(f, platformFor(f.platform), HOME);
 
 describe('setup --print', () => {
-  test('golden: macOS, *.localhost', () => golden('setup-darwin.txt', formatPlan(plan(facts({ os: 'darwin' })), { printOnly: true })));
-  test('golden: macOS, a custom domain, Caddy and dnsmasq to install with Homebrew', () =>
+  test('golden: macOS, *.localhost', POSIX_PATHS, () => golden('setup-darwin.txt', formatPlan(plan(facts({ os: 'darwin' })), { printOnly: true })));
+  test('golden: macOS, a custom domain, Caddy and dnsmasq to install with Homebrew', POSIX_PATHS, () =>
     golden(
       'setup-darwin-custom.txt',
       formatPlan(
@@ -78,7 +81,7 @@ describe('setup --print', () => {
         { printOnly: true },
       ),
     ));
-  test('golden: Linux, a custom domain', () => golden('setup-linux-custom.txt', formatPlan(plan(facts({ os: 'linux', base: 'myname.internal' })), { printOnly: true })));
+  test('golden: Linux, a custom domain', POSIX_PATHS, () => golden('setup-linux-custom.txt', formatPlan(plan(facts({ os: 'linux', base: 'myname.internal' })), { printOnly: true })));
 
   test('every privileged command is a sudo command with an explanation; the files it installs are shown first', () => {
     for (const os of ['darwin', 'linux'] as const) {
@@ -250,5 +253,30 @@ describe('running a plan', () => {
     assert.ok(versionAtLeast('v2.7.0', [2, 7, 0]));
     assert.ok(!versionAtLeast('v2.6.4', [2, 7, 0]));
     assert.ok(!versionAtLeast(null, [2, 7, 0]));
+  });
+});
+
+describe('Windows (D58)', () => {
+  // setup refuses before it reads the store, looks for a tool or writes a file: deps it would use are traps
+  const trap = () => {
+    throw new Error('setup touched something on Windows');
+  };
+  const deps = (out: string[]) =>
+    ({ platform: platformFor('win32'), out: (s: string) => out.push(s), services: trap, query: trap, env: {}, userHome: 'C:\\Users\\me', isRoot: false, get store() { return trap(); } }) as unknown as SetupDeps;
+
+  test('setup refuses at once, with the reason, and --print too', async () => {
+    for (const print of [false, true])
+      await assert.rejects(setup(deps([]), { print }), (e) => e instanceof SetupError && /fronted mode isn't supported on Windows/.test(e.message));
+  });
+
+  test('teardown has nothing to undo', async () => {
+    const out: string[] = [];
+    assert.equal(await teardown(deps(out)), 0);
+    assert.match(out.join(''), /^Nothing to undo: fronted mode isn't supported on Windows/);
+  });
+
+  test('every recipe throws FrontingUnsupported', () => {
+    const f = platformFor('win32').fronting;
+    for (const r of [f.redirect, f.unredirect, f.trust, f.untrust, f.resolver, f.unresolver]) assert.throws(() => r({} as FrontingEnv), /not supported on Windows|isn't supported on Windows/);
   });
 });

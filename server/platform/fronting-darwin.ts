@@ -5,7 +5,8 @@
 //              rewrite) is never edited.
 //   trust      the System keychain (`security add-trusted-cert`).
 //   resolver   /etc/resolver/<base>, `nameserver 127.0.0.1` with a `port` line (resolver(5)).
-import path from 'node:path';
+// POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
+import { posix as path } from 'node:path';
 import { type Fronting, type FrontingEnv, MARK, type Recipe, findTool } from './fronting.js';
 
 export const PF_ANCHOR_NAME = 'com.apple/hallway';

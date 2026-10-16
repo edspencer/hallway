@@ -1,0 +1,7 @@
+# Every text file is checked out with LF, Windows included: golden files, fixtures and AGENT-GUIDE.md are compared
+# byte for byte, and the parsers split command output on \n.
+* text=auto eol=lf
+*.png binary
+*.ttf binary
+*.woff2 binary
+*.ico binary

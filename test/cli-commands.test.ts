@@ -7,7 +7,7 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, onWindows, ROOT, tmpDir } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -50,7 +50,7 @@ describe('hallway app and bookmark commands', () => {
     assert.deepEqual(ls.apps.map((x: { slug: string; config: { port: number } }) => [x.slug, x.config.port]), [['notes', port]]);
     const rm = await hallway(['app', 'rm', 'notes']);
     assert.equal(rm.code, 0, rm.stderr);
-    assert.match(rm.stdout, /moved to .*backups\/removed\//);
+    assert.match(rm.stdout.replaceAll('\\', '/'), /moved to .*backups\/removed\//);
     assert.equal(fs.existsSync(path.join(DATA, 'apps', 'notes.yaml')), false);
   });
 
@@ -88,7 +88,7 @@ describe('scan, claim, ignore and status without a daemon', () => {
   });
   after(() => server?.kill());
 
-  test('scan --json finds the listener, labelled with its directory', async () => {
+  test('scan --json finds the listener, labelled with its directory', { skip: onWindows('the scanner sees no listeners on Windows until stage B (D58)') }, async () => {
     const r = await hallway(['scan', '--json']);
     assert.equal(r.code, 0, r.stderr);
     const o = JSON.parse(r.stdout).observed.find((x: { port: number }) => x.port === port);
@@ -96,7 +96,7 @@ describe('scan, claim, ignore and status without a daemon', () => {
     assert.equal(fs.realpathSync(o.identity.cwd), fs.realpathSync(dir));
   });
 
-  test('claim <port> writes the app with that port; status probes it; ignore <port> needs no scan', async () => {
+  test('claim <port> writes the app with that port; status probes it; ignore <port> needs no scan', { skip: onWindows('the scanner sees no listeners on Windows until stage B (D58)') }, async () => {
     const c = await hallway(['claim', String(port), '--slug', 'scratch', '--json']);
     assert.equal(c.code, 0, c.stderr);
     assert.equal(JSON.parse(c.stdout).config.port, port);

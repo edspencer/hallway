@@ -29,7 +29,8 @@ export function startWatcher(store: Store, bus: EventBus = store.bus, debounceMs
   };
   const onPath = (p: string) => {
     if (ignored(p)) return;
-    bus.emitSoon(`file:${path.relative(home, p)}`, () => store.reloadPath(p), debounceMs);
+    // one key per file, written the same on every OS (the store names files with `/` too)
+    bus.emitSoon(`file:${path.relative(home, p).split(path.sep).join('/')}`, () => store.reloadPath(p), debounceMs);
   };
   const w = watch(home, { ignoreInitial: true, depth: 1, ignored })
     .on('add', onPath)

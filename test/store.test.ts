@@ -331,7 +331,7 @@ describe('writing', () => {
     events.length = 0;
     const dest = await store.deleteApp('foo');
     assert.deepEqual(ls('apps'), []);
-    assert.match(path.relative(home, dest), /^backups\/removed\/\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ\/apps\/foo\.yaml$/);
+    assert.match(path.relative(home, dest).replaceAll(path.sep, '/'), /^backups\/removed\/\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ\/apps\/foo\.yaml$/);
     assert.equal(fs.readFileSync(dest, 'utf8'), 'port: 1\n');
     const snaps = listSnapshots(path.join(home, 'backups'));
     assert.equal(snaps.length, 1);

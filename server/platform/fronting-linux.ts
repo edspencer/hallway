@@ -5,7 +5,8 @@
 //              /etc/pki/ca-trust/source/anchors), plus the user's NSS database, which Chrome and Chromium read on
 //              Linux (no sudo; only when `certutil` and ~/.pki/nssdb exist).
 //   resolver   a systemd-resolved drop-in routing `~<base>` to Hallway's dnsmasq.
-import path from 'node:path';
+// POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
+import { posix as path } from 'node:path';
 import fs from 'node:fs';
 import { type Cmd, type Fronting, type FrontingEnv, FrontingUnsupported, MARK, type Recipe, findTool } from './fronting.js';
 
@@ -86,7 +87,7 @@ export const linuxFronting: Fronting = {
   installHelper: (tool) => ({
     advice:
       tool === 'caddy'
-        ? 'install Caddy 2.8 or later: a release binary from https://caddyserver.com/download (or https://github.com/caddyserver/caddy/releases) on your PATH, or set proxy.caddy in config.yaml to where it is. Distribution packages may be older, and start a system Caddy on port 80 that you would need to disable'
+        ? 'install Caddy 2.7 or later: a release binary from https://caddyserver.com/download (or https://github.com/caddyserver/caddy/releases) on your PATH, or set proxy.caddy in config.yaml to where it is. Distribution packages may be older, and start a system Caddy on port 80 that you would need to disable'
         : 'install dnsmasq (on Debian and Ubuntu the `dnsmasq-base` package, which starts no system service: `sudo apt install dnsmasq-base`), then run `hallway setup` again',
   }),
 

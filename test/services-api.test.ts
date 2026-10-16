@@ -8,7 +8,7 @@ import { createApp } from '../server/index.ts';
 import { platformFor } from '../server/platform/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
 import { Services } from '../server/services/index.ts';
-import { tmpDir, tmpStore } from './fixture.ts';
+import { onWindows, tmpDir, tmpStore } from './fixture.ts';
 
 const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));
@@ -49,7 +49,7 @@ describe('service routes', () => {
     assert.equal((await req('/api/apps/demo/logs?lines=x')).status, 400);
   });
 
-  test('start / stop / restart a managed app, updating expected', async () => {
+  test('start / stop / restart a managed app, updating expected', { skip: onWindows('POSIX executables (exec bits, #! lines); Windows has no managed services yet') }, async () => {
     const { req, calls, store } = await setup();
     let r = await req('/api/apps/demo/service/stop', { method: 'POST', body: '{}' });
     assert.equal(r.status, 200, await r.clone().text());

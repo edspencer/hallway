@@ -14,11 +14,13 @@ import { fallbackHtml } from '../server/proxy/fallback.ts';
 import { restartCommands, startProxy } from '../server/proxy/index.ts';
 import { appHosts, dialAddress, httpsUrl, tldOf } from '../server/proxy/names.ts';
 import { defaultConfig, validateApp } from '../server/store/schema.ts';
-import { exitWatchdog, ROOT, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore } from './fixture.ts';
 
 await exitWatchdog();
 
 const GOLDEN = path.join(ROOT, 'test', 'fixtures', 'proxy');
+// the goldens and the admin socket hold POSIX paths: fronted mode is unsupported on Windows (D58)
+const POSIX_PATHS = { skip: onWindows("fronted mode is unsupported on Windows (Caddy's admin API is a Unix socket)") };
 const app = (slug: string, raw: Record<string, unknown>) => ({ slug, config: validateApp(slug, raw).value as AppConfig });
 const APPS = [
   app('review', { name: 'Local Review', port: 5622, proxy: { aliases: ['lr'] } }),
@@ -54,13 +56,13 @@ describe('names', () => {
 describe('the Caddy config', () => {
   const home = '/home/me/.hallway';
 
-  test('golden: the default localhost setup', () => {
+  test('golden: the default localhost setup', POSIX_PATHS, () => {
     const out = caddyConfig({ home, config: fronted(), apps: APPS, daemonPort: 4255 });
     assert.deepEqual(out.problems, []);
     golden('caddy-localhost.json', caddyText(out.json));
   });
 
-  test('golden: a custom domain, no IPv6, links on the high port', () => {
+  test('golden: a custom domain, no IPv6, links on the high port', POSIX_PATHS, () => {
     const out = caddyConfig({ home, config: fronted({ domain: { base: 'myname.internal', dashboard: 'myname.internal' }, proxy: { publicPort: 4443 } }), apps: APPS.slice(0, 1), daemonPort: 4255, ipv6: false });
     golden('caddy-custom.json', caddyText(out.json));
   });
@@ -79,7 +81,7 @@ describe('the Caddy config', () => {
     assert.equal(routes[0].match[0].host[0], 'hallway.localhost', 'the dashboard comes first');
   });
 
-  test('the admin API is a 0600 Unix socket in the data home, never TCP; nothing is persisted outside it', () => {
+  test('the admin API is a 0600 Unix socket in the data home, never TCP; nothing is persisted outside it', POSIX_PATHS, () => {
     const { json } = caddyConfig({ home, config: fronted(), apps: [], daemonPort: 4255 }) as any;
     assert.equal(json.admin.listen, 'unix//home/me/.hallway/state/caddy/admin.sock|0600');
     assert.equal(json.admin.config.persist, false);
@@ -90,7 +92,7 @@ describe('the Caddy config', () => {
     for (const s of Object.values(json.apps.http.servers) as any[]) for (const l of s.listen) assert.match(l, /^(127\.0\.0\.1|\[::1\]):/, 'loopback only');
   });
 
-  test('a very deep data home moves the socket to the temp directory (sun_path is ~104 bytes)', () => {
+  test('a very deep data home moves the socket to the temp directory (sun_path is ~104 bytes)', POSIX_PATHS, () => {
     const deep = '/x'.repeat(60);
     const p = caddyPaths(deep);
     assert.ok(Buffer.byteLength(p.socket) <= 100, p.socket);
@@ -209,7 +211,7 @@ const until = async (f: () => boolean, ms = 3000) => {
   }
 };
 
-describe('the daemon side: startProxy', () => {
+describe('the daemon side: startProxy', { skip: onWindows("fronted mode is unsupported on Windows (Caddy's admin API is a Unix socket)") }, () => {
   const homes: (() => void)[] = [];
   after(() => homes.forEach((c) => c()));
 

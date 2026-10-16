@@ -6,7 +6,8 @@
 // Units are named `hallway-daemon.service` and `hallway-app-<slug>.service` (D40): the hyphenated prefix lets one
 // drop-in directory, `hallway-.service.d/`, apply to all of them.
 import fs from 'node:fs';
-import path from 'node:path';
+// POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
+import { posix as path } from 'node:path';
 import { type Runner, type ServiceManager, ServiceManagerError, type ServiceSpec, type ServiceStatus, defaultRunner, removeFile, writeIfChanged } from './services.js';
 
 /** `hallway.app.my-app` → `hallway-app-my-app.service`. Slugs have no dots, so this can't collide. */

@@ -6,43 +6,47 @@ import path from 'node:path';
 import { DEFAULT_PORT, ROOT as PKG_ROOT, dataPaths, devOverrides, expandHome, packageRoot, parsePort, resolveHome, tildify } from '../server/config.ts';
 import { ROOT, tmpDir } from './fixture.ts';
 
-const HOME = '/home/someone';
+// native paths (D:\home\someone on Windows), so the expectations hold on every OS
+const HOME = path.resolve('/home/someone');
+const at = (...p: string[]) => path.join(HOME, ...p);
 
 describe('data home', () => {
   test('defaults to ~/.hallway with an empty environment', () => {
-    assert.equal(resolveHome({}, HOME), '/home/someone/.hallway');
-    assert.equal(resolveHome({ HALLWAY_HOME: '' }, HOME), '/home/someone/.hallway');
+    assert.equal(resolveHome({}, HOME), at('.hallway'));
+    assert.equal(resolveHome({ HALLWAY_HOME: '' }, HOME), at('.hallway'));
   });
 
   test('$HALLWAY_HOME overrides it, with ~ expanded and relative paths resolved', () => {
-    assert.equal(resolveHome({ HALLWAY_HOME: '/srv/hw' }, HOME), '/srv/hw');
-    assert.equal(resolveHome({ HALLWAY_HOME: '~/dotfiles/hallway' }, HOME), '/home/someone/dotfiles/hallway');
+    assert.equal(resolveHome({ HALLWAY_HOME: '/srv/hw' }, HOME), path.resolve('/srv/hw'));
+    assert.equal(resolveHome({ HALLWAY_HOME: '~/dotfiles/hallway' }, HOME), at('dotfiles', 'hallway'));
     assert.equal(resolveHome({ HALLWAY_HOME: '~' }, HOME), HOME);
     assert.equal(resolveHome({ HALLWAY_HOME: 'rel/dir' }, HOME), path.resolve('rel/dir'));
   });
 
   test('the layout separates editable files from machine-written ones', () => {
-    const p = dataPaths('/d');
-    assert.equal(p.config, '/d/config.yaml');
-    assert.equal(p.apps, '/d/apps');
-    assert.equal(p.bookmarks, '/d/bookmarks');
-    assert.equal(p.ignore, '/d/ignore.yaml');
-    for (const k of ['state', 'cache', 'generated', 'logs', 'backups'] as const) assert.equal(p[k], `/d/${k}`);
+    const d = path.resolve('/d');
+    const p = dataPaths(d);
+    assert.equal(p.config, path.join(d, 'config.yaml'));
+    assert.equal(p.apps, path.join(d, 'apps'));
+    assert.equal(p.bookmarks, path.join(d, 'bookmarks'));
+    assert.equal(p.ignore, path.join(d, 'ignore.yaml'));
+    for (const k of ['state', 'cache', 'generated', 'logs', 'backups'] as const) assert.equal(p[k], path.join(d, k));
   });
 });
 
 describe('~ handling', () => {
   test('expandHome only expands a leading ~ or ~/', () => {
     assert.equal(expandHome('~', HOME), HOME);
-    assert.equal(expandHome('~/Code/my-app', HOME), '/home/someone/Code/my-app');
+    assert.equal(expandHome('~/Code/my-app', HOME), at('Code', 'my-app'));
+    assert.equal(expandHome(`~${path.sep}Code`, HOME), at('Code'));
     assert.equal(expandHome('~other/x', HOME), '~other/x');
     assert.equal(expandHome('/abs/~/x', HOME), '/abs/~/x');
   });
 
   test('tildify shows the home directory as ~, and nothing else', () => {
-    assert.equal(tildify('/home/someone', HOME), '~');
-    assert.equal(tildify('/home/someone/.hallway', HOME), '~/.hallway');
-    assert.equal(tildify('/home/someone-else/.hallway', HOME), '/home/someone-else/.hallway');
+    assert.equal(tildify(HOME, HOME), '~');
+    assert.equal(tildify(at('.hallway'), HOME), `~${path.sep}.hallway`);
+    assert.equal(tildify(`${HOME}-else${path.sep}.hallway`, HOME), `${HOME}-else${path.sep}.hallway`);
     assert.equal(tildify('/srv/hallway', HOME), '/srv/hallway');
   });
 });

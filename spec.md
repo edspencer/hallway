@@ -105,6 +105,7 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D47 | Fronted mode: **Caddy runs as you** on loopback 4443/4480, its admin API a 0600 Unix socket; the only root parts are a fixed 443/80 redirect (pf on macOS, nftables on Linux), the trusted CA root and, for a custom domain, the resolver (to Hallway's user-level dnsmasq). No `--resume`: Caddy starts from `generated/caddy.json`. Dashboard at `hallway.localhost`. |
 | D48 | `hallway setup`/`teardown` are printed plans (`--print` runs nothing), idempotent by checking the real thing; refusals (`.local`, HSTS TLDs, a held 443) and warnings; doctor's networking checks; cards show `:port` beside the hostname. |
 | D54 | **Lost at last reboot:** what was seen in the last scans before the boot and isn't listening now, kept in `state/lost.json` until dismissed; Restart once / Make it a service are `hallway run` (never MCP). |
+| D58 | **Windows: supported where feasible, best effort.** Native, no administrator rights, checked on CI's hosted runners; in stages (baseline, scanner, scheduled-task services); fronted mode out of scope there. |
 
 ## 5. Glossary
 

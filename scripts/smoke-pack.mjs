@@ -4,7 +4,7 @@
 // home it creates, /api/health, /api/state, /llms.txt, the dashboard's index.html and one of its assets, the favicon,
 // the Host check). On Linux it also installs the daemon as a service and starts an app with `hallway run`, against a
 // stand-in `systemctl` that really runs the units (test/fixtures/fake-systemctl; there is no systemd user instance
-// to rely on in CI or a container). Cleans up after itself. Linux and macOS.
+// to rely on in CI or a container). Cleans up after itself. Linux, macOS and Windows.
 import { execFileSync, spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,6 +24,11 @@ const work = path.join(tmp, 'work'); // run from somewhere unrelated, so nothing
 for (const d of [prefix, home, data, work]) fs.mkdirSync(d);
 
 const step = (s) => console.log(`smoke:pack: ${s}`);
+const windows = process.platform === 'win32';
+// npm is npm.cmd on Windows, which execFile can't run without a shell: run npm's own script with this Node instead
+// (npm sets npm_execpath when it runs this script)
+const npm = (args, opts) =>
+  process.env.npm_execpath ? execFileSync(process.execPath, [process.env.npm_execpath, ...args], opts) : execFileSync('npm', args, { ...opts, shell: windows });
 const fake = path.join(root, 'test', 'fixtures', 'fake-systemctl');
 const freePort = () =>
   new Promise((resolve) => {
@@ -35,10 +40,13 @@ const freePort = () =>
 let server;
 
 // the installed bin, run as a user would: a fresh HOME and data home, none of this checkout's environment
-const env = { ...process.env, HOME: home, HALLWAY_HOME: data };
+const env = { ...process.env, HOME: home, USERPROFILE: home, HALLWAY_HOME: data };
 for (const k of ['PORT', 'HALLWAY_DEV', 'HALLWAY_DEV_BIND', 'HALLWAY_DEV_ALLOWED_HOSTS', 'NODE_OPTIONS']) delete env[k];
-const bin = path.join(prefix, 'bin', 'hallway');
-const run = (...args) => execFileSync(bin, args, { cwd: work, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+// a global install puts the bin in <prefix>/bin and the package in <prefix>/lib/node_modules; on Windows, npm's
+// hallway.cmd shim goes in <prefix> itself and the package in <prefix>/node_modules. The shim needs a shell to run.
+const bin = windows ? path.join(prefix, 'hallway.cmd') : path.join(prefix, 'bin', 'hallway');
+const installed = windows ? path.join(prefix, 'node_modules', 'hallway') : path.join(prefix, 'lib', 'node_modules', 'hallway');
+const run = (...args) => execFileSync(bin, args, { cwd: work, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: windows });
 function fails(args, status, pattern) {
   try {
     run(...args);
@@ -65,7 +73,7 @@ const statusWithHost = (url, host) =>
 
 try {
   step('npm pack');
-  const out = execFileSync('npm', ['pack', '--json', '--pack-destination', tmp], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+  const out = npm(['pack', '--json', '--pack-destination', tmp], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
   // prepack's build output comes first; the JSON starts at a line that is just "["
   const packed = JSON.parse(out.slice(out.search(/^\[$/m))).at(-1);
   const tarball = path.join(tmp, packed.filename);
@@ -75,16 +83,14 @@ try {
   for (const f of files) assert.ok(!/^(src|server|test|scripts|website|docs)\//.test(f), `the package shouldn't include ${f}`);
 
   step(`installing ${path.basename(tarball)} into ${prefix}`);
-  execFileSync('npm', ['install', '--global', '--prefix', prefix, '--no-audit', '--no-fund', tarball], { stdio: ['ignore', 'ignore', 'inherit'] });
-
-  const installed = path.join(prefix, 'lib', 'node_modules', 'hallway');
+  npm(['install', '--global', '--prefix', prefix, '--no-audit', '--no-fund', tarball], { stdio: ['ignore', 'ignore', 'inherit'] });
   const deps = fs.readdirSync(path.join(installed, 'node_modules'));
   for (const dev of ['react', 'react-dom', 'vite', 'tsx', 'typescript', '@changesets'])
     assert.ok(!deps.includes(dev), `${dev} is a build-time dependency; it shouldn't be installed`);
   // v2 criterion 3: screenshots are opt-in (`hallway thumbs enable`, D56); a base install has no browser at all
   for (const browser of ['playwright', 'playwright-core', 'puppeteer', 'puppeteer-core'])
     assert.ok(!fs.existsSync(path.join(installed, 'node_modules', browser)), `${browser} shouldn't be installed`);
-  const browserDirs = (dir) => fs.readdirSync(dir, { recursive: true }).filter((f) => /(^|\/)(ms-playwright|chromium[^/]*|headless_shell)$/.test(String(f)));
+  const browserDirs = (dir) => fs.readdirSync(dir, { recursive: true }).filter((f) => /(^|[\\/])(ms-playwright|chromium[^\\/]*|headless_shell)$/.test(String(f)));
   assert.deepEqual(browserDirs(prefix), [], 'no browser was downloaded into the install');
 
   step('--version, --help, usage errors');
@@ -98,7 +104,10 @@ try {
   assert.match(run('guide', '--snippet'), /^Never start a long-running dev or preview server directly/);
 
   step('serve');
-  server = spawn(bin, ['--port', '0'], { cwd: work, env, stdio: ['ignore', 'pipe', 'inherit'] });
+  // on Windows the shim would run under cmd.exe, and killing that leaves node running: run what the shim runs
+  server = windows
+    ? spawn(process.execPath, [path.join(installed, 'dist', 'server', 'cli.js'), '--port', '0'], { cwd: work, env, stdio: ['ignore', 'pipe', 'inherit'] })
+    : spawn(bin, ['--port', '0'], { cwd: work, env, stdio: ['ignore', 'pipe', 'inherit'] });
   let printed = '';
   const base = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`the server didn't start: ${printed}`)), 30000);
@@ -158,6 +167,15 @@ try {
     svc('service', 'rm', 'smoke-run');
     svc('service', 'uninstall');
     await assert.rejects(fetch(`http://localhost:${port}/api/health`), 'the daemon is gone after uninstall');
+  }
+
+  if (windows) {
+    // no managed services on Windows yet (D58): refused up front, nothing registered; fronted mode is refused too
+    step('Windows: run, service install and setup refuse with the reason');
+    fails(['run', 'smoke-run', '--', 'node', 'server.js'], 1, /managed services aren't supported on Windows yet/);
+    assert.ok(!fs.existsSync(path.join(data, 'apps', 'smoke-run.yaml')), 'a refused run registers nothing');
+    fails(['service', 'install'], 1, /managed services aren't supported on Windows yet/);
+    fails(['setup', '--print'], 1, /fronted mode isn't supported on Windows/);
   }
 
   step('ok');
