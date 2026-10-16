@@ -130,7 +130,7 @@ export const FEATURES = [
 		alt: 'Five app cards drawn as doors: Local Review, Notes and Slides healthy, each with a screenshot of the app in the door and a green uptime bar; Metrics down, boarded up, with a red square, the word down and red at the end of its bar; Storybook stopped, a closed grey door with a monogram',
 	},
 	{
-		ms: 'v0',
+		ms: 'v1',
 		title: 'Agents start servers properly',
 		body: 'Instead of a bare npm run dev, an agent runs hallway run. The server is handed to launchd (or systemd on Linux) so it outlives the session, keeps a stable port, and the command prints the URL and exits, so it never hangs a tool call.',
 		mock: 'run',

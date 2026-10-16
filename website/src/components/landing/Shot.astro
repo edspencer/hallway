@@ -27,8 +27,8 @@ const { name, alt, eager = false } = Astro.props;
 ---
 
 <figure class="shot">
-	<span class="shot-tag" aria-hidden="true">Real capture · demo data</span>
 	<Image src={SHOTS[name]} alt={alt} widths={[640, 960, 1400]} sizes="(min-width: 940px) 700px, 100vw" loading={eager ? 'eager' : 'lazy'} />
+	<figcaption><span class="shot-tag">Real capture · demo data</span></figcaption>
 </figure>
 
 <style>
@@ -49,19 +49,19 @@ const { name, alt, eager = false } = Astro.props;
 		height: auto;
 	}
 
+	/* Under the picture, not over it: an overlay hides part of a short capture on a phone. */
+	figcaption {
+		display: flex;
+		justify-content: flex-end;
+		padding: 0.4rem 0.7rem;
+		border-top: 1px solid var(--border-subtle);
+	}
+
 	.shot-tag {
-		position: absolute;
-		right: 0.7rem;
-		bottom: 0.55rem;
-		z-index: 2;
 		font-family: var(--font-mono);
 		font-size: 0.62rem;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: var(--text-subtle);
-		background: rgb(13 11 8 / 0.8);
-		border: 1px solid var(--border-subtle);
-		border-radius: 999px;
-		padding: 0.1rem 0.55rem;
 	}
 </style>
