@@ -22,6 +22,10 @@ always there without you starting anything:
 - **Linux:** a systemd user unit, `~/.config/systemd/user/hallway-daemon.service`, enabled and started. A user unit
   runs while you are logged in; to keep it running without a login session (and from boot), enable lingering once
   with `loginctl enable-linger $USER`. Hallway never does that for you, and `hallway doctor` warns while it is off.
+- **Windows** (best effort): a scheduled task, `\hallway.daemon`, that starts when you log on and runs
+  `hallway supervise`, which keeps the daemon running and writes its logs. Its files are in
+  `%LOCALAPPDATA%\hallway\tasks\`. It runs while you're logged on. No administrator rights are needed, and none
+  are asked for.
 
 It is idempotent: run it again any time. Undo it with `hallway service uninstall`; `hallway service status` says
 whether it is running.
@@ -48,7 +52,7 @@ hallway open         # open the dashboard in your browser
 
 | | |
 | --- | --- |
-| **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort: the dashboard, health checks, the port scanner and bookmarks work, with no fronted mode or `hallway service` yet. |
+| **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort (per-user scheduled tasks): everything but fronted mode works. |
 | **Node** | 22.13 or later (for the built-in `node:sqlite` that holds uptime history). |
 | **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`. |
 | **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and one guided sudo step. On Linux also systemd, `nft` and a system CA store. See [Setup](/networking/setup-and-doctor/). |

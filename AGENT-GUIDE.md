@@ -19,9 +19,7 @@ dev servers directly. In **direct mode** (the default) every app's address is `h
 mode is on, and each app's `url` in `/api/state` is the address to give the user. Don't run `hallway setup` or `hallway teardown` yourself: they need sudo, so they're the
 user's to run.
 
-On Windows (best effort): the dashboard, the YAML files, health checks, the port scanner, bookmarks, this guide and
-MCP work; there is no fronted mode, and until a later version `hallway run` refuses, so start servers as you normally
-would and register them (below).
+On Windows (best effort) all of that works except fronted mode: `hallway run` makes a per-user scheduled task.
 
 ## The rule: don't leave servers running in your session
 
@@ -30,7 +28,7 @@ A dev or preview server started inside your session (`npm run dev`, `vite`, `ast
 reboot. So:
 
 - Start long-running servers with **`hallway run <slug> -- <command>`**. The server is then owned by the operating
-  system's service manager (launchd on macOS, systemd on Linux) rather than your session; it gets a stable port and a
+  system's service manager (launchd on macOS, systemd on Linux, Task Scheduler on Windows) rather than your session; it gets a stable port and a
   URL, which the command prints before exiting (exit 0; exit 1, with the last log lines, if it didn't come up within
   30 s). Pass the port through, **quoted** so your shell leaves it for Hallway to fill in:
   `hallway run my-app -- npx vite --port '$PORT' --strictPort` (without `--strictPort`, Vite silently moves to

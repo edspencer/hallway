@@ -33,7 +33,8 @@ Hallway gives them all a front door:
 ## Quick start
 
 You need Node.js 22.13 or later, on macOS or Linux. Windows is supported where feasible, best effort: the dashboard,
-health checks, the port scanner and bookmarks run there today, without fronted mode ([details](docs/09-decisions.md)).
+health checks, the port scanner, bookmarks and managed services (as scheduled tasks) run there, without fronted mode
+([details](docs/09-decisions.md)).
 
 ```sh
 npm i -g hallway
