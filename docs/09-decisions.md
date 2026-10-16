@@ -372,6 +372,112 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   at its default, generated from the schema. Writing the defaults as live values would freeze them: a later release
   could never change a default for an existing user. None of these files is ever replaced once it exists.
 
+### D40 — systemd user units for Linux, and how launchd's keys map onto them (2026-10-16)
+
+- Linux's managed services are systemd **user** units (D26) named `hallway-daemon.service` and
+  `hallway-app-<slug>.service`, in `$XDG_CONFIG_HOME/systemd/user` (default `~/.config/systemd/user`). The launchd
+  labels (`hallway.daemon`, `hallway.app.<slug>`, D19) map one to one by turning dots into hyphens; slugs have no
+  dots, so the mapping can't collide. Hyphens rather than dots because systemd treats the part before the first `-` as
+  a prefix: one drop-in directory, `hallway-.service.d/`, applies to every Hallway unit.
+- The keys: `RunAtLoad` → `[Install] WantedBy=default.target` plus `systemctl --user enable`; `KeepAlive` →
+  `Restart=always` (a `systemctl stop` is never undone by it); `ThrottleInterval 10` → `RestartSec=10`;
+  `StandardOutPath`/`StandardErrorPath` → `StandardOutput=append:`/`StandardError=append:` on the same
+  `logs/<slug>.out.log` / `.err.log` files. `%` is escaped everywhere, `$` in `ExecStart`, and arguments are quoted
+  only when they need it.
+- A unit starts with the user's systemd instance, i.e. at login. Running without a login session (and at boot) needs
+  lingering (`loginctl enable-linger`), which is a one-off privileged choice for the user: `hallway service install`
+  says so and `hallway doctor` warns while it's off. Hallway never enables it itself.
+- The renderers (`server/platform/launchd.ts`, `systemd.ts`) are pure functions pinned by golden files
+  (`test/fixtures/services/`); the lifecycle verbs go through a command runner that the tests mock, so both platforms
+  are tested on both OSes. Where the tools exist, `systemd-analyze verify` and `plutil -lint` check the output too.
+- **Rejected:** dotted unit names (`hallway.daemon.service`, legal, but no shared drop-in prefix); system units (need
+  root, D3); `Restart=on-failure` for KeepAlive (launchd's KeepAlive restarts after a clean exit too).
+
+### D41 — Stopping a managed service is durable; what start, stop and remove do to the YAML (2026-10-16)
+
+- `hallway stop` must keep a job stopped across logins, not just until the next one: `expected: stopped` says so. A
+  LaunchAgent in `~/Library/LaunchAgents` is loaded again at every login whatever `bootout` did, and an enabled systemd
+  unit starts again too. So stop is **bootout + `launchctl disable`** on macOS and **stop + `systemctl --user
+  disable`** on Linux, and start undoes it (`launchctl enable` before `bootstrap`; `enable`/`disable` per
+  `runAtLoad` before `start`). This extends docs/04's lifecycle table, which had bootout alone.
+- The YAML: start (and `hallway run`) set `expected: running` for a job that starts at login or restarts
+  (`runAtLoad` or `keepAlive`), and `expected: adhoc` for one that does neither (a `hallway run` without `--persist`),
+  so it reads as *stopped*, not *down*, after a reboot. Stop sets `expected: stopped`. Restart changes nothing.
+  `hallway service rm` removes the job and the `service:` block and leaves the app declared; `hallway app rm` of a
+  managed app removes its job first, then moves the file to `backups/removed/`.
+- Each job leaves a manifest in `generated/services/<label>.json` (the resolved program, PATH, Node path and version,
+  when it was generated), so `hallway doctor` can tell when the recorded Node has been uninstalled, and
+  `hallway service regenerate` can say what it changed. The unit or plist also carries the Node version as a comment.
+- `regenerate` rewrites every definition from the YAML and the current Node and PATH, restarts the jobs that were
+  running onto the new definition, and leaves stopped ones stopped.
+- **Rejected:** bootout alone (the job comes back at the next login, contradicting `expected: stopped`); deleting the
+  plist on stop (loses the definition `start` needs, and the dashboard's "managed" badge).
+
+### D42 — `$PORT` in a command, and the environment a job gets (2026-10-16)
+
+- `$PORT`, `${PORT}`, `$HOST` and `${HOST}` in a `service.command`'s arguments are replaced with the app's values when
+  the job is generated, by Hallway, the same on both platforms: launchd never expands variables in
+  `ProgramArguments`, and systemd's `ExecStart` rules differ from a shell's. The YAML keeps the command as written
+  (`["vite", "--port", "$PORT", "--strictPort"]`), so it stays right if the file is edited. The shell that runs
+  `hallway run` would expand an unquoted `$PORT` itself (usually to nothing), so the docs say to quote it:
+  `hallway run demo -- vite --port '$PORT' --strictPort`. Other variables are left alone.
+- A job's environment is exactly: `PATH` (D45), `HOST` and `HOSTNAME` (the app's `host`, default `127.0.0.1`), then the
+  app's `service.env` (which may override those, e.g. to listen elsewhere on purpose), then `PORT`, which is always
+  the app's port. The daemon's job gets `PATH`, plus `HALLWAY_HOME` when the installing shell set one, and never
+  `PORT`: its port comes from `config.yaml`.
+- **Rejected:** wrapping every command in `sh -c` so the shell expands variables (adds a process, changes signal
+  handling and quoting, and hides the real program from the PATH-trap resolution).
+
+### D43 — Log rotation: copy, then truncate, in the daemon (resolves Q-LOG-ROTATION, 2026-10-16)
+
+- The daemon checks every `*.log` in `logs/` (managed apps' and its own) every 15 s. A file above
+  `services.logMaxBytes` is copied to `<file>.1` (older generations shift up to `services.logGenerations`; the oldest
+  is dropped) and truncated in place, because launchd and systemd hold the file open for appending and a rename would
+  leave them writing to the old name.
+- Only the last `logMaxBytes` of the file are copied, starting at a line break, so a rotated file is never larger
+  than the limit however much was written between two checks (v1 criterion 12). The cost: lines written between the
+  copy and the truncation, and anything older than the limit within one check, are dropped.
+- **Rejected:** `newsyslog` on macOS (needs root and a file in `/etc/newsyslog.d`, and nothing like it on Linux);
+  signalling the process to reopen its logs (most dev servers don't handle that); rotating by rename.
+
+### D44 — How the CLI finds the daemon, and what it does without one (2026-10-16)
+
+- Commands that are richer with live data (`status`, `scan`, `claim`, `ignore`, `app ls`, `doctor`, `open`) look for the
+  daemon at `127.0.0.1:<config.yaml port>` (default 4255) and check `/api/health` says Hallway. **Not `$PORT`**: in an
+  agent's or a developer's shell, `$PORT` is usually some app's port (D36's `$PORT` is for `hallway serve` only).
+- Without a daemon they read the files themselves: `status` probes each app once; `ignore <port>` writes
+  `ignore.yaml` directly. Writes always go through the store (D7) in the CLI's own process; a running daemon picks them
+  up through its watcher. `bookmark ls` always reads the files, which are all there is to a bookmark.
+- `hallway doctor` is read-only: on a machine where the data home doesn't exist yet it warns and creates nothing.
+- **Rejected:** writing through the daemon's HTTP API whenever it's running (two code paths for every write, and the
+  CLI must work without it anyway).
+
+### D45 — `hallway run`'s details, and the PATH a job gets (2026-10-16)
+
+- **Re-running.** `hallway run <slug>` with no command reuses the recorded one and the recorded `--persist` choice
+  (`runAtLoad`/`keepAlive`), and restarts the job. With a command, `--persist` (or its absence) decides afresh. An
+  existing app keeps its port; `--port` with a different number is refused (D17), and `--cwd` defaults to the current
+  directory when a command is given, else the recorded one.
+- **Refusals before anything starts:** a broken app file (never written over); a port that something Hallway didn't
+  start is already listening on (it would fail to bind, or look as if it had come up); no command recorded or given.
+- **Waiting.** Up to 30 s for a TCP connect to the app's host and port. If the job has exited (two status checks a
+  second apart, so a job still being spawned isn't taken for dead) it stops early and reports the exit status. On
+  failure it prints the last 30 lines of both logs and exits 1, and leaves the app declared (fix it and re-run).
+- **PATH** (docs/04, "The PATH trap"): the resolved Node's own `bin` first (also for non-Node commands, so the job's
+  child `node`/`npm`/`npx` match), then the current PATH minus per-shell directories (`fnm_multishells`, npx's
+  `_npx` cache, `npm run`'s `node-gyp-bin`), relative entries and missing ones, then the usual system directories that
+  exist. `command[0]` becomes the `realpath` of what `which` finds; a script whose `#!` line runs Node (`npx`, any
+  `#!/usr/bin/env node` tool) is run as `<node> [its node flags] <script>`, as docs/04's template does; a bare `node`
+  is the resolved Node.
+- **Ports for new apps** (docs/04): the first port in `ports.assignRange` that no app declares, nothing answers on
+  (IPv4 and IPv6 loopback) and that can be bound, skipping a short list of well-known ports in the range (Vite's
+  5173/5174, PostgreSQL, Live Server, Prisma Studio, Kibana, AMQP, VNC, CouchDB, Local Review's 5622, …).
+- **Verification without a service manager.** Machines without a systemd user instance (containers, CI runners) run
+  the end-to-end tests and `smoke:pack` against `test/fixtures/fake-systemctl`, which reads the units Hallway writes
+  and really runs them, detached. CI also runs `scripts/services-real.mjs` against the real launchd (macOS runner)
+  and systemd (Ubuntu runner, lingering on); it refuses to run anywhere else, because it uses the real labels and
+  service directories.
+
 ## Alternatives considered for the whole product
 
 | Option | Why not |

@@ -83,7 +83,8 @@ try {
   step(`${darwin ? 'launchd (gui/' + uid + ')' : 'systemd --user'}; data home ${data}`);
   hw('app', 'ls'); // creates the data home
   const port = await freePort();
-  fs.appendFileSync(path.join(data, 'config.yaml'), `port: ${port}\n`);
+  // a small log limit, so the rotation step below doesn't need 10 MB of output
+  fs.appendFileSync(path.join(data, 'config.yaml'), `port: ${port}\nservices:\n  logMaxBytes: 65536\n  logGenerations: 2\n`);
 
   step('service install');
   const installed = hw('service', 'install');
@@ -128,6 +129,26 @@ try {
   }, 40000);
   step(`restarted: pid ${pid1} → ${pid2}`);
 
+  step('log rotation: copy, then truncate, while the service manager keeps writing');
+  fs.writeFileSync(
+    path.join(work, 'noisy.js'),
+    "process.stdout.write(('x'.repeat(99) + '\\n').repeat(3000)); require('http').createServer((q, s) => { console.log('hit'); s.end('ok') }).listen(Number(process.env.PORT), process.env.HOST)",
+  );
+  const noisy = hw('run', 'real-noisy', '--', 'node', 'noisy.js');
+  const noisyUrl = noisy.match(/real-noisy is up: (http:\/\/localhost:\d+)/)?.[1];
+  assert.ok(noisyUrl, noisy);
+  const out = path.join(data, 'logs', 'real-noisy.out.log');
+  await until('the daemon to rotate real-noisy.out.log', () => fs.existsSync(`${out}.1`), 40000);
+  for (let i = 0; i < 5; i++) await fetch(noisyUrl);
+  await sleep(500);
+  const sizes = { live: fs.statSync(out).size, rotated: fs.statSync(`${out}.1`).size };
+  step(`rotated: ${JSON.stringify(sizes)}`);
+  assert.ok(sizes.rotated <= 65536, 'the rotated file is within the limit');
+  // had the service manager not opened the log for appending, the writer would carry on at its old offset (~300 KB)
+  assert.ok(sizes.live < 4096, `writes after the truncation land at the start of the file (${sizes.live} bytes)`);
+  assert.match(fs.readFileSync(out, 'utf8'), /^(hit\n)+$/);
+  hw('service', 'rm', 'real-noisy');
+
   step('service regenerate, doctor');
   console.log(hw('service', 'regenerate'));
   const doc = JSON.parse(execFileSync(process.execPath, [cli, 'doctor', '--json'], { cwd: work, env, encoding: 'utf8' }));
@@ -148,7 +169,7 @@ try {
   step('ok');
 } finally {
   // best effort, in case an assertion stopped the run halfway
-  for (const args of [['service', 'rm', 'real-demo'], ['service', 'rm', 'real-kept'], ['service', 'uninstall']])
+  for (const args of [['service', 'rm', 'real-demo'], ['service', 'rm', 'real-kept'], ['service', 'rm', 'real-noisy'], ['service', 'uninstall']])
     try {
       execFileSync(process.execPath, [cli, ...args], { cwd: work, env, stdio: 'ignore' });
     } catch {
