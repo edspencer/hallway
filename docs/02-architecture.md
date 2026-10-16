@@ -269,7 +269,7 @@ type ServerEvent =
   | { type: 'apps'; reason: string }                        // list changed
   | { type: 'state'; slug: string; state: AppState }        // health transition only, not every probe
   | { type: 'bookmarks'; group?: string }
-  | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' }
+  | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' | 'config' }
   | { type: 'thumb'; slug: string }
   | { type: 'config' }
   | { type: 'reboot'; lost: string[] };                     // v1

@@ -132,12 +132,13 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
     : null;
 
   /** The latest scan's unknown listeners, with today's ignore rules and declared ports applied (a claim or an
-   * ignore takes effect at once, without waiting for the next scan). */
+   * ignore takes effect at once, without waiting for the next scan). Nothing while `scan.enabled` is off: the last
+   * scan before it was turned off would otherwise stay in the tray for good, ageing. */
   function observed(): Observation[] {
     const r = scanner?.last();
-    if (!r) return [];
-    const known = knownPorts();
     const cfg = config().scan;
+    if (!r || !cfg.enabled) return [];
+    const known = knownPorts();
     const opts = { minPort: cfg.minPort, includeEphemeralPorts: cfg.includeEphemeralPorts, ignore: ignore(), selfPid: process.pid, selfPorts };
     return [...r.listeners, ...r.other].filter(
       (o) => !known.has(o.port) && !noiseReason({ pid: o.pid, process: o.process, port: o.port, addresses: o.addresses }, opts, o.cwd),
@@ -202,11 +203,18 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   });
 
   // Config and app files change under us (API writes and hand edits alike): re-read the probe targets. One of the
-  // bus's subscribers is this one, so "a dashboard is open" means more than one.
+  // bus's subscribers is this one, so "a dashboard is open" means more than one. Turning the scanner off empties the
+  // tray, and turning it back on scans straight away rather than after a whole interval.
+  let scanEnabled = config().scan.enabled;
   const onEvent = (e: ServerEvent) => {
     if (e.type === 'app' || e.type === 'apps' || e.type === 'config') {
       health.prober.refresh();
       historyCache.clear();
+    }
+    if (e.type === 'config' && scanner && config().scan.enabled !== scanEnabled) {
+      scanEnabled = config().scan.enabled;
+      if (scanEnabled) scanner.scan().catch(() => {});
+      bus.emit({ type: 'observed', reason: 'config' });
     }
   };
   const unsubscribe = bus.subscribe(onEvent);

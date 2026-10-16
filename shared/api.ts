@@ -391,7 +391,7 @@ export type ServerEvent =
   /** A health transition (not every probe). */
   | { type: 'state'; slug: string; state: AppState }
   | { type: 'bookmarks'; group?: string }
-  | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' }
+  | { type: 'observed'; reason: 'scan' | 'claimed' | 'ignored' | 'config' }
   | { type: 'thumb'; slug: string }
   | { type: 'config' }
   /** v1. */
