@@ -63,6 +63,8 @@ export class Shots {
   private mem = new Map<string, Shot | null>();
   private failed = new Map<string, number>();
   private queue: { slug: string; url: string; pid: number | null }[] = [];
+  /** Queued or being shot now. */
+  private pending = new Set<string>();
   private running: Promise<void> | null = null;
   private browser: BrowserLike | null = null;
   private launching: Promise<BrowserLike | null> | null = null;
@@ -100,7 +102,8 @@ export class Shots {
   want(slug: string, url: string, pid: number | null, force = false): boolean {
     if (this.stopped || !safe(slug)) return false;
     if (!force && !shotDue(this.get(slug), { pid, url }, this.now(), this.failed.get(slug))) return false;
-    if (this.queue.some((q) => q.slug === slug)) return false;
+    if (this.pending.has(slug)) return false;
+    this.pending.add(slug);
     this.queue.push({ slug, url, pid });
     this.pump();
     return true;
@@ -111,7 +114,11 @@ export class Shots {
     this.running = (async () => {
       while (this.queue.length && !this.stopped) {
         const job = this.queue.shift()!;
-        await this.take(job.slug, job.url, job.pid);
+        try {
+          await this.take(job.slug, job.url, job.pid);
+        } finally {
+          this.pending.delete(job.slug);
+        }
       }
     })().finally(() => {
       this.running = null;
@@ -208,6 +215,7 @@ export class Shots {
   /** Screenshots turned off: drop the queue, close the browser and forget every picture. */
   async reset() {
     this.queue.length = 0;
+    this.pending.clear();
     await this.running;
     if (this.idle) clearTimeout(this.idle);
     await this.closeBrowser();
@@ -232,6 +240,7 @@ export class Shots {
   async stop() {
     this.stopped = true;
     this.queue.length = 0;
+    this.pending.clear();
     if (this.idle) clearTimeout(this.idle);
     await this.running;
     await this.closeBrowser();
