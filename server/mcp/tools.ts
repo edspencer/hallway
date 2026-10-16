@@ -4,7 +4,7 @@
 // `update_app` refuse `service`, `update_app` refuses a port change (D17), `remove_app` refuses a managed app.
 import { McpServer, ResourceTemplate, type CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod';
-import type { AppState, AppView, HistoryWindow } from '../../shared/api.js';
+import type { AppState, AppView, HistoryWindow, LostNotice } from '../../shared/api.js';
 import { claimObserved, ignoreObserved } from '../api.js';
 import { VERSION, tildify } from '../config.js';
 import type { EventBus } from '../events.js';
@@ -71,6 +71,24 @@ const opts = (etag: string | undefined) => ({ ifMatch: etag ?? null });
 // ---------------------------------------------------------------------------------------------------------------
 // Views: compact for lists, full for one app
 // ---------------------------------------------------------------------------------------------------------------
+
+/** "Lost at last reboot" for get_status: what each was, where it ran and its command, and whether it's back. */
+function lostSummary(n: LostNotice | null) {
+  if (!n) return null;
+  return {
+    bootTime: n.bootTime,
+    items: n.items.map((i) => ({
+      id: i.id,
+      label: i.label,
+      port: i.port,
+      slug: i.slug,
+      dir: i.identity.projectDir ?? i.identity.cwd ?? i.cwd,
+      branch: i.identity.branch,
+      command: i.command?.join(' ') ?? i.identity.command,
+      back: i.back,
+    })),
+  };
+}
 
 function summary(a: AppView) {
   return {
@@ -175,7 +193,7 @@ export function createMcpServer(ctx: McpContext, era: 'legacy' | 'modern' = 'mod
     'get_status',
     {
       title: 'Status of every app',
-      description: 'Every app with its state, URL and 24-hour uptime, counts by state, and how many observed listeners are waiting to be named.',
+      description: 'Every app with its state, URL and 24-hour uptime, counts by state, how many observed listeners are waiting to be named, and what was lost at the last reboot (null if nothing).',
       inputSchema: z.object({ filter: z.string().optional().describe('Only apps whose slug, name, URL, description, port or tags contain this.') }),
       annotations: { readOnlyHint: true },
     },
@@ -189,6 +207,8 @@ export function createMcpServer(ctx: McpContext, era: 'legacy' | 'modern' = 'mod
         observed: providers.all('observed').length,
         healthChecks: providers.has('appHealth'),
         problems: store.allProblems().filter((p) => p.severity === 'error').length,
+        // read-only: restarting one is `hallway run` or the dashboard, never MCP (D10, D53)
+        lostAtReboot: lostSummary(providers.first('lost')),
       };
     }),
   );

@@ -27,6 +27,8 @@ export interface LiveFacts {
   base: string;
   apps: { slug: string; name: string; port: number | null; url: string | null; expected: string | null; error: boolean }[];
   groups: { group: string; title: string; links: number }[];
+  /** "Lost at last reboot", when there's a notice (D54). */
+  lost?: { bootTime: string; items: { id: string; label: string; port: number; slug: string | null; dir: string | null; branch: string | null; command: string | null; back: boolean }[] } | null;
 }
 
 export interface GuideInput {
@@ -100,7 +102,21 @@ function liveFacts(i: GuideInput, f: LiveFacts): string {
     apps,
     `- Bookmark groups:`,
     groups,
+    ...lostFacts(f),
   ].join('\n');
+}
+
+/** What the last reboot took down, and how to start each again (the dashboard's banner, for agents). */
+function lostFacts(f: LiveFacts): string[] {
+  const l = f.lost;
+  if (!l?.items.length) return [];
+  return [
+    `- Lost at the last reboot (the machine booted at ${l.bootTime}; these were running before it and weren't after). Start one again with \`hallway run <slug> --cwd <dir> -- <command>\` (\`--persist\` to keep it across reboots); \`hallway lost dismiss <id>\` clears one:`,
+    ...l.items.map(
+      (i) =>
+        `  - ${code(i.id)}: ${i.label}, port ${i.port}${i.dir ? `, in ${code(i.dir)}${i.branch ? ` @ ${i.branch}` : ''}` : ''}${i.command ? `, ran ${code(i.command)}` : ''}${i.slug ? `, app ${code(i.slug)}` : ''}${i.back ? ' (back: listening again)' : ''}`,
+    ),
+  ];
 }
 
 function offlineFacts(i: GuideInput): string {
