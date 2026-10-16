@@ -1,5 +1,17 @@
 # hallway
 
+## 0.4.0
+
+### Minor Changes
+
+- [#25](https://github.com/edspencer/hallway/pull/25) [`ca5f3ae`](https://github.com/edspencer/hallway/commit/ca5f3ae25eb2a115647afe8fc221f27a34e3346a) Thanks [@edspencer](https://github.com/edspencer)! - Windows: the port scanner. Hallway now finds the web servers listening on a Windows machine, with each one's working directory (read without administrator rights), project, git branch and command line, so the observed tray, Claim and `hallway scan` / `claim` work there. A process whose directory can't be read (elevated, another user's, or 32-bit) shows its command line instead, on every OS.
+
+### Patch Changes
+
+- [#24](https://github.com/edspencer/hallway/pull/24) [`490f359`](https://github.com/edspencer/hallway/commit/490f35948dcd45697c1f2956b8241de485aa765e) Thanks [@edspencer](https://github.com/edspencer)! - On Linux, `hallway setup`'s advice when Caddy is missing asks for Caddy 2.7 or later (it said 2.8; 2.7 is the minimum it checks for).
+
+- [#20](https://github.com/edspencer/hallway/pull/20) [`cc0e2e6`](https://github.com/edspencer/hallway/commit/cc0e2e63ff1f5b79430234e44848541cde4158be) Thanks [@edspencer](https://github.com/edspencer)! - Windows, best effort: the daemon, dashboard, health checks, bookmarks, MCP and the CLI's file commands now run natively on Windows (no administrator rights). The port scanner and `hallway run` / `hallway service` aren't available there yet and say so; `hallway setup` refuses, since fronted mode is out of scope on Windows. On every OS, `hallway run` now records `cwd: ~/…` with the same home directory it is later expanded with.
+
 ## 0.3.1
 
 ### Patch Changes
