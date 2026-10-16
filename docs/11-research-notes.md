@@ -469,6 +469,32 @@ Node 22.13, 22 and 24. **Nothing has been run on a real Windows desktop**; each 
   daemon, so the tray shows the command line instead), and WSL's servers (their listeners show up as `wslrelay` or
   `wsl`, with no Windows directory).
 
+**Stage C, managed services (D60):**
+
+- CI's "Services (real Task Scheduler)" job (`scripts/services-real.mjs`, the same script as the launchd and systemd
+  jobs) passed on its first run on `windows-latest`. It covered:
+  - `service install` registering `\hallway.daemon` and the daemon answering;
+  - `service restart`;
+  - `hallway run` and its logs;
+  - stop (task disabled, port closed), start and restart;
+  - `--persist` bringing an app back after its process was killed (pid 7236 → 3032, through the supervisor's 10 s
+    restart);
+  - log rotation while the job writes: rotated 65 512 bytes; the live file was 20 bytes after the truncation, so
+    the supervisor's append-mode handle writes at the new end;
+  - regenerate, doctor, and removal leaving no task and no files.
+- The runner's account has an interactive session, so `InteractiveToken` tasks run on `/Run`.
+- **Found by that run:** doctor split a job's PATH on `:`, which cut every `C:\…` entry in two and warned about all
+  of them. It now uses the OS's delimiter, and the script asserts there are no PATH warnings.
+- npm on Windows puts three files per bin in its prefix: `vite` (a `#!/bin/sh` script), `vite.cmd` and `vite.ps1`.
+  Looking `vite` up without `PATHEXT` finds the sh script, which Windows can't run. Hallway looks names up with
+  `PATHEXT`, as cmd.exe does, and runs a `.cmd` through `cmd.exe /d /s /c` (Node refuses to spawn one without a shell
+  since the CVE-2024-27980 fix).
+- Unverified on a real Windows desktop:
+  - a real logon starting the tasks (the runner has no logon to test with), and a logoff stopping them;
+  - `conhost --headless` showing no window (the runner has no visible desktop);
+  - a standard user registering tasks: the runner is an administrator. A standard user may register tasks for
+    themselves by default, but that's untested here.
+
 ## Prior art status (checked 2026-09-16 via GitHub API / npm)
 
 | Project | Last push | Stars | Notes |
