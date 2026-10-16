@@ -262,7 +262,7 @@ export function startThumbs({ store, bus, providers, dir = path.join(store.home,
     }
     if (e.type === 'bookmarks') warmBookmarks();
     if (e.type === 'apps' || (e.type === 'app' && e.reason === 'config')) warmApps();
-  });
+  }, { internal: true });
   const off = providers.register({
     name: 'thumbs',
     thumb,

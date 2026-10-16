@@ -1,0 +1,237 @@
+{
+  "admin": {
+    "listen": "unix//home/me/.hallway/state/caddy/admin.sock|0600",
+    "config": {
+      "persist": false
+    }
+  },
+  "storage": {
+    "module": "file_system",
+    "root": "/home/me/.hallway/state/caddy/data"
+  },
+  "apps": {
+    "http": {
+      "http_port": 4480,
+      "https_port": 4443,
+      "servers": {
+        "hallway": {
+          "listen": [
+            "127.0.0.1:4443",
+            "[::1]:4443"
+          ],
+          "protocols": [
+            "h1",
+            "h2"
+          ],
+          "routes": [
+            {
+              "@id": "hallway-dashboard-hallway.localhost",
+              "match": [
+                {
+                  "host": [
+                    "hallway.localhost"
+                  ]
+                }
+              ],
+              "terminal": true,
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "127.0.0.1:4255"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "@id": "hallway-app-legacy-legacy.localhost",
+              "match": [
+                {
+                  "host": [
+                    "legacy.localhost"
+                  ]
+                }
+              ],
+              "terminal": true,
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "127.0.0.1:8000"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "@id": "hallway-app-review-review.localhost",
+              "match": [
+                {
+                  "host": [
+                    "review.localhost"
+                  ]
+                }
+              ],
+              "terminal": true,
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "127.0.0.1:5622"
+                    }
+                  ],
+                  "headers": {
+                    "request": {
+                      "set": {
+                        "Host": [
+                          "{http.reverse_proxy.upstream.hostport}"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "@id": "hallway-app-review-lr.localhost",
+              "match": [
+                {
+                  "host": [
+                    "lr.localhost"
+                  ]
+                }
+              ],
+              "terminal": true,
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "127.0.0.1:5622"
+                    }
+                  ],
+                  "headers": {
+                    "request": {
+                      "set": {
+                        "Host": [
+                          "{http.reverse_proxy.upstream.hostport}"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "@id": "hallway-app-slides-slides.localhost",
+              "match": [
+                {
+                  "host": [
+                    "slides.localhost"
+                  ]
+                }
+              ],
+              "terminal": true,
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "[::1]:4321"
+                    }
+                  ],
+                  "headers": {
+                    "request": {
+                      "set": {
+                        "Host": [
+                          "{http.reverse_proxy.upstream.hostport}"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "errors": {
+            "routes": [
+              {
+                "handle": [
+                  {
+                    "handler": "rewrite",
+                    "uri": "/fallback.html"
+                  },
+                  {
+                    "handler": "headers",
+                    "response": {
+                      "set": {
+                        "Cache-Control": [
+                          "no-store"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "handler": "file_server",
+                    "root": "/home/me/.hallway/generated",
+                    "status_code": "{http.error.status_code}"
+                  }
+                ]
+              }
+            ]
+          },
+          "automatic_https": {
+            "disable_redirects": true
+          }
+        },
+        "hallway-http": {
+          "listen": [
+            "127.0.0.1:4480",
+            "[::1]:4480"
+          ],
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "static_response",
+                  "status_code": 308,
+                  "headers": {
+                    "Location": [
+                      "https://{http.request.host}{http.request.uri}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tls": {
+      "automation": {
+        "policies": [
+          {
+            "issuers": [
+              {
+                "module": "internal",
+                "ca": "local"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "pki": {
+      "certificate_authorities": {
+        "local": {
+          "name": "Hallway Local CA",
+          "install_trust": false
+        }
+      }
+    }
+  }
+}

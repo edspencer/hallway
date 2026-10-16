@@ -16,28 +16,26 @@ export const HEARTBEAT_MS = 25_000;
 
 export class EventBus {
   private listeners = new Set<Listener>();
-  private passive = new Set<Listener>();
+  private internal = new Set<Listener>();
   private timers = new Map<string, { t: NodeJS.Timeout; fn: () => ServerEvent | ServerEvent[] | null | void }>();
 
-  /**
-   * `passive`: a listener that isn't someone watching (the MCP server's change notifications), so it doesn't count in
-   * `size` and doesn't make the prober think a dashboard is open.
-   */
-  subscribe(l: Listener, { passive = false } = {}): () => void {
-    (passive ? this.passive : this.listeners).add(l);
+  /** `internal`: the daemon's own modules (the prober, the thumbnailer, the proxy), which `size` doesn't count. */
+  subscribe(l: Listener, { internal = false } = {}): () => void {
+    this.listeners.add(l);
+    if (internal) this.internal.add(l);
     return () => {
       this.listeners.delete(l);
-      this.passive.delete(l);
+      this.internal.delete(l);
     };
   }
 
-  /** How many subscribers (open dashboards, mostly): the prober probes faster while there are any. */
+  /** How many outside subscribers (open dashboards, mostly): the prober probes faster while there are any. */
   get size() {
-    return this.listeners.size;
+    return this.listeners.size - this.internal.size;
   }
 
   emit(e: ServerEvent) {
-    for (const l of [...this.listeners, ...this.passive]) {
+    for (const l of this.listeners) {
       try {
         l(e);
       } catch {

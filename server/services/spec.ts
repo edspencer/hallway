@@ -83,3 +83,39 @@ export function daemonSpec(home: string, cliScript: string, ctx: SpecContext): S
     node,
   };
 }
+
+export const CADDY_LABEL = 'hallway.caddy';
+export const DNSMASQ_LABEL = 'hallway.dnsmasq';
+
+/**
+ * Fronted mode's two helpers (D47), user-level jobs like any other, always running:
+ *   hallway.caddy    `caddy run --config <data home>/generated/caddy.json` (the daemon keeps that file current and
+ *                    pushes it over the admin socket; Caddy starts from it after a reboot, before the daemon is up)
+ *   hallway.dnsmasq  custom domains only: `dnsmasq` in the foreground on generated/dnsmasq.conf
+ * Caddy's own directories ($XDG_CONFIG_HOME, $XDG_DATA_HOME) point into the data home, so a Caddy the user runs for
+ * something else is never touched.
+ */
+export function helperSpec(kind: 'caddy' | 'dnsmasq', program: string, home: string, ctx: { userHome?: string }): ServiceSpec {
+  const p = dataPaths(home);
+  const logs = logFiles(home, kind);
+  const caddyDir = path.join(p.state, 'caddy');
+  return {
+    label: kind === 'caddy' ? CADDY_LABEL : DNSMASQ_LABEL,
+    description: kind === 'caddy' ? "Hallway: Caddy, fronted mode's proxy" : "Hallway: dnsmasq, fronted mode's custom-domain DNS",
+    program:
+      kind === 'caddy'
+        ? [program, 'run', '--config', path.join(p.generated, 'caddy.json')]
+        : [program, '--keep-in-foreground', `--conf-file=${path.join(p.generated, 'dnsmasq.conf')}`, '--pid-file=', '--log-facility=-'],
+    cwd: home,
+    env: {
+      PATH: servicePath(null, undefined),
+      HOME: ctx.userHome ?? os.homedir(),
+      ...(kind === 'caddy' ? { XDG_CONFIG_HOME: path.join(caddyDir, 'config'), XDG_DATA_HOME: path.join(caddyDir, 'xdg-data') } : {}),
+    },
+    runAtLoad: true,
+    keepAlive: true,
+    stdout: logs.out,
+    stderr: logs.err,
+    node: null,
+  };
+}

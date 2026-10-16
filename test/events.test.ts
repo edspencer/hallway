@@ -164,7 +164,7 @@ describe('the watcher', () => {
     assert.ok(!store.apps.has('foo'));
   });
 
-  test('a burst of writes to one file is one event', { timeout: 30_000 }, async () => {
+  test('a burst of writes to one file goes through one debounce key, says only what changed, and the last write wins', { timeout: 30_000 }, async () => {
     // What makes a burst one event is the bus's per-key trailing debounce (its own test above, on mocked timers). What
     // the watcher must get right, and what this checks with the real file system, is the rest: every change to a file
     // goes through that one debounce key (chokidar's add and its changes alike), a re-read that finds nothing new says
@@ -173,26 +173,27 @@ describe('the watcher', () => {
     // It deliberately doesn't assert "one event" from wall-clock timing. On a stalled machine chokidar's deliveries lag
     // their writes unevenly (each goes through an async stat), and Node computes a new timer's deadline from the event
     // loop's cached time, so a timer set just after a stall can fire almost at once: the debounce can then legitimately
-    // fire twice in one burst, giving two correct events. So it counts the debounce's firings: one firing must mean one
-    // event, and a split burst (rare, a stall) is retried.
+    // fire twice in one burst, giving two correct events. So it watches the debounce fire, reads the file each time it
+    // does, and requires exactly one event per firing that found new content: a burst that reached it as one firing
+    // is then exactly one event, and a split burst (rare, a stall) can't produce a spurious one.
     const WINDOW = 400;
     const { home, store, bus, until, got } = await watched(WINDOW);
     const f = path.join(home, 'bookmarks', 'g.yaml');
     const keys = new Set<string>();
-    let fires = 0;
+    let seen: string[] = []; // the file's content at each firing (the writes are synchronous, so this is what the store reads)
+    let loaded = '';
     const emitSoon = bus.emitSoon.bind(bus);
     bus.emitSoon = (k, e, ms) => {
       keys.add(k);
-      emitSoon(k, typeof e === 'function' ? () => (fires++, e()) : e, ms);
+      emitSoon(k, typeof e === 'function' ? () => (seen.push(fs.readFileSync(f, 'utf8')), e()) : e, ms);
     };
     const quiet = async () => {
       // nothing more for two whole windows, rather than a fixed sleep
-      for (let n = got.length + fires, since = Date.now(); Date.now() - since < 2 * WINDOW; await sleep(20))
-        if (got.length + fires !== n) [n, since] = [got.length + fires, Date.now()];
+      for (let n = got.length + seen.length, since = Date.now(); Date.now() - since < 2 * WINDOW; await sleep(20))
+        if (got.length + seen.length !== n) [n, since] = [got.length + seen.length, Date.now()];
     };
-    let events = 0;
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      [fires, got.length] = [0, 0];
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      [seen, got.length] = [[], 0];
       keys.clear();
       for (let i = 0; i < 5; i++) {
         fs.writeFileSync(f, `title: G${attempt}-${i}\nlinks: []\n`);
@@ -200,13 +201,20 @@ describe('the watcher', () => {
       }
       await until((e) => e.type === 'bookmarks', 5000);
       await quiet();
-      events = got.filter((g) => g.e.type === 'bookmarks').length;
+      const events = got.filter((g) => g.e.type === 'bookmarks').length;
+      let changed = 0;
+      for (const c of seen) if (c !== loaded) [changed, loaded] = [changed + 1, c];
       assert.deepEqual([...keys], ['file:bookmarks/g.yaml'], 'every change went through the one key');
-      assert.ok(events >= 1 && events <= fires, `${events} events from ${fires} firings: ${JSON.stringify(got.map((g) => g.e))}`);
+      assert.equal(events, changed, `one event per firing that found new content (${seen.length} firings): ${JSON.stringify(got.map((g) => g.e))}`);
       assert.equal(store.groups.get('g')!.value!.title, `G${attempt}-4`, 'the last write wins');
-      if (fires === 1) break;
     }
-    if (fires === 1) assert.equal(events, 1, 'one firing of the debounce is one event');
+    // a change that isn't one (a touch: new mtime, same bytes) fires the debounce and says nothing
+    [seen, got.length] = [[], 0];
+    const later = new Date(Date.now() + 5000);
+    fs.utimesSync(f, later, later);
+    for (const t0 = Date.now(); seen.length === 0; await sleep(20)) assert.ok(Date.now() - t0 < 5000, 'the touch reached the watcher');
+    await quiet();
+    assert.deepEqual(got, [], 'a re-read that finds nothing new sends nothing');
   });
 
   test('a broken file arrives as an error event; temp files and machine dirs are ignored', async () => {

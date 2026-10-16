@@ -16,8 +16,8 @@ describe('slugs', () => {
 
   test('reserved: www, api and the dashboard label', () => {
     assert.deepEqual(reservedSlugs(defaultConfig()).sort(), ['api', 'hallway', 'www']);
-    assert.deepEqual(reservedSlugs({ domain: { base: 'myname.internal', dashboard: 'myname.internal', tls: true } }).sort(), ['api', 'www']);
-    assert.deepEqual(reservedSlugs({ domain: { base: 'localhost', dashboard: 'hall.localhost', tls: true } }).sort(), ['api', 'hall', 'www']);
+    assert.deepEqual(reservedSlugs({ domain: { base: 'myname.internal', dashboard: 'myname.internal' } }).sort(), ['api', 'www']);
+    assert.deepEqual(reservedSlugs({ domain: { base: 'localhost', dashboard: 'hall.localhost' } }).sort(), ['api', 'hall', 'www']);
   });
 });
 

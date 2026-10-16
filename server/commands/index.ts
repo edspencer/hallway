@@ -5,6 +5,7 @@ import { app, bookmark } from './apps.js';
 import type { Ctx } from './context.js';
 import { doctor } from './doctor.js';
 import { logs, restart, run, service, start, stop } from './services.js';
+import { setup, teardown } from './setup.js';
 import { claim, ignore, open, scan, status } from './status.js';
 
 export { makeCtx } from './context.js';
@@ -26,6 +27,8 @@ export const COMMANDS: Record<string, Command> = {
   restart,
   logs,
   service,
+  setup,
+  teardown,
   mcp,
   hook: (ctx, args, flags, rest) => hook(ctx, args, flags, rest),
 };

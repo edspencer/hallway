@@ -123,6 +123,11 @@ a Mac**. Move an item out of this list, with the date and how, once it has been.
 | `ps -o pid=,ppid=,lstart=,command= -p <pids>` under `LC_ALL=C` (start time parsed as local time; argv recovered by splitting `command` on spaces, which is lossy for arguments containing a space) | v0 | Built; hand-written fixture; exercised by the same CI test. |
 | Orphans as PPID 1 (a LaunchAgent is PPID 1 too, so it also counts as one) | v0 | Built; unverified. |
 | Boot time from `sysctl -n kern.boottime` | v1 | Parser built and unit-tested against a hand-written fixture (`{ sec = …, usec = … } …`); recorded in `state/boot.json` from v0. Never run on a Mac. |
+| The pf redirect: `rdr pass on lo0` for 443/80 → 4443/4480 in the `com.apple/hallway` anchor, loaded by the `hallway.pf` LaunchDaemon (`pfctl -E -a … -f …`); that it applies to connections from local processes; that it survives another tool reloading `/etc/pf.conf`, an OS update and a reboot; that `pfctl -E`'s enable reference outlives the process | v1 | Built (`server/platform/fronting-darwin.ts`), golden-tested. CI's macOS job runs setup for real; reboot and OS-update survival can't be checked there. |
+| `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain` without a GUI prompt; `remove-trusted-cert` and `delete-certificate -Z` on teardown; Safari, Chrome and Firefox (with `security.enterprise_roots.enabled`) accepting the certificate | v1 | Built; CI's macOS job runs the commands and `security verify-cert`; no browser has been driven on a Mac. |
+| `/etc/resolver/<base>` with a `port 4253` line reaching Hallway's dnsmasq; `killall -HUP mDNSResponder` | v1 | Built; CI's macOS job runs it. |
+| Caddy and dnsmasq as LaunchAgents (`hallway.caddy`, `hallway.dnsmasq`); `brew install caddy`/`dnsmasq` from setup | v1 | Built on PR #7's launchd manager; CI's macOS job runs them. |
+| Safari resolving `https://<app>.localhost` (Q-SAFARI-LOCALHOST) | v1 | Not checked. |
 
 ## The scanner on Linux
 
@@ -270,6 +275,97 @@ daemon under a process manager (`hallway serve`, D31's development bind so a bro
   running as an unprivileged service; `caddy trust` retries (needs privileges); `caddy untrust` removes it;
   `skip_install_trust` disables it.
 - Homebrew versions on 2026-09-30: **caddy 2.11.4**, **dnsmasq 2.93**. *Verified (`brew info`).*
+
+### Fronted mode experiments (D47), Linux, 2026-10-16
+
+Run on a Debian 12 container (no systemd, no `ss`), unprivileged where it matters (`setpriv` to uid 65534 and to an
+arbitrary uid with no passwd entry), with throwaway `HOME`, `XDG_*` and data homes, never touching ports 80/443.
+Caddy **2.11.7** (the release binary), Node 22.23.3. *Verified* unless marked.
+
+- **Caddy as an ordinary user on high loopback ports:** listening on `127.0.0.1:4443`, `[::1]:4443` and the same on
+  4480 works with no privilege.
+- **Admin API on a Unix socket:** `"admin": {"listen": "unix//<dir>/admin.sock|0600"}` creates the socket with mode
+  `srw-------`; `POST /load` and `GET /config/` work over it (`curl --unix-socket`, and Node's `http.request({socketPath})`).
+  Caddy logs "admin endpoint on open interface; host checking disabled" for a socket, which is expected (no browser can
+  reach a Unix socket). **Caddy 2.6.4 does not understand the `|0600` suffix** (no socket appears at that path),
+  **2.7.6 does** (mode 600), as do 2.8.4 and 2.11.7. All four accept the generated config in `caddy validate`, so
+  validate alone doesn't catch 2.6. Minimum: 2.7.
+- **Autosave and `--resume` (Q-CADDY-RESUME):** with `persist` on, a pushed config is written to
+  `$XDG_CONFIG_HOME/caddy/autosave.json`. `caddy run --config X --resume` then logs "--config and --resume flags were
+  used together; ignoring --config and resuming from last configuration" and serves the autosave. With
+  `"admin": {"config": {"persist": false}}` no autosave is written. `$XDG_DATA_HOME/caddy/instance.uuid` is written
+  regardless of the configured storage.
+- **The local CA:** with `pki.certificate_authorities.local.name` set to `Hallway Local CA`, the root is
+  `CN=Hallway Local CA - 2026 ECC Root`, valid ten years, in `<storage>/pki/authorities/local/root.crt` (mode 0600 in a
+  0700 directory); leaves are issued by `Hallway Local CA - ECC Intermediate` for exactly the requested name and last
+  12 hours. `install_trust: false` makes Caddy log "root certificate trust store installation disabled" instead of
+  trying to install it (which, unprivileged on Linux, means trying `sudo`). An internal-issuer automation policy with
+  no subjects covers every name.
+- **Host rewrite (D9):** `headers.request.set.Host = ["{http.reverse_proxy.upstream.hostport}"]` makes the upstream see
+  `Host: 127.0.0.1:<port>`, with `X-Forwarded-Host: <name>:<port>`, `X-Forwarded-Proto: https`, `X-Forwarded-For`
+  (`127.0.0.1`, or `::1` over IPv6). A strict app that 403s foreign Hosts answers 200 that way and 403 with the Host
+  preserved.
+- **Fallback:** an `errors` route of `rewrite` to `/fallback.html` plus `file_server` with
+  `status_code: "{http.error.status_code}"` serves the page with status 502 when the upstream refuses the connection.
+- **HTTP → HTTPS:** Caddy's automatic redirect pointed at `https://<host>/…` with no port even with `https_port` 4443,
+  so Hallway turns it off and adds its own `static_response` 308 to the public port.
+- **HMR through the proxy (Q-HMR):** a Vite 8.3.4 dev server on `127.0.0.1:5902` behind
+  `https://vite.localhost:4443`, Host rewritten, loaded in Chromium (Playwright): the client connected its websocket
+  to `wss://vite.localhost:4443/?token=…` ("[vite] connected."); editing an imported module produced "[vite] hot
+  updated: /text.js via /main.js" and the new text, and a marker set on `window` beforehand survived (no reload). No
+  `server.hmr.clientPort` or `allowedHosts` setting was needed.
+- **End to end with the daemon:** a throwaway data home in fronted mode (`proxy.publicPort: 4443`), the daemon from
+  source and Caddy started from the `generated/caddy.json` the daemon wrote: `https://<app>.localhost:4443` reached each
+  app; an app file created while both ran was routed 1.5 s later with no restart (criterion 3); with the daemon killed,
+  `https://hallway.localhost:4443` served the fallback page (502) listing every app (criterion 7); a cross-origin-safe
+  write from `Origin: https://hallway.localhost:4443` through Caddy was accepted; `hallway doctor` named a `python3`
+  process (with PID and command) squatting on `proxy.httpPort`, and `hallway setup` stopped before doing anything.
+- **dnsmasq unprivileged:** dnsmasq 2.90 (Debian 12's `dnsmasq-base`, libraries extracted into a temp directory), run
+  as an arbitrary uid with the generated config (`port=4253`, `listen-address=127.0.0.1`, `bind-interfaces`,
+  `no-resolv`, `address=/myname.internal/127.0.0.1` and `::1`): A for `myname.internal`, `app.myname.internal` and
+  `a.b.myname.internal` → 127.0.0.1, AAAA → ::1, `example.com` → REFUSED. It needs no root on a port above 1024.
+- **HSTS preload list:** Chromium's `net/http/transport_security_state_static.json` (fetched 2026-10-16) has 51
+  whole-TLD entries with `include_subdomains` (listed in `server/proxy/tld.ts`). **IANA's TLD list** was at version
+  `2026101600`.
+- Not possible on that machine (no systemd, no `CAP_NET_ADMIN`, and the rule not to touch 80/443): the nftables
+  redirect, the system trust store, `systemd-resolved`. CI's Linux job runs those (below).
+
+### Fronted mode in CI, 2026-10-16
+
+`scripts/fronted-real.mjs` in the "Fronted mode (real …)" jobs runs `hallway setup` for real with the runners'
+passwordless sudo. **ubuntu-latest** (first run, PR #8): setup installed the nftables table and unit, trusted the root
+system-wide (curl with no `--cacert` accepted `https://hallway.localhost`), started Caddy as a systemd user unit; the
+strict app answered through `https://review.localhost` with Host rewritten; a newly declared app was routed with no
+restart; re-running setup reported the parts already done; doctor's networking checks passed; with the daemon
+stopped the fallback listed every app. A later run (38939015729) also passed the custom domain (`systemd-resolved`
+drop-in to Hallway's dnsmasq; `https://review.myname.internal` with the system trust store), `.local` refused, and
+teardown leaving no file, nftables table, trusted root or job behind.
+
+**macos-latest** (Apple silicon, macOS 26 "Tahoe" bottles), run 38939015729, 2026-10-16. *Verified on a real (CI)
+Mac:*
+- setup installed Caddy 2.11.7 itself with `brew install caddy` (and later `brew install dnsmasq`, 2.93);
+- `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain <root.crt>` ran headless,
+  with no authorisation prompt, and `/usr/bin/curl` then accepted `https://hallway.localhost` with no `--cacert`;
+- the pf anchor `com.apple/hallway`, loaded by `launchctl bootstrap system /Library/LaunchDaemons/hallway.pf.plist`
+  (`pfctl -E -a com.apple/hallway -f …`), **redirects locally originated connections to 127.0.0.1:443 and :80** to
+  Caddy on 4443/4480: the dashboard, a strict app with Host rewritten, and an app declared afterwards all answered
+  through `https://<name>.localhost`;
+- Caddy and dnsmasq ran as LaunchAgents; doctor's checks all passed; with the daemon stopped the fallback listed every
+  app;
+- **`/etc/resolver/myname.internal` with `nameserver 127.0.0.1` and `port 4253` works**: `https://myname.internal`
+  and `https://review.myname.internal` resolved and answered, and other names still resolved. (Homebrew's dnsmasq
+  caveat says resolver overrides to 127.0.0.1 on a non-53 port don't work on current macOS; on this runner they did.
+  Worth re-checking on a desktop Mac, where mDNSResponder may behave differently.)
+- `.local` was refused.
+- It then **hung in teardown**: the untrust step ran `security remove-trusted-cert -d`, which edits the admin trust
+  settings and can wait for an authorisation prompt even as root. Teardown now only runs `security delete-certificate
+  -Z <sha1>`, every command setup and teardown run has a 5-minute timeout, and the CI script times out each call.
+- Run 38943464360 then failed setup's own final check on macOS ("nothing answered" on 443 and 80) right after
+  `launchctl bootstrap`: the LaunchDaemon's `pfctl` can load the anchor a moment after `bootstrap` returns (and the
+  CI's root squatter on 443 was being killed by a pattern, not its pid). Setup's check now waits up to 15 s for the
+  redirect. **Run 38944433673 (commit 8c556dc) passed every check on both runners**, macOS included: setup, the
+  squatter refused, idempotent re-run, doctor, the fallback, the custom domain, `.local` refused, and teardown leaving
+  nothing behind (no anchor, LaunchDaemon, resolver file, keychain certificate or LaunchAgent).
 
 ## Prior art status (checked 2026-09-16 via GitHub API / npm)
 

@@ -21,14 +21,14 @@ export function mcpEndpoint(ctx: McpContext): McpEndpoint {
   const handler = createMcpHandler(({ era }) => createMcpServer(ctx, era), {
     onerror: (e) => process.stderr.write(`hallway: [mcp] ${e.message}\n`),
   });
-  // passive: an MCP client isn't a dashboard, so it mustn't speed the prober up (EventBus.size)
+  // internal: an MCP client isn't a dashboard, so it mustn't speed the prober up (EventBus.size)
   const unsubscribe = ctx.bus.subscribe(
     (e) => {
       handler.notify.resourceUpdated(STATE_URI);
       if ('slug' in e && typeof e.slug === 'string') handler.notify.resourceUpdated(appUri(e.slug));
       if (e.type === 'apps') handler.notify.resourcesChanged();
     },
-    { passive: true },
+    { internal: true },
   );
   return {
     handle: (c) => handler.fetch(c.req.raw),
