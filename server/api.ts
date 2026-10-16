@@ -16,6 +16,10 @@ import { VERSION, tildify } from './config.js';
 import { sseHandler, type EventBus } from './events.js';
 import { agentGuide, llmsFullTxt, llmsTxt, readGuide, type GuideInput } from './guide.js';
 import type { ProviderRegistry } from './providers.js';
+import { ServiceManagerError } from './platform/index.js';
+import { ServiceError, Services } from './services/index.js';
+import { appLogs } from './services/logs.js';
+import { ResolveError } from './services/resolve.js';
 import { ConflictError, NotFoundError, SLUG, ValidationError, type Entry, type Store, type WriteOptions } from './store/index.js';
 import { appView, appViews, configView, declaredView, groupView, groupViews, stateView } from './views.js';
 
@@ -24,6 +28,8 @@ export interface ApiOptions {
   bus: EventBus;
   providers: ProviderRegistry;
   startedAt: Date;
+  /** Managed services (start/stop/restart). Created on first use; tests pass one with a mocked runner. */
+  services?: () => Services;
 }
 
 const WINDOWS: HistoryWindow[] = ['24h', '7d', '90d'];
@@ -41,6 +47,8 @@ function handle(c: Context, e: unknown) {
   if (e instanceof ValidationError) return fail(c, 400, { error: e.message, issues: e.issues });
   if (e instanceof NotFoundError) return fail(c, 404, { error: e.message });
   if (e instanceof ConflictError) return fail(c, 409, { error: e.message, etag: e.etag });
+  if (e instanceof ServiceError || e instanceof ResolveError) return fail(c, 409, { error: e.message });
+  if (e instanceof ServiceManagerError) return fail(c, 503, { error: e.message });
   process.stderr.write(`hallway: ${c.req.method} ${c.req.path}: ${(e as Error).stack ?? e}\n`);
   return c.json({ error: (e as Error).message ?? 'internal error' } satisfies ErrorResponse, 500);
 }
@@ -85,8 +93,10 @@ function claimFile(o: ObservedListener, req: ClaimRequest) {
   return { value, header, footer };
 }
 
-export function apiRoutes({ store, bus, providers, startedAt }: ApiOptions) {
+export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOptions) {
   const ctx = { store, providers };
+  let svc: Services | undefined;
+  const getServices = services ?? (() => (svc ??= new Services({ store })));
   const api = new Hono();
 
   api.get('/health', (c) => c.json({ ok: true, version: VERSION }));
@@ -158,6 +168,32 @@ export function apiRoutes({ store, bus, providers, startedAt }: ApiOptions) {
     c.header('Cache-Control', 'no-cache');
     if (c.req.header('if-none-match') === t.etag) return c.body(null, 304);
     return c.body(t.body as Uint8Array<ArrayBuffer>, 200, { 'Content-Type': t.contentType });
+  });
+
+  // ---------------- managed services (v1) ----------------
+  api.get('/apps/:slug/logs', (c) => {
+    const slug = c.req.param('slug');
+    if (!store.apps.has(slug)) return fail(c, 404, { error: `no app '${slug}'` });
+    const lines = Number(c.req.query('lines') ?? 200);
+    if (!Number.isInteger(lines) || lines < 0 || lines > 10000) return fail(c, 400, { error: 'lines must be a whole number from 0 to 10000' });
+    const l = appLogs(store.home, slug, lines);
+    return c.json({ slug, out: { file: tildify(l.out.file), text: l.out.text }, err: { file: tildify(l.err.file), text: l.err.text } });
+  });
+
+  api.post('/apps/:slug/service/:action', async (c) => {
+    try {
+      const slug = c.req.param('slug');
+      const action = c.req.param('action');
+      if (!store.apps.has(slug)) return fail(c, 404, { error: `no app '${slug}'` });
+      const s = getServices();
+      if (action === 'start') await s.startApp(slug);
+      else if (action === 'stop') await s.stopApp(slug);
+      else if (action === 'restart') await s.restartApp(slug);
+      else return fail(c, 404, { error: 'the action must be start, stop or restart' });
+      return c.json({ ok: true, app: declaredView(ctx, slug), service: await s.status(`hallway.app.${slug}`) });
+    } catch (e) {
+      return handle(c, e);
+    }
   });
 
   // ---------------- bookmarks ----------------

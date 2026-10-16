@@ -10,6 +10,7 @@ import { providers as defaultProviders, type ProviderRegistry } from './provider
 import { localOnly } from './security.js';
 import { startLogRotation } from './services/rotate.js';
 import { startSnapshots } from './store/backups.js';
+import type { Services } from './services/index.js';
 import { Store } from './store/index.js';
 import { startWatcher } from './watcher.js';
 
@@ -24,6 +25,8 @@ export interface AppOptions {
   /** Hostnames accepted besides loopback (security.ts): the development-only HALLWAY_DEV_ALLOWED_HOSTS. */
   extraHosts?: readonly string[];
   startedAt?: Date;
+  /** Managed services for the start/stop/restart routes (default: created on first use). */
+  services?: () => Services;
 }
 
 /**
@@ -39,11 +42,11 @@ export function allowedHosts(store: Store, extra: readonly string[] = []): strin
  * The daemon's HTTP app: the JSON API under /api, the agent documents, and the dashboard (a single-page app) for
  * everything else.
  */
-export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date() }: AppOptions) {
+export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date(), services }: AppOptions) {
   const app = new Hono();
   app.use('*', localOnly(() => allowedHosts(store, extraHosts)));
 
-  app.route('/api', apiRoutes({ store, bus, providers, startedAt }));
+  app.route('/api', apiRoutes({ store, bus, providers, startedAt, services }));
   app.route('/', agentRoutes({ store, providers }));
 
   if (webDist) {
