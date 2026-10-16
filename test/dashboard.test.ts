@@ -8,11 +8,21 @@ import type { AppHealth } from '../shared/api.ts';
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, slugify, tildify } from '../src/lib/format.ts';
-import { countStates, doorState, faviconMark, subtitle, tabTitle } from '../src/lib/status.ts';
+import { countStates, doorState, faviconMark, isScanning, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
 
 const health = (state: AppHealth['state'], starting = false): { health: AppHealth } => ({
   health: { state, starting, since: null, checkedAt: null, httpStatus: null, latencyMs: null, detail: null, uptime24h: null, latencyP50: null },
+});
+
+describe('scanning', () => {
+  test('needs both a scanner in the daemon and scan.enabled', () => {
+    const st = (scanner: boolean, enabled: boolean) =>
+      ({ daemon: { providers: { scanner } }, config: { config: { scan: { enabled } } } }) as Parameters<typeof isScanning>[0];
+    assert.equal(isScanning(st(true, true)), true);
+    assert.equal(isScanning(st(true, false)), false, 'the first-run screen must not promise that a server will be found');
+    assert.equal(isScanning(st(false, true)), false);
+  });
 });
 
 describe('door subtitle', () => {

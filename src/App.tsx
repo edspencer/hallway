@@ -16,7 +16,7 @@ import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
 import { matchScore } from './lib/filter';
 import { displayUrl, homeDir, hostOf } from './lib/format';
-import { countStates, subtitle } from './lib/status';
+import { countStates, isScanning, subtitle } from './lib/status';
 import { useLive } from './live';
 import { useTheme } from './theme/theme';
 
@@ -192,7 +192,7 @@ export function App() {
         </section>
       ) : null,
     observed: () =>
-      state.daemon.providers.scanner && observed.length > 0 ? (
+      isScanning(state) && observed.length > 0 ? (
         <ObservedTray key="observed" observed={observed} home={home} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
       ) : null,
     bookmarks: () =>

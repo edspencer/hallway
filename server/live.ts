@@ -148,7 +148,7 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
   /** Any listener on a port, declared or not, from the latest scan. */
   function onPort(port: number): Observation | null {
     const r = scanner?.last();
-    if (!r) return null;
+    if (!r || !config().scan.enabled) return null;
     return r.known.get(port) ?? r.listeners.find((o) => o.port === port) ?? r.other.find((o) => o.port === port) ?? null;
   }
 
