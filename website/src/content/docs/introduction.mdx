@@ -56,7 +56,7 @@ Plenty of dashboards show tiles and bookmarks. Hallway's differences:
    (that list arrives in v1).
 3. **It fronts** (coming in v1). Memorable HTTPS hostnames per app, with defaults that need no DNS server.
 4. **It keeps things alive.** Native launchd (macOS) or systemd user (Linux) services, no extra process manager.
-5. **It is built for agent-spawned servers.** Plain YAML an agent can edit, an agent guide, MCP (in v2), and one command,
+5. **It is built for agent-spawned servers.** Plain YAML an agent can edit, an agent guide, an MCP server, and one command,
    `hallway run`, that starts a server so it never becomes an orphan.
 
 ## What ships when
@@ -66,12 +66,13 @@ Plenty of dashboards show tiles and bookmarks. Hallway's differences:
   24-hour uptime bars (7- and 90-day views in the drawer), the port scanner with claim and ignore, bookmarks, favicon
   tiles, the agent guide, `hallway doctor` for the daemon and data, and running Hallway itself as a login service.
   Shipped early from v1: `hallway run`, `stop`, `start`, `restart` and `logs`, managed services for apps (launchd or
-  systemd user units) and log rotation. Links go to `http://localhost:<port>`. No sudo, no DNS, no proxy.
+  systemd user units) and log rotation. Shipped early from v2, in the first release after 0.1.0: the [MCP server](/agents/mcp/) and the optional
+  [dev-server hook](/agents/hook/), `hallway hook check-command`. Links go to `http://localhost:<port>`. No sudo, no DNS, no proxy.
 - <span class="ms">v1</span> **Fronting** (upcoming). Caddy with HTTPS on `*.localhost`, `hallway setup` and
   `teardown`, networking checks in `hallway doctor`, custom `.internal` domains, the fallback page, and "lost at last
   reboot".
-- <span class="ms">v2</span> **Agents and polish** (upcoming). The MCP server, screenshot thumbnails, latency charts,
-  and `hallway hook check-command`.
+- <span class="ms">v2</span> **Agents and polish** (upcoming). Screenshot thumbnails and latency charts. (Its agent
+  parts, the MCP server and the hook, have already shipped.)
 
 ## Who it's for
 

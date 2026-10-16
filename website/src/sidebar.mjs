@@ -51,6 +51,7 @@ export const SIDEBAR = [
 			{ label: 'hallway run', slug: 'agents/hallway-run' },
 			{ label: 'Agent guide and llms.txt', slug: 'agents/agent-guide' },
 			{ label: 'MCP server', slug: 'agents/mcp' },
+			{ label: 'The dev-server hook', slug: 'agents/hook' },
 		],
 	},
 	{

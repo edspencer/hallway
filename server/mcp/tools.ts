@@ -393,8 +393,9 @@ export function createMcpServer(ctx: McpContext, era: 'legacy' | 'modern' = 'mod
       }),
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    run(async ({ group: g, etag: tag, ...link }) => {
-      const e = await store.addBookmark(g, link, opts(tag));
+    run(async ({ group: g, etag: tag, title, url, description, icon, tags }) => {
+      // in the order people write them: title first
+      const e = await store.addBookmark(g, { title, url, description, icon, tags }, opts(tag));
       return { group: groupView(e), ...written(e) };
     }),
   );

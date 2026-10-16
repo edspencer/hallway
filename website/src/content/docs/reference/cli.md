@@ -74,8 +74,8 @@ Each command is marked with its milestone: <span class="ms ms--v0">v0</span> com
 | Command | Description | |
 | --- | --- | --- |
 | `hallway guide [--snippet]` | Print the agent guide, or just the snippet for agent instruction files. | <span class="ms ms--v0">v0</span> |
-| `hallway mcp` | The stdio MCP bridge to the daemon. | <span class="ms">v2</span> |
-| `hallway hook check-command` | Optional pre-tool-use hook: blocks bare dev-server starts. | <span class="ms">v2</span> |
+| `hallway mcp` | An MCP server on stdio: a bridge that forwards every message to the running daemon's `/mcp`, found on `config.yaml`'s port. Exits 1 with a message if the daemon isn't running. See [MCP server](/agents/mcp/). | <span class="ms ms--v0">v0</span> |
+| `hallway hook check-command` | An optional Claude Code `PreToolUse` hook: reads the payload on stdin and denies a command that starts a dev server directly, suggesting the `hallway run` equivalent. See [The dev-server hook](/agents/hook/). | <span class="ms ms--v0">v0</span> |
 
 ## Thumbnails
 

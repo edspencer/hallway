@@ -129,6 +129,7 @@ for (const era of ['legacy', 'auto'] as const) {
       assert.match(text, /# shown as the heading/);
       assert.match(text, /# the wiki/);
       assert.match(text, /url: https:\/\/example.com/);
+      assert.match(text, /- title: Example\n {4}url: https:\/\/example.com/);
       assert.match(data.etag, /^"[0-9a-f]{16}"$/);
       assert.equal(data.group.config.links.length, 2);
       assert.deepEqual(events, [{ type: 'bookmarks', group: 'docs' }]);
