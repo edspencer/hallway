@@ -226,8 +226,8 @@ scan, `open` explains), usage errors exiting 2 with the usage, two apps on one p
   2026-07-28 and `subscriptions/listen`. `resources.subscribe` has to be in the server's capabilities for a listen
   filter's `resourceSubscriptions` to be honoured (the SDK drops them otherwise, silently). *Verified.*
 - **`claude mcp add`** syntax used in the docs (`claude mcp add --transport http hallway http://localhost:4255/mcp`;
-  `claude mcp add hallway -- hallway mcp`) is Claude Code's documented form. Not run against this box's real Claude
-  configuration (a box rule); the end-to-end checks used the SDK client over HTTP and over a real `hallway mcp`.
+  `claude mcp add hallway -- hallway mcp`) is Claude Code's documented form, and was checked with a throwaway
+  configuration (see the acceptance run below).
 - **Claude Code `PreToolUse` hooks** (`https://code.claude.com/docs/en/hooks`, fetched 2026-10-16; resolves Q-HOOK):
   the payload is JSON on stdin with `session_id`, `cwd`, `hook_event_name: "PreToolUse"`, `tool_name: "Bash"` and
   `tool_input: { command, description, timeout, run_in_background }`. To block: either exit 2 with the reason on
@@ -253,9 +253,11 @@ daemon under a process manager (`hallway serve`, D31's development bind so a bro
    `Content-Type: text/plain`, 415; a GET, 405; the same request with a loopback Host, 200.
 4. **Notifications:** a `subscriptions/listen` stream for `hallway://apps/my-app`, opened through `hallway mcp`,
    heard `notifications/resources/updated` within 1.5 s of the file being edited by hand.
-5. Not run: a real Claude Code session with the server registered (this machine's Claude configuration is not to be
-   touched); the hook inside a real Claude Code session (tested with payloads of the documented shape). Both on macOS:
-   unverified, though nothing in either is platform-specific.
+5. **Claude Code** (2.1.292 (Claude Code)), with a throwaway `HOME` and `CLAUDE_CONFIG_DIR` and no credentials:
+   `claude mcp add --transport http hallway http://localhost:<port>/mcp` and `claude mcp add hallway-stdio -- hallway
+   mcp` were accepted, and `claude mcp list` reported both "✔ Connected". Not run: the hook inside a real Claude Code
+   session (it would need a model; tested with payloads of the documented shape). On macOS: unverified, though
+   nothing in either is platform-specific.
 ## Caddy
 
 *From https://caddyserver.com/docs/automatic-https, fetched 2026-10-14.*
