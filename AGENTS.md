@@ -5,8 +5,9 @@
 Hallway is **pre-release**. The repository holds a complete **specification** and the **start of the
 implementation**: the package, build, CI and release machinery, the daemon core (`hallway serve` and `guide`, the data
 home and its store, the watcher, event bus and SSE, the HTTP API, the agent guide and `llms.txt`, the security
-middleware, the platform abstraction) and a placeholder dashboard. The prober, scanner, services and proxy are still
-to be built, milestone by milestone; they plug into the core as providers (`server/providers.ts`, D35).
+middleware, the platform abstraction) and a placeholder dashboard. The scanner, prober and uptime history are built and
+plug into the core as a provider (`server/live.ts`, D35); services and the proxy are still to be built, milestone by
+milestone.
 
 Nobody who took part in the design discussion will be available to answer questions, so the spec is deliberately
 exhaustive: it records decisions, their rationale, the alternatives that were rejected, verified facts, and open
@@ -71,6 +72,7 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
                    listener/process parsers are pure functions tested against test/fixtures/platform/
   store/           the one reader/writer of the YAML files: index.ts (Store), schema.ts (validation + reference),
                    yamldoc.ts (comment-preserving edits), safefs.ts (atomic writes), backups.ts, home.ts (layout)
+  live.ts          plugs the scanner, prober and uptime store into the core: one provider + bus events (D35, D38)
   scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
                    (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
