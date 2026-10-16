@@ -323,6 +323,18 @@ describe('security on the API', () => {
     assert.equal((await req('/api/health', { host: 'myname.internal' })).status, 200);
     assert.equal((await req('/api/health', { host: 'hallway.localhost' })).status, 403);
   });
+
+  test("fronted mode: a write from the dashboard's own https origin (through Caddy, Host kept) is accepted", async () => {
+    const { req, store, home } = await setup();
+    const write = (origin: string) => req('/api/apps/foo', { method: 'PUT', json: { port: 5001 }, host: 'hallway.localhost', headers: { origin } });
+    await store.patchConfig({ mode: 'fronted', proxy: { publicPort: 4443 } });
+    assert.equal((await write('https://evil.example')).status, 403);
+    assert.equal((await write('https://foo.localhost:4443')).status, 403, "an app's origin isn't the dashboard's");
+    assert.equal((await write('https://hallway.localhost:4443')).status, 201);
+    assert.ok(fs.existsSync(path.join(home, 'apps/foo.yaml')));
+    await store.patchConfig({ mode: 'direct' });
+    assert.equal((await req('/api/apps/foo', { method: 'DELETE', host: 'localhost', headers: { origin: 'https://hallway.localhost' } })).status, 403, 'direct mode: the dashboard host is foreign again');
+  });
 });
 
 describe('appUrl', () => {
@@ -332,5 +344,7 @@ describe('appUrl', () => {
     assert.equal(appUrl('a', 5173, '::1', cfg), 'http://[::1]:5173');
     assert.equal(appUrl('a', 5173, '192.168.1.5', cfg), 'http://192.168.1.5:5173');
     assert.equal(appUrl('a', 5173, '127.0.0.1', { ...cfg, mode: 'fronted' }), 'https://a.localhost');
+    assert.equal(appUrl('a', 5173, '127.0.0.1', { ...cfg, mode: 'fronted', proxy: { ...cfg.proxy, publicPort: 4443 } }), 'https://a.localhost:4443');
+    assert.equal(appUrl('a', 5173, '127.0.0.1', { ...cfg, mode: 'fronted', domain: { ...cfg.domain, base: 'myname.internal' } }), 'https://a.myname.internal');
   });
 });

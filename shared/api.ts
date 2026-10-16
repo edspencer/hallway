@@ -125,7 +125,9 @@ export interface HallwayConfig {
   version: 1;
   port: number;
   mode: Mode;
-  domain: { base: string; dashboard: string; tls: boolean };
+  domain: { base: string; dashboard: string; tls: boolean; dnsPort: number };
+  /** Fronted mode's Caddy (D47). */
+  proxy: { caddy: string | null; httpsPort: number; httpPort: number; publicPort: number };
   probe: { intervalSeconds: number; liveIntervalSeconds: number; timeoutMs: number; concurrency: number; failuresBeforeUnhealthy: number };
   ports: { assignRange: [number, number] };
   services: { startGraceSeconds: number; logMaxBytes: number; logGenerations: number };
@@ -262,6 +264,8 @@ export interface AppView {
   name: string;
   /** Where to open it: `http://localhost:<port>` in direct mode, `https://<slug>.<base>` in fronted mode. */
   url: string | null;
+  /** `http://localhost:<port>`, in both modes: in fronted mode the card shows it as the secondary address (D47). */
+  directUrl: string | null;
   /**
    * The validated contents (declared apps). While the file is broken this is the last good version, or null if it has
    * never been valid since the daemon started.

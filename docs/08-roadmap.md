@@ -50,7 +50,12 @@ Acceptance criteria:
 integration via admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; dashboard fallback page;
 `hallway setup` / `hallway teardown`; networking checks in `hallway doctor`; custom-domain mode (dnsmasq + `/etc/resolver`); bind
 address indicator; "Lost at last reboot"; log rotation. On Linux (D26): systemd user units for apps, a `*.localhost`
-resolution check, `setcap` for Caddy, and custom-domain DNS via `systemd-resolved` or a dnsmasq drop-in.
+resolution check, an nftables redirect from 443/80 to the user's Caddy (D47; `setcap` was considered and rejected),
+and custom-domain DNS via a `systemd-resolved` drop-in pointing at Hallway's user-level dnsmasq.
+
+**Status (2026-10-16):** fronted mode is built (D47, D48). Criteria 1–4 and 7–11 are checked for real on Linux and
+macOS by CI's "Fronted mode (real …)" jobs (`scripts/fronted-real.mjs`), and by hand on Linux without a redirect
+(`11-research-notes.md`); browsers on a real Mac (criterion 2's Safari and Firefox) are not yet checked.
 
 Acceptance criteria:
 

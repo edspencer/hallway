@@ -16,9 +16,9 @@ import { ROOT, VERSION, dataPaths } from '../config.js';
 import { type Platform, type Runner, type ServiceManager, type ServiceSpec, type ServiceStatus, currentPlatform } from '../platform/index.js';
 import type { Store } from '../store/index.js';
 import type { ResolvedNode } from './resolve.js';
-import { DAEMON_LABEL, appLabel, appSpec, daemonSpec, slugOfLabel } from './spec.js';
+import { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, appSpec, daemonSpec, helperSpec, slugOfLabel } from './spec.js';
 
-export { DAEMON_LABEL, appLabel, logFiles, slugOfLabel } from './spec.js';
+export { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, logFiles, slugOfLabel } from './spec.js';
 
 /** What a job's manifest records (generated/services/<label>.json). */
 export interface ServiceManifest {
@@ -228,6 +228,8 @@ export class Services {
       try {
         let spec: ServiceSpec;
         if (label === DAEMON_LABEL) spec = this.daemonSpec();
+        else if ((label === CADDY_LABEL || label === DNSMASQ_LABEL) && this.readManifest(label)?.program[0])
+          spec = this.helperSpec(label === CADDY_LABEL ? 'caddy' : 'dnsmasq', this.readManifest(label)!.program[0]);
         else if (s && this.store.apps.get(s)?.value?.service) spec = this.appSpec(s);
         else {
           out.push({ label, changed: false, restarted: false, error: s ? `apps/${s}.yaml has no service: block (remove the job with \`hallway service rm ${s}\`)` : 'not a job Hallway generates here' });
@@ -252,6 +254,24 @@ export class Services {
       }
     }
     return out;
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Fronted mode's helpers: Caddy and dnsmasq (D47), installed by `hallway setup`, removed by `hallway teardown`
+  // ---------------------------------------------------------------------------------------------------------------
+
+  helperSpec(kind: 'caddy' | 'dnsmasq', program: string): ServiceSpec {
+    return helperSpec(kind, program, this.store.home, { userHome: this.userHome });
+  }
+
+  /** Write and start (or restart onto a changed definition) the helper's job. */
+  async helperUp(kind: 'caddy' | 'dnsmasq', program: string) {
+    return this.up(this.helperSpec(kind, program));
+  }
+
+  /** Is the helper's job installed? */
+  helperInstalled(kind: 'caddy' | 'dnsmasq') {
+    return this.manager.list().includes(kind === 'caddy' ? CADDY_LABEL : DNSMASQ_LABEL);
   }
 
   // ---------------------------------------------------------------------------------------------------------------

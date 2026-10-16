@@ -66,12 +66,11 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
 - Transparent WebSocket proxying (Vite/Astro HMR, WS-based apps), automatic local-CA TLS, HTTP→HTTPS redirects,
   zero-downtime reloads via an admin API, single static binary in Homebrew.
 - The daemon stays unprivileged and never handles app traffic.
-- Run Caddy as a **dedicated LaunchDaemon** (`hallway.caddy`), not Homebrew's service, to avoid hijacking
-  a Caddy the user may already run. Binding loopback :443 needs root on macOS (verified).
+- Run Caddy as a **dedicated job** (`hallway.caddy`), not Homebrew's service, to avoid hijacking a Caddy the user may
+  already run. *Updated by D47:* it is a user-level job (LaunchAgent / systemd user unit), not a root LaunchDaemon.
 - Push config through the **admin API** so adding an app never needs sudo.
-- **Not final:** a root Caddy with an unauthenticated admin API is a local privilege-escalation path. How Caddy gets
-  :443 without that risk (leading candidate: user-level Caddy + pf redirect on `lo0`) is open and blocking for v1 —
-  Q-CADDY-UNPRIVILEGED.
+- *Resolved by D47:* a root Caddy with an unauthenticated admin API would be a local privilege-escalation path, so
+  Caddy runs as the user on high loopback ports, with a fixed root-owned redirect from 443/80.
 - **Rejected:** a Node reverse proxy inside the daemon (WebSocket upgrade handling, TLS, HTTP/2 — all reinvented);
   Traefik (designed around container labels, heavier); nginx (manual config, no automatic local TLS);
   **localias** as the base (no wildcard subdomains, no persistence, no process management).
@@ -163,8 +162,8 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
 
 ### D19 — Hallway's own launchd jobs use unique, prefixed labels
 
-- `hallway.daemon`, `hallway.caddy`, `hallway.dnsmasq` (if not using Homebrew's),
-  `hallway.app.<slug>`. Makes them easy to find, audit and tear down, and impossible to confuse with
+- `hallway.daemon`, `hallway.caddy`, `hallway.dnsmasq`, `hallway.app.<slug>` (user-level), and `hallway.pf` (D47: the
+  one LaunchDaemon, macOS's redirect). Makes them easy to find, audit and tear down, and impossible to confuse with
   user-created jobs.
 
 ### D20 — Default daemon port 4255 (approved by the author)
@@ -594,6 +593,96 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   Either way `/api/health` must answer as Hallway, so a stale record or a reused pid can't mislead it.
 - **Rejected:** parsing a broken `config.yaml` leniently for its `port:` line (doesn't help `--port`/`$PORT`, and
   guesses at a file the store has declared invalid); scanning listeners for a Hallway (slow, and the scanner's job).
+
+### D47 — Fronted mode: Caddy runs as you; the only root parts are a fixed redirect, the trusted root and the resolver (2026-10-16; resolves Q-CADDY-UNPRIVILEGED, Q-CADDY-RESUME, Q-CADDY-TRUST, Q-HMR, Q-DASHBOARD-HOST)
+
+- **Caddy is a user-level job** (`hallway.caddy`: a LaunchAgent / systemd user unit) on `127.0.0.1` and `[::1]`,
+  ports `proxy.httpsPort` (4443) and `proxy.httpPort` (4480), started as `caddy run --config generated/caddy.json`.
+  Its **admin API is a Unix socket in the data home with mode 0600** (`state/caddy/admin.sock`), never TCP. Since
+  Caddy holds no privilege, whoever can reach its API (the user's own processes) gains nothing they didn't have.
+- **The privileged parts are fixed jobs** that read nothing a user-level process can write later, installed once by
+  `hallway setup` and removed by `hallway teardown` (`server/platform/fronting-*.ts`):
+  - the redirect, loopback 443 → 4443 and 80 → 4480: on **macOS a pf anchor** (`com.apple/hallway`, loaded at boot by
+    the `hallway.pf` LaunchDaemon running one `pfctl -E -a com.apple/hallway -f /etc/pf.anchors/hallway`; macOS's own
+    `/etc/pf.conf` already evaluates `com.apple/*`, so it is never edited and OS updates that rewrite it don't matter);
+    on **Linux an nftables table** (`inet hallway`, a nat `output` chain, applied at boot by
+    `hallway-redirect.service`);
+  - Hallway's CA root in the system trust store (and, on Linux, the user's NSS database, without sudo);
+  - for a custom domain, the resolver: `/etc/resolver/<base>` with a `port` line (macOS), a `systemd-resolved` drop-in
+    (Linux), pointing at **Hallway's own dnsmasq, also a user-level job** (`hallway.dnsmasq`) on `127.0.0.1:4253`.
+- **No `--resume`** (Q-CADDY-RESUME): verified, an admin push is autosaved to `$XDG_CONFIG_HOME/caddy/autosave.json`
+  and `--resume` then ignores `--config`. The daemon writes `generated/caddy.json` before every push, Caddy starts from
+  that file, and pushes don't persist (`persist: false`), so there is one copy of the truth and routes come back after
+  a reboot before the daemon does. The job's `XDG_*` point into `state/caddy/`.
+- **Trust** (Q-CADDY-TRUST): Caddy's CA lives in the data home (`state/caddy/data/`); its own trust installation is off
+  (`install_trust: false`) and `hallway setup` installs the root itself with printed commands (`security
+  add-trusted-cert` into the System keychain; `update-ca-certificates` / `update-ca-trust`), so no `caddy trust` against
+  a root instance is needed.
+- **HMR** (Q-HMR): verified with Vite 8.3.4 through Caddy with Host rewritten: a real hot update, no reload, no
+  `server.hmr.clientPort`.
+- **Dashboard host** (Q-DASHBOARD-HOST): `hallway.localhost`, as the spec leaned, matching the product and binary; the
+  apex for a custom domain. Bare `localhost` on 443 is too likely to collide, and `hall` saves little. Its label is a
+  reserved slug (already enforced). The daemon gets the dashboard's Host unchanged (no rewrite on that route) and
+  accepts it in fronted mode (`server/security.ts`), so `daemon.url` and write Origins are the real public ones.
+- **`proxy.publicPort`** (default 443) is the HTTPS port in links. Setting it to `proxy.httpsPort` is fronted mode
+  without any redirect (links carry `:4443`): useful where no redirect can be installed (a container, no systemd).
+- Caddy **2.7 or later** (2.6.4 ignores the socket's `|0600` mode; verified). HTTP/3 is off (it would advertise the
+  high UDP port in `Alt-Svc`). Every name gets an internal-CA certificate (`local_certs`), so `.test` and made-up TLDs
+  never go to public ACME. HTTP → HTTPS is Hallway's own redirect, which knows the public port.
+- **Rejected:**
+  - a root Caddy with the admin API on TCP (any local process can reconfigure a root process: the escalation path);
+  - a root Caddy with the API on a user-only Unix socket (the user's own processes, e.g. a malicious install script,
+    still escalate);
+  - a root Caddy with `admin off` and a privileged reload helper (sudo for every new app);
+  - a user Caddy on `0.0.0.0:443` (macOS allows it unprivileged, but it exposes every app to the LAN, even with a
+    `remote_ip` filter);
+  - on Linux, `setcap cap_net_bind_service` on a Hallway-owned Caddy, which the roadmap had listed: whoever reaches the
+    admin API could then bind any privileged port on any address, and every Caddy upgrade must re-apply it;
+    `net.ipv4.ip_unprivileged_port_start` (machine-wide); `iptables` (nftables is the default backend on every
+    current distribution, and a table of our own is cleaner to remove);
+  - a root dnsmasq on :53 or a drop-in in Homebrew's dnsmasq (root for no reason; edits the user's dnsmasq), and
+    `/etc/hosts` per app (sudo per app, no wildcards).
+- **Unverified on macOS** until CI's macOS job or a real Mac runs them: pf `rdr` on `lo0` for locally originated
+  connections, the anchor surviving a reload of `/etc/pf.conf` by another tool and an OS update, `pfctl -E`'s enable
+  reference outliving the LaunchDaemon's process, `security add-trusted-cert` without a GUI prompt, the `port` line in
+  `/etc/resolver/<base>`, Safari (Q-SAFARI-LOCALHOST). See `11-research-notes.md`.
+
+### D48 — Setup, teardown and doctor for fronted mode; the dashboard's second address (2026-10-16)
+
+- **Setup is a plan of printed steps** (`server/proxy/setup.ts`): facts are gathered read-only, the plan is a pure
+  function of them (golden files for macOS and Linux), and `--print` prints it. Steps are `[Hallway]` (its own files
+  and user-level jobs), `[you]` (`brew install caddy`/`dnsmasq` when missing and Homebrew is there) and `[sudo]` (each
+  command shown exactly; a file to install as root is written to `generated/setup/` as the user first, shown, then
+  copied with `sudo install`). Already root: no `sudo` prefix.
+- **Idempotent by asking the real thing:** the root's fingerprint in the trust store; the installed files' exact text
+  and a TLS handshake on 443 meeting Hallway's CA (tried with the old dashboard name too, since Caddy only answers for
+  names it serves); `config.yaml` already set. A failed command stops the run; running setup again resumes.
+- **Refused** before anything runs: `.local`; the 51 whole-TLD entries on Chromium's HSTS preload list (extracted
+  2026-10-16: `.dev`, `.app`, `.page`, …); `.example` and `.invalid`; anything else on 80/443 or on Caddy's or dnsmasq's
+  ports (named with PID and command; on macOS, where `lsof` can't see root's sockets, also a connection to 443 that
+  doesn't meet Hallway's CA, plain HTTP included); a missing helper with no way to install it; on Linux, no systemd,
+  `nft` or CA store. **Warned:** a delegated TLD, a made-up TLD (IANA's list, cached a week in `cache/iana-tlds.txt`;
+  failing to fetch is itself a warning), Caddy older than 2.7, a listener on 2019. `--domain` needs two labels.
+- **`hallway teardown`** removes only what it finds (resolver, dnsmasq job, redirect, trusted root, Caddy job), sets
+  `mode: direct`, and has `--print` too. `--uninstall-packages` uninstalls Homebrew's `caddy`/`dnsmasq`; on Linux it
+  only says to use the package manager. The CA stays in the data home, unused.
+- **`hallway doctor`** in fronted mode (`server/proxy/doctor.ts`) checks Caddy (version, job, socket answering and
+  private, running config = `generated/caddy.json`), who holds Caddy's ports and 80/443, a TLS handshake through the
+  redirect that verifies against Hallway's root, the HTTP redirect, the root trusted, a Firefox note, `*.localhost`
+  resolution (a warning: browsers resolve it themselves), and for a custom domain the TLD, dnsmasq (running, loopback
+  only), the resolver file and resolution of `<base>` and a name under it.
+- **The dashboard:** in fronted mode a card's address is the hostname, and the port is a quiet `:5622` link beside it
+  that goes straight to `http://localhost:5622`, round the proxy (the door plate already shows the number). The API
+  gains `AppView.directUrl` (always the direct address). Direct mode is unchanged.
+- **The fallback page** (`generated/fallback.html`) is self-contained (the dashboard's tokens inlined, from a copy of
+  `src/theme/tokens.css` that the Vite build puts in `dist/web/`), says which host isn't answering (the daemon, or which app and where Caddy
+  looked), how to restart it, and lists every app.
+- **Bus subscribers:** the daemon's own modules (prober, thumbnailer, proxy) subscribe as `internal`, and `bus.size`
+  counts only the others (open dashboards). Before this, the thumbnailer's subscription made the prober think a
+  dashboard was always open.
+- **CI** runs it all for real (`scripts/fronted-real.mjs`, "Fronted mode (real …)" jobs on `ubuntu-latest` and
+  `macos-latest`, with the runners' passwordless sudo): setup, the v1 criteria with `curl` and the system trust store,
+  a squatter on 443, a custom domain, teardown leaving nothing behind.
 
 ## Alternatives considered for the whole product
 

@@ -220,6 +220,12 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `domain.base` | text | `localhost` | Apps are served at `<slug>.<base>`. (a host name) |
 | `domain.dashboard` | text | `hallway.localhost` when `base` is `localhost`, else `<base>` | Where the dashboard is in fronted mode. (a host name) |
 | `domain.tls` | true/false | `true` | Fronted mode is always HTTPS. |
+| `domain.dnsPort` | number 1–65535 | `4253` | Custom domains only: the loopback port Hallway's own dnsmasq answers on (the resolver configuration points at it). |
+| `proxy` | mapping |  | Fronted mode's Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` redirects 443 and 80 to them. |
+| `proxy.caddy` | text | `caddy` on your PATH, else Homebrew's | The Caddy binary. |
+| `proxy.httpsPort` | number 1–65535 | `4443` | The loopback port Caddy serves HTTPS on. |
+| `proxy.httpPort` | number 1–65535 | `4480` | The loopback port Caddy serves HTTP (a redirect to HTTPS) on. |
+| `proxy.publicPort` | number 1–65535 | `443` | The HTTPS port in links: 443 once `hallway setup` has redirected it to `httpsPort`. Set it to `httpsPort` to use fronted mode with no setup (links then carry the port). |
 | `probe` | mapping |  | Health checks. |
 | `probe.intervalSeconds` | number ≥ 5 | `60` | Seconds between checks. |
 | `probe.liveIntervalSeconds` | number ≥ 1 | `15` | Seconds between checks while a dashboard is open. |

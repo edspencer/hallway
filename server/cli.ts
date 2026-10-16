@@ -42,8 +42,15 @@ Bookmarks
   bookmark add <group> <url> [--title T] [--description D]
   bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
 
+Fronted mode (https://<app>.localhost, or your own domain)
+  setup [--domain BASE] [--print]   Run Caddy for your apps, redirect ports 443 and 80 to it and trust its
+                                    certificates. Prints each step first; the privileged ones run through sudo.
+                                    --print shows the plan and runs nothing.
+  teardown [--uninstall-packages] [--print]
+                                    Undo setup and go back to http://localhost:<port> links.
+
 Other
-  doctor [--json]                   Check the daemon, the data home and the services, with fixes.
+  doctor [--json]                   Check the daemon, the data home, the services and fronted mode, with fixes.
   guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph
                                     for an agent instruction file (CLAUDE.md, AGENTS.md).
   --version | --help
@@ -80,6 +87,9 @@ async function serve(flags: Record<string, string>) {
   // the scanner, prober and uptime history (server/live.ts): plugged in once the port is ours
   const [{ startLive }, { providers }] = await Promise.all([import('./live.js'), import('./providers.js')]);
   await startLive({ store, bus: store.bus, providers, selfPorts: process.env.HALLWAY_DEV ? [bound, DEFAULT_PORT] : [bound] });
+  // fronted mode: Caddy's config and the fallback page, pushed now and on every change (server/proxy/)
+  const [{ startProxy, restartCommands }, { currentPlatform }] = await Promise.all([import('./proxy/index.js'), import('./platform/index.js')]);
+  await startProxy({ store, bus: store.bus, daemonPort: bound, restart: restartCommands(currentPlatform().serviceManager) });
   let out = `Hallway on http://localhost:${bound}\n`;
   if (!flags.quiet) {
     out += `Data home: ${tildify(dataPaths(HOME).home)}\n`;

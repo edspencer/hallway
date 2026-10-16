@@ -127,9 +127,9 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
     }
   }
 
-  // ---------------- networking (v1) ----------------
-  if (cfg.mode === 'direct') add({ id: 'networking', status: 'skip', message: 'networking checks (Caddy, ports 80/443, certificates, DNS) are not applicable in direct mode' });
-  else add({ id: 'networking', status: 'warn', message: 'config.yaml says mode: fronted, but fronted mode (Caddy) is not built yet; apps are linked directly', fix: 'set mode: direct for now' });
+  // ---------------- networking: fronted mode (server/proxy/doctor.ts) ----------------
+  const { networkChecks } = await import('../proxy/doctor.js');
+  for (const c of await networkChecks({ store, platform: ctx.platform(), services, query: run, env: ctx.env, userHome: os.homedir() })) add(c);
 
   return checks;
 }

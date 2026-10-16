@@ -1,0 +1,64 @@
+1. [Hallway] Write Caddy's configuration, routing *.myname.internal to your apps and https://myname.internal to the dashboard, and check it with `caddy validate`
+     /home/me/.hallway/generated/caddy.json
+     /home/me/.hallway/generated/fallback.html
+2. [Hallway] Run Caddy as you, on 127.0.0.1:4443 and :4480, as a systemd user unit (hallway.caddy), with its admin API on a private socket
+     /home/me/.hallway/state/caddy/admin.sock
+3. [Hallway] Write dnsmasq's configuration: myname.internal and every name under it → loopback
+     /home/me/.hallway/generated/dnsmasq.conf
+4. [Hallway] Run dnsmasq as you, on 127.0.0.1:4253, as a systemd user unit (hallway.dnsmasq)
+5. [sudo] Trust Hallway's local certificate authority system-wide, and in your NSS database (Chrome's on Linux)
+     $ sudo install -D -m 0644 /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt /usr/local/share/ca-certificates/hallway-local-ca.crt
+     $ sudo update-ca-certificates
+     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -D -n 'Hallway Local CA'   (may fail harmlessly)
+     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -A -t C,, -n 'Hallway Local CA' -i /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
+6. [sudo] Redirect loopback ports 443 and 80 to Caddy on 4443 and 4480 (an nftables table, applied at boot by hallway-redirect.service)
+     writes /home/me/.hallway/generated/setup/redirect.nft, installed as /etc/hallway/redirect.nft:
+       | # Written by `hallway setup`; removed by `hallway teardown`.
+       | # Applied at boot by hallway-redirect.service. Connections from this machine to loopback ports 443 and 80 go to Hallway's
+       | # Caddy, which runs as you on 4443 and 4480. Hallway's own table: nothing else's rules are touched.
+       | # (Declaring then deleting the table first makes re-applying the file replace it rather than add to it.)
+       | table inet hallway
+       | delete table inet hallway
+       | table inet hallway {
+       |   chain output {
+       |     type nat hook output priority -100; policy accept;
+       |     ip daddr 127.0.0.1 tcp dport 443 redirect to :4443
+       |     ip daddr 127.0.0.1 tcp dport 80 redirect to :4480
+       |     ip6 daddr ::1 tcp dport 443 redirect to :4443
+       |     ip6 daddr ::1 tcp dport 80 redirect to :4480
+       |   }
+       | }
+     writes /home/me/.hallway/generated/setup/hallway-redirect.service, installed as /etc/systemd/system/hallway-redirect.service:
+       | # Written by `hallway setup`; removed by `hallway teardown`.
+       | # Applies one fixed nftables file at boot; it reads nothing a user can write.
+       | [Unit]
+       | Description=Hallway: redirect loopback ports 443 and 80 to Hallway's Caddy
+       | After=nftables.service
+       | Wants=network-pre.target
+       | 
+       | [Service]
+       | Type=oneshot
+       | RemainAfterExit=yes
+       | ExecStart=/usr/sbin/nft -f /etc/hallway/redirect.nft
+       | ExecStop=/usr/sbin/nft delete table inet hallway
+       | 
+       | [Install]
+       | WantedBy=multi-user.target
+     $ sudo install -D -m 0644 /home/me/.hallway/generated/setup/redirect.nft /etc/hallway/redirect.nft
+     $ sudo install -m 0644 /home/me/.hallway/generated/setup/hallway-redirect.service /etc/systemd/system/hallway-redirect.service
+     $ sudo systemctl daemon-reload
+     $ sudo systemctl enable hallway-redirect.service
+     $ sudo systemctl restart hallway-redirect.service
+7. [sudo] Send myname.internal and every name under it to Hallway's dnsmasq on 127.0.0.1:4253 (a systemd-resolved drop-in)
+     writes /home/me/.hallway/generated/setup/resolved.conf, installed as /etc/systemd/resolved.conf.d/hallway.conf:
+       | # Written by `hallway setup`; removed by `hallway teardown`.
+       | # Routes myname.internal and every name under it to Hallway's dnsmasq, which runs as you on 127.0.0.1:4253.
+       | [Resolve]
+       | DNS=127.0.0.1:4253
+       | Domains=~myname.internal
+     $ sudo install -D -m 0644 /home/me/.hallway/generated/setup/resolved.conf /etc/systemd/resolved.conf.d/hallway.conf
+     $ sudo systemctl restart systemd-resolved.service
+8. [Hallway] Switch config.yaml to fronted mode on myname.internal: links become https://<app>.myname.internal
+9. [Hallway] Check https://myname.internal answers through the redirect, with Hallway's certificate
+
+Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

@@ -5,9 +5,9 @@
 export class UsageError extends Error {}
 
 /** Options that take a value (`--port 5050` or `--port=5050`). */
-const VALUE_FLAGS = ['port', 'cwd', 'name', 'expected', 'health', 'slug', 'by', 'title', 'description', 'lines'];
+const VALUE_FLAGS = ['port', 'cwd', 'name', 'expected', 'health', 'slug', 'by', 'title', 'description', 'lines', 'domain'];
 /** Options that don't. */
-const BOOLEAN_FLAGS = ['snippet', 'json', 'persist', 'follow'];
+const BOOLEAN_FLAGS = ['snippet', 'json', 'persist', 'follow', 'print', 'uninstall-packages'];
 
 export interface ParsedArgs {
   pos: string[];
