@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The working mark (src/brand/Logo.tsx): a door, ajar, with lamplight. Provisional (Q-VISUAL-IDENTITY). -->
+  <rect x="6" y="3" width="20" height="27" rx="2" fill="#100d0b" stroke="#4c3e33" stroke-width="1.5"/>
+  <path d="M16 4.5 L24.5 4.5 L24.5 28.5 L16 28.5 Z" fill="#ffd08a" opacity="0.9"/>
+  <path d="M7.5 4.5 L16 6.5 L16 26.5 L7.5 28.5 Z" fill="#3a2f27" stroke="#4c3e33" stroke-width="1"/>
+  <circle cx="13.6" cy="17" r="1.1" fill="#f0b35a"/>
+</svg>

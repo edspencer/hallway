@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to a PR cancels that PR's older run. Pushes to main get a group per commit, so they never cancel (or,
+# as a pending run in a shared group would be, get superseded by) each other: release.yml's verify-ci job waits for
+# the CI run on the exact commit it's releasing, and a cancelled run there would block the release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+        # macOS is the primary platform and Linux is supported alongside it (D26), so both run everything.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      # Node 22 bundles npm 10 and the lockfile was written by npm 11; `npm ci` reads it fine with both.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # Before `npm ci`: it needs no dependencies and is near-instant. A raw 0x00 in a source file is invisible in
+      # diffs and makes grep/ripgrep skip the whole file as binary, so nothing else would notice it
+      # (scripts/check-no-nul-bytes.mjs).
+      - name: No raw NUL bytes in JS/TS sources
+        run: npm run check:nul
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      # Packs the package, installs the tarball into a temp prefix and runs it as a user would (scripts/smoke-pack.mjs).
+      - name: Smoke-test the npm package
+        run: npm run smoke:pack
+
+  # ---------------------------------------------------------------------------------------------------------------
+  # Docs site (website/). The site is its own npm project, with its own package.json and lockfile; the root
+  # typecheck, tests and package never include it. Until website/ exists, the filter never matches and this job
+  # passes with its build steps skipped. When the site lands, adjust the steps below to its scripts (e.g. a link
+  # checker), keeping the job name: `ci-passed` depends on it.
+  # ---------------------------------------------------------------------------------------------------------------
+  website:
+    name: Docs site build
+    runs-on: ubuntu-latest
+    # paths-filter reads the PR's changed-file list through the API.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            docs:
+              - 'website/**'
+      - uses: actions/setup-node@v7
+        if: steps.filter.outputs.docs == 'true'
+        with:
+          node-version: 22
+      - name: Install docs-site deps
+        if: steps.filter.outputs.docs == 'true'
+        run: npm install
+        working-directory: website
+      - name: Build docs site
+        if: steps.filter.outputs.docs == 'true'
+        run: npm run build
+        working-directory: website
+
+  # One stable check name to require in branch rules, so the matrix can change without editing them.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [test, website]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to have passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: ${RESULTS}"
+          for r in ${RESULTS}; do
+            if [ "${r}" != "success" ]; then
+              echo "::error::a required job concluded '${r}'"
+              exit 1
+            fi
+          done
