@@ -124,7 +124,7 @@ lsof -nP -iTCP:4321 -sTCP:LISTEN          # which process is listening, and its 
 ps -o pid,ppid,command -p 12345           # its full command line and its parent
 lsof -a -p 12345 -d cwd                   # the directory it was started in
 launchctl list | grep -i <name>           # macOS: is it a launchd job (a LaunchAgent, `brew services`)?
-systemctl --user status 12345             # Linux: which systemd unit it belongs to, if any
+systemctl status 12345                    # Linux: the systemd unit it belongs to, if any
 ```
 
 On macOS, `brew services list` shows the jobs Homebrew manages, and `~/Library/LaunchAgents` holds the definitions
