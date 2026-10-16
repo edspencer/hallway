@@ -146,7 +146,7 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
 
 ### D16 — Stack and conventions mirror Local Review
 
-- Node ≥ 22, TypeScript ESM, Hono, React, Vite, chokidar, `yaml`, `node --test`, changesets, npm provenance; data
+- Node ≥ 22.13 (D32), TypeScript ESM, Hono, React, Vite, chokidar, `yaml`, `node --test`, changesets, npm provenance; data
   home with env override; `packageRoot()`; single-export `port.ts` with a keypad mnemonic; SSE pattern; loopback
   security middleware; agent guide + `llms.txt`; backups; "rename, never delete".
 - Consistency across the author's projects, and those patterns are already proven in production use.
@@ -304,6 +304,54 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   development often happens on remote machines; if that stops being true, delete it.
 - **Rejected:** a `--host` flag (discoverable by users, contradicts the security model); tunnelling 127.0.0.1 through
   SSH for every preview (works, but not with the dev box's existing proxy).
+
+### D32 — Uptime history in `node:sqlite`; Node ≥ 22.13 (2026-10-16; resolves Q-STORE and Q-NODE-MIN)
+
+- Probe samples and hourly rollups live in `state/health.sqlite` through the built-in `node:sqlite`
+  (`server/health/uptime.ts`): no dependency, and rollups, windows and pruning are a few lines of SQL.
+- `node:sqlite` loads without a flag from **Node 22.13.0**; 22.5–22.12 need `--experimental-sqlite` and 22.0 doesn't
+  have it (`11-research-notes.md`). So `engines.node` is raised from `>=22` to **`>=22.13`**, and CI adds a Node 22.13
+  job so the floor stays tested (the `22` in the matrix resolves to the newest 22.x). Node 22 and 24 print an
+  `ExperimentalWarning` when the module loads; the daemon drops that one warning and nothing else. If an older Node
+  ignores `engines` (npm only warns), opening the store fails with a message naming the version needed.
+- Settings: WAL, `synchronous = NORMAL` (one insert per probe; losing the last moment of samples in a power cut is
+  fine).
+- **Rejected:** JSONL day-files (the fallback, needed only if 22.0–22.12 had to be supported: rollups and pruning by
+  hand); passing `--experimental-sqlite` (a flag in the bin's shebang or the service definition, for no gain);
+  `better-sqlite3` (a native dependency to build on install).
+
+### D33 — Scanner and prober details the spec left open (2026-10-16)
+
+- **Listener source on Linux:** `ss -ltnpH` when it runs, else `/proc/net/tcp{,6}` + `/proc/<pid>/fd` (D26). Both are
+  pure parsers with fixtures. Listeners whose owning process can't be seen are dropped (as `lsof` on macOS never shows
+  them).
+- **Project without markers:** when no `package.json`/`pyproject.toml`/`Cargo.toml`/`go.mod`/`Gemfile`/`.git` is found
+  above the cwd, the cwd itself is the project (so `python3 -m http.server` in a folder is labelled with that folder:
+  v0 acceptance criterion 4), unless the cwd is `/` or the home directory. The walk never accepts `~` or `/` as a
+  root, so a dotfiles repository in `~` doesn't claim everything under it.
+- **Labels:** `repo @ branch` for every listener in a linked worktree, and for every listener whose repository has
+  more than one checkout listening; otherwise the project name; otherwise `<process> :<port>`. `repo` is the main
+  checkout's directory name, from `git rev-parse --git-common-dir`. A detached HEAD shows its short commit.
+- **Observation id:** the first 16 hex characters of SHA-256 over project root (or cwd), port and the command with its
+  executable reduced to a basename and whitespace collapsed. `observed.json` keeps records for 90 days after last seen.
+- **Identity cache:** per PID, keyed also on the start time and command so a reused PID isn't confused with the old
+  process, for 10 minutes; the HTTP sniff runs on every scan (titles change), at most 8 at once.
+- **Orphans:** PPID 1 on both platforms; on Linux also a parent named `systemd` (the `systemd --user` subreaper).
+  Under launchd a LaunchAgent is PPID 1 too, so "orphan" means "not attached to a session", not "lost".
+- **Starting:** while a managed service is in its start grace period and not listening, its state is `unknown` with
+  `starting: true`, so no new state is needed in `AppState`. Starting probes are not uptime samples.
+- **Flap damping applies to any move away from `healthy`** (to `unhealthy`, `down` or `stopped`), counting consecutive
+  non-healthy probes of any kind. Uptime samples record each probe's own (undamped) state.
+- **Probe schedule:** each app has its own timer (interval × 0.9–1.1); the first round is spread over up to 2 s; a
+  shared semaphore caps `probe.concurrency`. Going live (a dashboard connects) pulls every app's next probe in to
+  within the live interval. A changed port or host resets an app to `unknown`; a changed `expected` keeps the state
+  and re-probes at once.
+- **Uptime bars:** 24 h = 48 × 30 min from samples; 7 d = 56 × 3 h and 90 d = 90 × 1 day (UTC days) from rollups, with
+  the hour in progress computed from samples. A bar's colour is its worst state (down > unhealthy > healthy >
+  stopped); no samples is `null` (no data). Uptime = healthy / (samples − stopped). Latency percentiles over 7 d and
+  90 d are sample-weighted percentiles of the hourly ones (rollups don't keep raw latencies), so approximate.
+- **ignore.yaml** is read by a small reader in `server/scanner/ignore.ts` that understands just the documented shape,
+  until the scanner is handed the store's parsed copy.
 
 ## Alternatives considered for the whole product
 

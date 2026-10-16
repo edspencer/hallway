@@ -45,13 +45,13 @@ Mirror Local Review (D16). Keep dependencies minimal.
 
 | Concern | Choice | Notes |
 |---------|--------|-------|
-| Runtime | Node ≥ 22 | `node:sqlite` is available and works without a flag on Node 24 (verified: v24.15.0, SQLite 3.51.3). Check behaviour on the oldest supported Node before relying on it. |
+| Runtime | Node ≥ 22.13 | 22.13 is the first 22.x where `node:sqlite` loads without a flag (D32, verified: `11-research-notes.md`). |
 | Language | TypeScript, ESM | |
 | HTTP | Hono + `@hono/node-server` | Including `hono/streaming` `streamSSE` for events. |
 | UI | React + Vite | Built into `dist/web`, served statically by the daemon. |
 | File watching | chokidar | |
 | Config format | `yaml` package | Preserve comments on round-trip writes where possible (the `yaml` package's Document API supports this). |
-| Health/uptime store | `node:sqlite` (preferred) or JSONL | See open question Q-STORE. |
+| Health/uptime store | `node:sqlite` | `state/health.sqlite`; decided in D32 (was Q-STORE). |
 | MCP | the official MCP TypeScript SDK | v2. Streamable HTTP transport mounted in Hono, plus stdio. |
 | Image rendering | `@resvg/resvg-js` + `opentype.js` | Only for generated cards (v2), reusing Local Review's approach. |
 | Screenshots | Playwright, **optional, lazily installed** | v2. Never a hard dependency. |
@@ -84,7 +84,7 @@ Mirror Local Review (D16). Keep dependencies minimal.
     <group-slug>.yaml         # one bookmark group per file (human/agent-editable)
   ignore.yaml                 # observed listeners the user chose to hide (human/agent-editable)
   state/                      # machine-written; never hand-edit; safe to delete
-    health.sqlite             # probe samples + rollups (or *.jsonl, see Q-STORE)
+    health.sqlite             # probe samples + hourly rollups (node:sqlite, D32)
     observed.json             # last-known identity of every observed listener, with first/last seen
     boot.json                 # last seen boot time, to detect reboots
   cache/                      # machine-written; regenerable

@@ -26,6 +26,11 @@ jobs:
         node: [22, 24]
         # macOS is the primary platform and Linux is supported alongside it (D26), so both run everything.
         os: [ubuntu-latest, macos-latest]
+        # The oldest supported Node (engines.node): the first 22.x where node:sqlite needs no flag (D32). The `22`
+        # above resolves to the newest 22.x, so without this the floor would go untested.
+        include:
+          - node: '22.13'
+            os: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       # Node 22 bundles npm 10 and the lockfile was written by npm 11; `npm ci` reads it fine with both.

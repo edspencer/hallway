@@ -71,6 +71,12 @@ Sources:
   and `select sqlite_version()` succeed, and Node prints `ExperimentalWarning: SQLite is an experimental feature`. The
   daemon would want to silence that warning (or accept it in the log) if Q-STORE picks SQLite. Earlier 22.x releases
   are still unchecked (Q-NODE-MIN). *Verified 2026-10-16.*
+- **The oldest Node 22 that loads `node:sqlite` without a flag is 22.13.0** (Q-NODE-MIN, D32). Checked with the
+  official `linux-x64` builds from nodejs.org, running `require('node:sqlite')`, `new DatabaseSync(':memory:')` and
+  `select sqlite_version()`: **22.0.0**, **22.5.0** and **22.12.0** fail with `ERR_UNKNOWN_BUILTIN_MODULE` (22.5–22.12
+  have it only behind `--experimental-sqlite`; 22.0 not at all); **22.13.0** works (SQLite 3.47.2) and prints the same
+  `ExperimentalWarning`. The whole test suite, uptime store included, also passes on 22.13.0. The daemon drops that
+  one warning while loading the module (`server/health/uptime.ts`, `loadSqlite`). *Verified 2026-10-16.*
 
 ## Names, npm and binary collisions
 
@@ -108,8 +114,28 @@ a Mac**. Move an item out of this list, with the date and how, once it has been.
 | `server/platform/darwin.ts`: LaunchAgents directory (`~/Library/LaunchAgents`) and `<label>.plist` naming | scaffold | Unit-tested on Linux and macOS CI; never installed on a Mac. |
 | The daemon binding 127.0.0.1 and serving the built dashboard on macOS | scaffold | CI (`macos-latest`) runs the tests and `smoke:pack`, which start the packed daemon and fetch from it. Not run interactively on a Mac. |
 | `hallway service install` via `launchctl bootstrap gui/<uid>` | v0 | Not built yet. |
-| `lsof -nP -iTCP -sTCP:LISTEN -F pcLn` parsing on current macOS | v0 | Not built yet. |
-| Boot time from `sysctl -n kern.boottime` | v1 | Not built yet. |
+| `lsof -nP -iTCP -sTCP:LISTEN -F pcLn` parsing on current macOS | v0 | Built (`darwin.ts`, `parseLsofListeners`). Unit-tested against a **hand-written** fixture in the documented `-F` format (`test/fixtures/platform/lsof-listen.txt`); never captured on a Mac. The real-scan test (`test/scanner.test.ts`) runs lsof for real on CI's `macos-latest`, which checks that a server we start is found with its cwd, but not lsof's output for anyone else's processes. |
+| cwd via `lsof -a -p <pids> -d cwd -Fn` (batched: one call for every PID) | v0 | Built; hand-written fixture; exercised by the same CI test. |
+| `ps -o pid=,ppid=,lstart=,command= -p <pids>` under `LC_ALL=C` (start time parsed as local time; argv recovered by splitting `command` on spaces, which is lossy for arguments containing a space) | v0 | Built; hand-written fixture; exercised by the same CI test. |
+| Orphans as PPID 1 (a LaunchAgent is PPID 1 too, so it also counts as one) | v0 | Built; unverified. |
+| Boot time from `sysctl -n kern.boottime` | v1 | Parser built and unit-tested against a hand-written fixture (`{ sec = …, usec = … } …`); recorded in `state/boot.json` from v0. Never run on a Mac. |
+
+## The scanner on Linux
+
+- **`/proc` works as the listener source without `ss`.** On a Debian 12 container with no `iproute2` (so no `ss`) and
+  no `lsof`, the scanner fell back to `/proc/net/tcp{,6}` (LISTEN rows are `st` `0A`; addresses are little-endian hex
+  words) and found each socket's owner by matching `socket:[<inode>]` links under `/proc/<pid>/fd`: about 30 ms for
+  the whole machine. `/proc/<pid>/cwd`, `cmdline` and `stat` (ppid; start time = `btime` + field 22 / `CLK_TCK`, which
+  was 100) gave the identity. With real servers started in temp directories (`python3 -m http.server 4567` in a folder
+  with no project files, and one small Node server in each of two git worktrees of one repository, on 4670 and 4671),
+  the scan reported the python server labelled with its directory and the two worktrees as `dash @ feature-a` and
+  `dash @ branch-b`, with the right cwd, `orphan: true` (started with `setsid`, so adopted by PID 1) and loopback
+  binds; a Node helper on 51234 was dropped as ephemeral and a raw TCP listener on 4590 went to "other".
+  *Verified 2026-10-16.*
+- Sockets whose owner can't be found (another user's process, without root; or another network namespace's) have no
+  PID, and the scanner drops them, which matches what `lsof` shows on macOS without root.
+- The `ss -ltnpH` parser is tested against a hand-written fixture only on that machine; the real-scan test exercises
+  it for real on CI's `ubuntu-latest`, which has `ss`.
 
 ## Caddy
 

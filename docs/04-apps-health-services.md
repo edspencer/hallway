@@ -165,7 +165,7 @@ Details:
 
 ## Uptime storage
 
-Store in `state/health.sqlite` (or JSONL; Q-STORE):
+Store in `state/health.sqlite`, through `node:sqlite` (D32):
 
 - **Samples** — one per probe: `(slug, ts, state, http_status, latency_ms)`. Retain **48 hours**.
 - **Hourly rollups** — `(slug, hour, n_samples, n_healthy, n_unhealthy, n_down, n_stopped, latency_p50, latency_p95,
