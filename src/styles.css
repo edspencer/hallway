@@ -402,7 +402,9 @@ kbd {
   border-bottom: 1px solid var(--hw-line);
 }
 .hw-header-inner {
-  display: flex;
+  /* brand | filter | status: the filter stays put however the counts change */
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) minmax(200px, 440px) minmax(max-content, 1fr);
   align-items: center;
   gap: 20px;
   max-width: 1480px;
@@ -443,9 +445,6 @@ kbd {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1;
-  max-width: 440px;
-  margin-left: auto;
   color: var(--hw-text-subtle);
 }
 .hw-filter > svg {
@@ -494,8 +493,9 @@ kbd {
 .hw-header-status {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 .hw-counts {
   display: flex;
@@ -2167,19 +2167,20 @@ kbd {
 /* narrow screens                                                                                                    */
 /* ---------------------------------------------------------------------------------------------------------------- */
 
+@media (max-width: 1180px) {
+  .hw-counts .hw-count--stopped {
+    display: none;
+  }
+}
 @media (max-width: 900px) {
   .hw-header-inner {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px 16px;
     padding: 10px 18px;
   }
   .hw-filter {
-    order: 3;
-    max-width: none;
-    flex-basis: 100%;
-  }
-  .hw-header-status {
-    margin-left: auto;
+    grid-row: 2;
+    grid-column: 1 / -1;
   }
   .hw-main {
     padding: 20px 18px 40px;
