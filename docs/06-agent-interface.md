@@ -10,25 +10,25 @@ The author's sibling project Local Review has **no MCP server at all**. Its agen
   `/agent-guide.md` endpoints that include live data (version, data-home path, current projects).
 
 That pattern works with every agent, needs no configuration, and makes a hand edit in a text editor behave exactly
-like an agent write. Spaghetti Junction adopts it as the **primary** interface. MCP (v2) is a typed convenience layer
+like an agent write. Hallway adopts it as the **primary** interface. MCP (v2) is a typed convenience layer
 over the *same* write module — never a separate code path, and never the only way to do something.
 
 ## Agent guide
 
-Ship `AGENT-GUIDE.md` in the package. Expose it as `sj guide`, `GET /agent-guide.md`, and summarised in
+Ship `AGENT-GUIDE.md` in the package. Expose it as `hallway guide`, `GET /agent-guide.md`, and summarised in
 `GET /llms.txt` / `GET /llms-full.txt`. Like Local Review, render live context into it: daemon version and URL, data
 home path, mode (direct/fronted) and base domain, and the current app and bookmark-group slugs.
 
 Contents (outline):
 
-1. What Spaghetti Junction is, in two sentences.
-2. **Rule: never start a long-running server directly.** Use `sj run <slug> -- <command>` (v1). Explain why: the
+1. What Hallway is, in two sentences.
+2. **Rule: never start a long-running server directly.** Use `hallway run <slug> -- <command>` (v1). Explain why: the
    server is then owned by launchd, not your session; it gets a stable port and a URL; the user can find it later.
    Include framework flag hints (`vite --port $PORT --strictPort`, `astro dev --port $PORT`, `next dev -p $PORT`).
 3. How to register an existing server: write `apps/<slug>.yaml` (show the minimal file: `name`, `port`) or
-   `sj app add`.
+   `hallway app add`.
 4. How to add bookmarks: write/edit `bookmarks/<group>.yaml`.
-5. How to check status: `sj status --json` or `GET /api/state`.
+5. How to check status: `hallway status --json` or `GET /api/state`.
 6. File-format reference (generated from the same schema the validator uses, so it cannot drift).
 7. Etiquette: never change an existing app's `port`; never delete files outside `apps/` and `bookmarks/`; prefer
    `expected: adhoc` for throwaway servers; do not touch `state/`, `cache/`, `generated/`.
@@ -38,13 +38,13 @@ Contents (outline):
 The tooling cannot fix the habit on its own: agents will keep running `npm run dev` unless told otherwise. Provide:
 
 - **A snippet for users' agent instruction files** (`CLAUDE.md`, `AGENTS.md`, etc.), printed by
-  `sj guide --snippet`:
+  `hallway guide --snippet`:
   > Never start a long-running dev or preview server directly (`npm run dev`, `vite`, `astro dev`, `next dev`,
-  > `python -m http.server`, …). Start it with `sj run <slug> -- <command>`, which keeps it running outside this
-  > session on a stable port and prints its URL. Run `sj guide` for details.
+  > `python -m http.server`, …). Start it with `hallway run <slug> -- <command>`, which keeps it running outside this
+  > session on a stable port and prints its URL. Run `hallway guide` for details.
 - **An optional pre-tool-use hook** for agents that support them (e.g. Claude Code's `PreToolUse` hook on the `Bash`
-  tool): `sj hook check-command` reads the hook payload from stdin, and if the command looks like a bare dev-server
-  start, blocks it with a message suggesting the equivalent `sj run` invocation. Document how to install it; never
+  tool): `hallway hook check-command` reads the hook payload from stdin, and if the command looks like a bare dev-server
+  start, blocks it with a message suggesting the equivalent `hallway run` invocation. Document how to install it; never
   install it automatically. (Verify the current hook payload format and blocking convention against the agent's docs
   at implementation time — Q-HOOK.)
 
@@ -55,7 +55,7 @@ The tooling cannot fix the habit on its own: agents will keep running `npm run d
 - **Same process and port as the dashboard**, mounted at `/mcp`, using MCP's Streamable HTTP transport. One service,
   one launchd job, one port to remember; and it shares the write module and file watcher, so an MCP write lights up
   every open dashboard for free.
-- **`sj mcp`**: a stdio MCP server for clients that prefer stdio. It is a thin bridge that forwards to the daemon's
+- **`hallway mcp`**: a stdio MCP server for clients that prefer stdio. It is a thin bridge that forwards to the daemon's
   HTTP API (so there is one writer), and fails with a clear message if the daemon is not running.
 - The security middleware applies to `/mcp` too: Host and Origin must be local (the MCP Streamable HTTP guidance
   itself calls for Origin validation to prevent DNS rebinding). JSON-RPC requests are `application/json`, so they
@@ -66,9 +66,9 @@ The tooling cannot fix the habit on its own: agents will keep running `npm run d
 Example client registration (verify exact syntax for each client at implementation time):
 
 ```sh
-claude mcp add --transport http spaghetti-junction http://localhost:7724/mcp
+claude mcp add --transport http hallway http://localhost:4255/mcp
 # or, stdio:
-claude mcp add spaghetti-junction -- sj mcp
+claude mcp add hallway -- hallway mcp
 ```
 
 ### Tools
@@ -102,7 +102,7 @@ Two data sets, very different risk:
 Every write tool returns the written entity and its new ETag, and accepts an optional `etag` for optimistic
 concurrency (409-equivalent error on mismatch).
 
-Optionally expose resources (`sj://state`, `sj://apps/<slug>`) with change notifications driven by the same event
+Optionally expose resources (`hallway://state`, `hallway://apps/<slug>`) with change notifications driven by the same event
 bus. Not required for v2.
 
 **Deliberately excluded from MCP:** `run`, `start`, `stop`, `restart`, `service add/remove`, `setup`, `teardown`.

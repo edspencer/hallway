@@ -37,8 +37,8 @@ service:
   command: ["local-review", "serve", "--quiet"]
 ```
 
-Note the difference: Paddock already has its own launchd job, so Spaghetti Junction must **not** create a second
-one (no `service:` block); Local Review does not, so Spaghetti Junction manages it.
+Note the difference: Paddock already has its own launchd job, so Hallway must **not** create a second
+one (no `service:` block); Local Review does not, so Hallway manages it.
 
 ### Discovered apps (adapters)
 
@@ -84,7 +84,7 @@ named it — what is it?"*
    - entries in `ignore.yaml` (ports, process names, directories)
    - a built-in list of known non-web daemons: `postgres`, `mysqld`, `redis-server`, `mongod`, `sshd`, `rapportd`,
      `ControlCenter`, `com.docker.*`, etc.
-   - Spaghetti Junction's own daemon and Caddy
+   - Hallway's own daemon and Caddy
    - ports belonging to declared/discovered apps (these enrich the app instead)
 3. **HTTP sniff:** `GET /` with a 2 s timeout. If it speaks HTTP at all (any status), it is a web app; record status,
    `<title>`, and favicon link. If not, put it in a collapsed "other listeners" group, not the main list.
@@ -107,7 +107,7 @@ named it — what is it?"*
    command) — PIDs change on every restart. Store first-seen, last-seen, last PID, full identity. Cache identity per
    PID between scans; `lsof` is slow enough (hundreds of ms) that re-identifying everything every scan is wasteful.
 
-**Claim** (UI button, `sj claim`, API, MCP): writes `apps/<slug>.yaml` from the observation — slug suggested from
+**Claim** (UI button, `hallway claim`, API, MCP): writes `apps/<slug>.yaml` from the observation — slug suggested from
 the package name, `port` = the observed port (**never a new one**), `expected: adhoc`, `project.dir`, and the
 observed command as a *commented-out* `service:` block the user can enable.
 
@@ -118,7 +118,7 @@ observed command as a *commented-out* `service:` block the user can enable.
 On daemon start, read the boot time (`sysctl -n kern.boottime` → `{ sec = …, usec = … } …`) and compare it with
 `state/boot.json`. If the machine has rebooted, every observation that was alive before the boot and is not
 listening now goes into a **"Lost at last reboot"** notice: what it was, where it ran from, the command that started
-it, and one-click actions — *restart it once* (`sj run`), *make it a service* (`sj service add`), or *dismiss*. This is
+it, and one-click actions — *restart it once* (`hallway run`), *make it a service* (`hallway service add`), or *dismiss*. This is
 only possible because observations are recorded while the processes are alive; once a process is gone its cwd cannot
 be recovered.
 
@@ -156,7 +156,7 @@ Probe ladder for each declared/discovered app, every `probe.intervalSeconds` (de
 Details:
 - Do not follow redirects. Abort the body once headers arrive; latency = time to response headers.
 - Send `Host: <host>:<port>` (the upstream, so apps with Host checks answer normally) and
-  `User-Agent: spaghetti-junction/<version>`.
+  `User-Agent: hallway/<version>`.
 - Use `GET`, not `HEAD` (some dev servers mishandle `HEAD`).
 - While at least one dashboard is connected over SSE, probe faster (default every 15 s) so the page feels live.
 - Probe the daemon's own health too, for the "is the fronting working" indicator in fronted mode: optionally probe
@@ -181,9 +181,9 @@ Computation rules:
 
 ### Generating launchd jobs
 
-`sj service add <slug>` (requires a `service:` block, or flags that create one) generates
-`~/Library/LaunchAgents/spaghetti-junction.app.<slug>.plist` and loads it. The daemon itself uses the same generator
-for `~/Library/LaunchAgents/spaghetti-junction.daemon.plist` (`sj service install`).
+`hallway service add <slug>` (requires a `service:` block, or flags that create one) generates
+`~/Library/LaunchAgents/hallway.app.<slug>.plist` and loads it. The daemon itself uses the same generator
+for `~/Library/LaunchAgents/hallway.daemon.plist` (`hallway service install`).
 
 Template, derived from the plist the author already uses to run Paddock as a service:
 
@@ -192,7 +192,7 @@ Template, derived from the plist the author already uses to run Paddock as a ser
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
-    <key>Label</key>              <string>spaghetti-junction.app.review</string>
+    <key>Label</key>              <string>hallway.app.review</string>
     <key>ProgramArguments</key>
     <array>
       <string>/ABSOLUTE/PATH/TO/node</string>                <!-- resolved, never a shim -->
@@ -254,15 +254,15 @@ The generator must:
   the same Node that runs the service;
 - build the rest of `PATH` from stable directories only, dropping per-shell patterns (`fnm_multishells`, etc.) and any
   entry that does not exist;
-- record the resolved Node version, so `sj doctor` can warn when that version has been uninstalled (the absolute path
-  will break), and `sj service regenerate <slug>` can fix it.
+- record the resolved Node version, so `hallway doctor` can warn when that version has been uninstalled (the absolute path
+  will break), and `hallway service regenerate <slug>` can fix it.
 
-`sj doctor` should also scan existing `spaghetti-junction.*` plists for these problems.
+`hallway doctor` should also scan existing `hallway.*` plists for these problems.
 
 ### Ports and environment
 
 - `PORT` and `HOST=127.0.0.1` (plus `HOSTNAME`) are injected. Frameworks that ignore `PORT` need flags; the docs and
-  `sj run` hints should cover the common ones: Vite `--port $PORT --strictPort` (**`--strictPort` matters**: without
+  `hallway run` hints should cover the common ones: Vite `--port $PORT --strictPort` (**`--strictPort` matters**: without
   it Vite silently picks another port when the one it wants is busy, and the app "moves"), Astro `--port`, Next `-p`.
 - **Never reassign an app's existing port.** Apps hardcode their own ports in helper scripts, dev-proxy configs and
   baked-in site URLs (both seen in the motivating incident). A claimed or declared app keeps the port it already uses.
@@ -274,14 +274,14 @@ The generator must:
 - launchd does **not** rotate `StandardOutPath`/`StandardErrorPath`; files grow forever (the author's existing service
   logs do). The daemon must rotate them: because launchd keeps the file descriptor open, *rename* does not work —
   copy then truncate in place when a file exceeds a size (default 10 MB), keeping N generations (Q-LOG-ROTATION).
-- `sj logs <slug> [--lines N] [--follow]` and `GET /api/apps/:slug/logs`.
+- `hallway logs <slug> [--lines N] [--follow]` and `GET /api/apps/:slug/logs`.
 
-## `sj run` — the one command agents should use (v1)
+## `hallway run` — the one command agents should use (v1)
 
-`sj run` replaces the ad-hoc `npm run dev` that creates orphans. It is the successor to Paddock's `pm start`.
+`hallway run` replaces the ad-hoc `npm run dev` that creates orphans. It is the successor to Paddock's `pm start`.
 
 ```
-sj run <slug> [--cwd DIR] [--port N] [--persist] [--name "Display name"] -- <command...>
+hallway run <slug> [--cwd DIR] [--port N] [--persist] [--name "Display name"] -- <command...>
 ```
 
 1. Create or update `apps/<slug>.yaml`: `expected: adhoc` (or `running` with `--persist`), `service.command`,
@@ -293,8 +293,8 @@ sj run <slug> [--cwd DIR] [--port N] [--persist] [--name "Display name"] -- <com
    - With `--persist`: `RunAtLoad true`, `KeepAlive true` — a full service.
 3. Wait until the port is listening (default timeout 30 s), then print the URL(s) and the log path and **exit 0**.
    If it does not come up, print the last 30 log lines and exit 1.
-4. Re-running `sj run <slug>` with no command reuses the recorded one (as `pm start` did).
+4. Re-running `hallway run <slug>` with no command reuses the recorded one (as `pm start` did).
 
-Companion commands: `sj stop <slug>`, `sj restart <slug>`, `sj logs <slug>`.
+Companion commands: `hallway stop <slug>`, `hallway restart <slug>`, `hallway logs <slug>`.
 
 Because it returns promptly and prints the URL, an agent can use it inside a tool call without hanging.

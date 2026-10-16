@@ -3,7 +3,7 @@
 ## Process model
 
 ```
-                         ┌──────────────────────────── Spaghetti Junction daemon (one Node process, user-level) ───┐
+                         ┌──────────────────────────── Hallway daemon (one Node process, user-level) ──────────────┐
                          │                                                                                         │
  browser ── direct ────▶ │  HTTP server on 127.0.0.1:<port>                                                        │
    │       mode          │    /            dashboard (React SPA)                                                  │
@@ -23,8 +23,8 @@
    └── fronted mode ──▶ Caddy (127.0.0.1:443/80) ──▶ <slug>.<base>  → 127.0.0.1:<app port>
                                                   └─▶ dashboard host → 127.0.0.1:<daemon port>
 
- CLI `sj …` ── reads/writes the same files via the same write module; asks the daemon (HTTP) for live state.
- `sj mcp`  ── stdio MCP bridge to the daemon.                                              (v2)
+ CLI `hallway …` ── reads/writes the same files via the same write module; asks the daemon (HTTP) for live state.
+ `hallway mcp`  ── stdio MCP bridge to the daemon.                                              (v2)
 ```
 
 Rules:
@@ -36,7 +36,7 @@ Rules:
 - **The daemon never proxies app traffic.** Caddy does that (D4). The daemon only serves its own UI/API.
 - **Never require environment variables for normal operation.** Agents usually invoke commands from non-login shells
   that source no profile (Paddock's `pm` needed a config file for exactly this reason), and launchd jobs inherit no
-  shell environment at all. Defaults must work with an empty environment; `$SPAGHETTI_JUNCTION_HOME` is an override,
+  shell environment at all. Defaults must work with an empty environment; `$HALLWAY_HOME` is an override,
   never a requirement.
 
 ## Tech stack
@@ -62,19 +62,21 @@ Mirror Local Review (D16). Keep dependencies minimal.
 
 - Single source of truth: a tiny `server/port.ts` that only exports `DEFAULT_PORT`, so the Vite config can import it
   without loading the server (Local Review's pattern).
-- **`DEFAULT_PORT = 7724`** (decided, D20) — "SPAG" on a phone keypad, echoing Local Review's 5622 = "LOCA". Put the
-  mnemonic in the comment, as Local Review does. IANA lists 7724 as "Novell Snap-in Deep Freeze Control" (2008), an
-  enterprise endpoint product that is not a realistic conflict on a developer's machine.
+- **`DEFAULT_PORT = 4255`** (decided, D20) — "HALL" on a phone keypad, echoing Local Review's 5622 = "LOCA". Put the
+  mnemonic in the comment, as Local Review does, e.g. `// 4255 spells HALL on a phone keypad.` (The pre-rename
+  default is recorded in D20.) IANA has no individual registration for 4255; it falls inside the legacy
+  `vrml-multi-use` block (4200–4299), which is not a realistic conflict on a developer's machine. It also avoids
+  common dev-server defaults (Angular 4200, Astro 4321).
 - Never use 5000 or 7000: macOS's AirPlay Receiver listens there (Local Review moved off 5000 for exactly this).
 - `--port <n>` and `$PORT` override. Fail with a clear message on `EADDRINUSE` / `EACCES`.
 
 ## Data home
 
-`~/.spaghetti-junction`, overridable with `$SPAGHETTI_JUNCTION_HOME`. Resolve `~` explicitly (Local Review's
+`~/.hallway`, overridable with `$HALLWAY_HOME`. Resolve `~` explicitly (Local Review's
 `expandHome`).
 
 ```
-~/.spaghetti-junction/
+~/.hallway/
   config.yaml                 # global settings (human/agent-editable)
   apps/
     <slug>.yaml               # one declared app per file (human/agent-editable)
@@ -117,14 +119,14 @@ future migration can be detected. Unknown keys are preserved on write, reported 
 ```yaml
 version: 1
 
-port: 7724                      # daemon port (127.0.0.1 only)
+port: 4255                      # daemon port (127.0.0.1 only)
 
-mode: direct                    # direct | fronted   (fronted requires `sj setup`, v1)
+mode: direct                    # direct | fronted   (fronted requires `hallway setup`, v1)
 
 domain:
   base: localhost               # apps are served at <slug>.<base>
-  dashboard: junction.localhost # where the dashboard lives in fronted mode.
-                                # Default: "junction.<base>" when base is "localhost";
+  dashboard: hallway.localhost  # where the dashboard lives in fronted mode.
+                                # Default: "hallway.<base>" when base is "localhost";
                                 # the bare apex "<base>" for any custom domain.
   tls: true                     # fronted mode is always HTTPS; kept explicit for clarity
 
@@ -161,7 +163,7 @@ dashboard:
 ### `apps/<slug>.yaml`
 
 The slug is the filename. It becomes the hostname label in fronted mode, so it must be a valid DNS label:
-`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`. Reserved slugs: the dashboard's label (`junction` by default), `www`, `api`.
+`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`. Reserved slugs: the dashboard's label (`hallway` by default), `www`, `api`.
 
 ```yaml
 name: Local Review
@@ -182,7 +184,7 @@ proxy:                          # fronted mode only
   preserveHost: false           # default false: Host is rewritten to the upstream (D9)
   aliases: []                   # extra hostnames, e.g. [review] → review.<base>
 
-service:                        # optional (v1). Present = Spaghetti Junction keeps it alive via launchd.
+service:                        # optional (v1). Present = Hallway keeps it alive via launchd.
   command: ["local-review", "serve", "--quiet"]   # argv array; resolved to absolute paths at generation time
   cwd: ~
   env: {}                       # PORT and HOST are injected automatically (see 04)
@@ -342,7 +344,7 @@ daemon can also start and stop launchd jobs, and in v2 it speaks MCP, so this ma
 - **No authentication in v1.** Anything running as the user can already edit the data home. Whether MCP needs a token
   is Q-MCP-AUTH.
 
-Reference implementation, from Local Review's `server/security.ts` (MIT, same author). Spaghetti Junction's version
+Reference implementation, from Local Review's `server/security.ts` (MIT, same author). Hallway's version
 must additionally accept the configured dashboard host:
 
 ```ts
@@ -377,7 +379,7 @@ itself would answer `403 forbidden host` to a request arriving as `review.localh
 - **`packageRoot()`**: find the package's own root by walking up from `import.meta.url` looking for a `package.json`
   whose `name` matches, rather than assuming a directory depth (works from source via tsx and from `dist/`).
 - **Startup banner** printing the URL and data-home path.
-- **`tildify`** when showing paths in the UI (`/Users/x/.spaghetti-junction` → `~/.spaghetti-junction`).
+- **`tildify`** when showing paths in the UI (`/Users/x/.hallway` → `~/.hallway`).
 - **Automatic backups** of the editable files into `backups/<timestamp>/` on a schedule and before destructive
   operations.
 - **Exit codes:** 0 success, 1 error, 2 usage error (print usage).

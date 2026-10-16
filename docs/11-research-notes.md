@@ -20,7 +20,7 @@ run, file read, page fetched); "reported" means taken from a secondary source. R
 ## ICANN 2026 new gTLD round
 
 Relevant only to users who pick a made-up TLD (`03-networking.md`): it is why such TLDs get a warning and an IANA
-check in `sj doctor`. *Reported, from ICANN announcements and coverage; fetched 2026-09-30 and 2026-10-14.*
+check in `hallway doctor`. *Reported, from ICANN announcements and coverage; fetched 2026-09-30 and 2026-10-14.*
 
 - Application window: 30 April – 12 August 2026.
 - 1,616 applications proceeding (announced September 2026).
@@ -51,9 +51,14 @@ Sources:
   (but exposes it to the network). *Verified 2026-10-14.*
 - **Ports 80/443 already in use** on the author's machine by an `ssh` process owned by the user — a container-runtime
   VM's port forward. *Verified 2026-10-14.*
-- **IANA port registry, checked 2026-10-15** (`service-names-port-numbers.csv`): 7724 is registered to
-  `nsdeepfreezectl` ("Novell Snap-in Deep Freeze Control", 2008) for TCP and UDP; 7721–7723 and 7729–7733 are
-  unassigned. *Verified.* Kept as the default (D20): it is not a realistic conflict on a developer machine.
+- **IANA port registry, checked 2026-10-16**
+  (`https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.csv`):
+  there is **no individual registration for 4255**, and none for any port from 4250 to 4260. 4255 does fall inside the
+  legacy block registration `vrml-multi-use`, **4200–4299** ("VRML Multi User Systems", assignee Mitra, with no
+  transport protocol or registration date). *Verified.* Chosen as the default (D20): a 1990s-era block registration is
+  not a realistic conflict on a developer machine. Nearby dev-server defaults to stay clear of: Angular CLI 4200, Astro
+  4321, Jekyll and Phoenix 4000. *Reported (well-known defaults).* The pre-rename default and its IANA entry are
+  recorded in D20.
 - **AirPlay Receiver** listens on 5000 and 7000. *Reported; the reason Local Review moved its default off 5000.*
 - **`lsof` noise:** on the author's machine, listening sockets from IDE language servers and agent-tool helpers on
   ephemeral ports (49152–65535, loopback) outnumbered dev servers roughly ten to one. *Verified 2026-09-16.*
@@ -62,6 +67,27 @@ Sources:
   were distinguishable only by branch. After a reboot the cwd of dead processes was unrecoverable; they could only be
   matched afterwards by cross-referencing build-cache mtimes, inconclusively. *Verified 2026-09-30.*
 - `node:sqlite` works without a flag on Node v24.15.0 (SQLite 3.51.3). *Verified 2026-10-14.*
+
+## Names, npm and binary collisions
+
+*Checked 2026-10-16 against `https://registry.npmjs.org/<name>` (404 = free).* The pre-rename naming record (2026-10-14)
+is in D1.
+
+- **Free:** `hallway`, `hall-way`; also the shortlisted alternatives `strays`, `pinfold`, `foundling`, `digory`,
+  `otherwood`, `kenning`, `dewpond`, `gyratory`, `sliproad`. *Verified.* The author is publishing a placeholder to
+  reserve `hallway`; it was still unpublished at the time of this check.
+- **Taken:** `porter`, `portico`, `concierge`, `foyer`, `lobby`, `roundup`, `corral`, `wrangler`, `muster`, `stray`,
+  `flyover`, `slipway`, `signpost`, `fingerpost`, `satnav`, `beacon`. *Verified.*
+- **Short-alias candidate `hw` (Q-BINARY):**
+  - Homebrew: no formula installs an executable named `hw`, `hallway` or `hwy` (searched the executables index
+    `https://formulae.brew.sh/api/internal/executables.txt`, 8,521 formulae). *Verified.*
+  - Debian stable: no package ships a file named `hw` (packages.debian.org contents search, exact filename). *Verified.*
+  - npm: a package named `hw` exists (v0.0.3, created 2015, last modified 2022) and declares an `hw` bin. It is a
+    personal package with about one download a week, so a real collision is very unlikely, but a user who has it
+    installed globally would get a bin conflict. *Verified.*
+  - Not found as a command on a stock Linux box. **Not checked:** a stock macOS install, or popular shell-framework
+    aliases (e.g. Oh My Zsh plugins). Check both before shipping the alias.
+  - `hwy` is also an npm web framework (no bin); `hall` is an npm router package (no bin). Neither was pursued.
 
 ## Caddy
 
