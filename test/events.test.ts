@@ -159,25 +159,36 @@ describe('the watcher', () => {
     assert.ok(!store.apps.has('foo'));
   });
 
-  test('a burst of writes to one file is one event', { timeout: 10_000 }, async () => {
+  test('a burst of writes to one file is one event', { timeout: 20_000 }, async () => {
     // The debounce is trailing: writes closer together than the window are one event. A wide window keeps the burst
     // (five writes ~5 ms apart) well inside it even on a loaded CI runner, where the 60 ms used elsewhere can be
     // outlasted by a single stalled tick and legitimately split the burst in two.
     const WINDOW = 400;
     const { home, store, until, got } = await watched(WINDOW);
     const f = path.join(home, 'bookmarks', 'g.yaml');
-    const at: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      fs.writeFileSync(f, `title: G${i}\nlinks: []\n`);
-      at.push(Date.now());
-      await sleep(5);
+    const quiet = async () => {
+      // nothing more for two whole windows, rather than a fixed sleep
+      for (let n = got.length, quietSince = Date.now(); Date.now() - quietSince < 2 * WINDOW; await sleep(20))
+        if (got.length !== n) [n, quietSince] = [got.length, Date.now()];
+    };
+    // A stalled runner can stretch a 5 ms sleep past the window, and then the writes really aren't a burst: that says
+    // nothing about the debounce, so let things settle and try again rather than fail.
+    let gaps: number[] = [];
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const at: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        fs.writeFileSync(f, `title: G${i}\nlinks: []\n`);
+        at.push(Date.now());
+        await sleep(5);
+      }
+      gaps = at.slice(1).map((t, i) => t - at[i]);
+      if (Math.max(...gaps) < WINDOW / 2) break;
+      await quiet();
+      got.length = 0;
     }
-    const gaps = at.slice(1).map((t, i) => t - at[i]);
-    assert.ok(Math.max(...gaps) < WINDOW, `the writes weren't a burst (gaps ${gaps.join(', ')} ms): the runner stalled`);
+    assert.ok(Math.max(...gaps) < WINDOW / 2, `the writes weren't a burst in four tries (last gaps ${gaps.join(', ')} ms): the runner stalled`);
     await until((e) => e.type === 'bookmarks', 5000);
-    // quiescence: nothing more for two whole windows, rather than a fixed sleep
-    for (let n = got.length, quietSince = Date.now(); Date.now() - quietSince < 2 * WINDOW; await sleep(20))
-      if (got.length !== n) [n, quietSince] = [got.length, Date.now()];
+    await quiet();
     assert.equal(got.filter((g) => g.e.type === 'bookmarks').length, 1, JSON.stringify(got.map((g) => g.e)));
     assert.equal(store.groups.get('g')!.value!.title, 'G4', 'and the one event carries the last write');
   });
