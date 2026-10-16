@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What shipped in which release (v0, v1 and most of v2 are out), what is left, and the acceptance criteria each milestone is checked against.
+description: What shipped in which release (v0, v1 and most of v2 are out, plus Windows best effort), what is left, and the acceptance criteria each milestone is checked against.
 ---
 
 Each milestone is useful on its own, and each is checked by **running the software** against the criteria below,
@@ -9,7 +9,10 @@ not by reading the code.
 :::note[Where things stand]
 **v0 and v1 have shipped, and so has all of v2's software**, for macOS and Linux. What is left is v2's last
 criterion: running everything on a real Mac. Fronted mode has run for real on Linux and on CI's macOS runners, but no
-browser has been driven on a Mac yet, and nothing has been checked across a real reboot or a macOS update. The
+browser has been driven on a Mac yet, and nothing has been checked across a real reboot or a macOS update.
+
+**Windows** is supported where feasible, best effort, since 0.4.0 and 0.5.0: everything but fronted mode. It has run
+only on GitHub's hosted Windows runners, not yet on a real Windows desktop. See [Windows](#windows) below. The
 [specification](https://github.com/edspencer/hallway/blob/main/spec.md) in the repository is the source of truth.
 :::
 
@@ -21,6 +24,8 @@ browser has been driven on a Mac yet, and nothing has been checked across a real
 | **0.2.0** | The rest of v1's networking: [fronted mode](/networking/fronted-mode/) (`hallway setup` and `teardown`, Caddy, `https://<app>.localhost`), [custom domains](/networking/custom-domains/), the fallback page and doctor's networking checks. From v2: the [MCP server](/agents/mcp/) and the [dev-server hook](/agents/hook/). |
 | **0.3.0** | The last of v1: [Lost at last reboot](/concepts/services/#lost-at-last-reboot). From v2: [screenshot thumbnails and generated cards](/concepts/thumbnails/), and a fast 90-day uptime view. |
 | **0.3.1** | A fix: `hallway lost dismiss --all` was refused as an unknown option. |
+| **0.4.0** | [Windows](#windows), best effort: the daemon, dashboard, health checks, bookmarks, MCP and the CLI's file commands run natively, and the [port scanner](/concepts/apps/#observed-listeners-the-scanner) finds Windows' listeners with each one's directory, project and branch, without administrator rights. `hallway setup` refuses on Windows: fronted mode is out of scope there. On every OS, a listener whose directory can't be read shows its command line instead. |
+| **0.5.0** | Windows managed services: `hallway service install` and [`hallway run`](/agents/hallway-run/) work there, as [per-user scheduled tasks](/concepts/services/#windows) that start at logon. |
 
 ## v0: The front page
 
@@ -116,12 +121,30 @@ Done when:
 4. The 90-day view renders from rollups only and stays fast with 30 apps. (Met.)
 5. Every v0 and v1 criterion has been run on a real Mac, with nothing left marked unverified on macOS. **(Not yet.)**
 
+## Windows
+
+**Supported where feasible, best effort** (since 0.4.0). macOS comes first and Linux sits alongside it; Windows comes
+third. Hallway runs natively there (not through WSL) and never asks for administrator rights.
+
+- **What works:** the daemon, the dashboard, health checks and uptime, bookmarks, the
+  [port scanner](/concepts/apps/#observed-listeners-the-scanner) (0.4.0), MCP, the agent guide, the CLI, and
+  [managed services](/concepts/services/#windows) as per-user scheduled tasks that start at logon (0.5.0).
+- **What doesn't:** [fronted mode](/networking/fronted-mode/). Its parts (the 443/80 redirect, trusting a root
+  certificate, a custom domain's resolver) have no user-level equivalent on Windows, so `hallway setup` refuses and
+  apps keep their `http://localhost:<port>` addresses. Services don't run while you're logged off: Linux's lingering
+  has no Windows equivalent without a stored password or administrator rights.
+- **How it was checked:** unit tests, `smoke:pack`, the scanner (as an administrator and as a standard user) and real
+  scheduled tasks all run in CI on GitHub's `windows-latest` runners. **Not yet checked on a real Windows desktop:** a
+  real logon starting the tasks and a logoff stopping them, no console window flashing at logon, a standard user
+  registering tasks, an interactive user's dev servers, `hallway open`, and non-English Windows.
+
 ## What is left
 
 - **A run on a real Mac** (v2 criterion 5). Still unverified there: Safari, Chrome and Firefox accepting Hallway's
   certificate, and Safari resolving `*.localhost`; services and the daemon coming back after a logout or a reboot
   (`RunAtLoad`), and "Lost at last reboot" after a real one; the pf redirect surviving another tool reloading
   `/etc/pf.conf`, and a macOS update. On Linux, a real reboot (with lingering on) hasn't been run either.
+- **A run on a real Windows desktop**, for the [Windows](#windows) items above.
 - **Service controls in the dashboard.** The detail drawer doesn't yet have start, stop and restart buttons or a live
   log tail; the CLI and the [HTTP API](/reference/http-api/) do.
 - **Discovery adapters.** The interface for reading another tool's registry exists, but no adapter ships yet (see

@@ -34,7 +34,7 @@ export async function sections(): Promise<Section[]> {
 
 export const intro = `# ${TITLE}
 
-> ${TAGLINE}. A small, always-on, local-only service for a developer's own machine (macOS and Linux): a live dashboard of every local web server (declared, discovered from other tools, or simply found listening), with health, uptime and bookmarks; native launchd or systemd user services for the apps that should survive a reboot; and, upcoming, memorable HTTPS hostnames via Caddy.
+> ${TAGLINE}. A small, always-on, local-only service for a developer's own machine (macOS and Linux, and Windows best effort): a live dashboard of every local web server (declared, discovered from other tools, or simply found listening), with health, uptime and bookmarks; native user services (launchd, systemd, or a scheduled task on Windows) for the apps that should survive a reboot; and, on macOS and Linux, memorable HTTPS hostnames via Caddy.
 
 **Status: v0 is released** (\`npm i -g hallway\`, Node 22.13+). Each feature is marked v0 (available now), v1 or v2 (upcoming); see ${SITE_URL}/roadmap/.
 

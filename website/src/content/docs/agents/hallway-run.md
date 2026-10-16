@@ -26,7 +26,7 @@ command as written, so it stays right if you edit the file later.
 1. **Registers the app.** It creates or updates `apps/<slug>.yaml` with the command, the working directory (default:
    where you ran it) and the port: the app's existing port if it has one, the one you pinned with `--port`, or else a
    stable one assigned from 5100–5999. The app is `expected: adhoc`, or `running` with `--persist`.
-2. **Hands the server to the OS's service manager** (a launchd job on macOS, a systemd user unit on Linux), so it is
+2. **Hands the server to the OS's service manager** (a launchd job on macOS, a systemd user unit on Linux, a scheduled task on Windows), so it is
    owned by that, **not by your session**, and survives the session ending.
    - Without `--persist`, it won't come back after a reboot; it stays on the dashboard as `stopped`, is listed under
      [Lost at last reboot](/concepts/services/#lost-at-last-reboot), and `hallway run <slug>` starts it again.
@@ -67,7 +67,8 @@ moves away from the URL Hallway printed.
 ## Why launchd and systemd, and why not PM2
 
 launchd is how macOS itself keeps things running, and systemd is how most Linux distributions do; both are reliable
-across reboots. A second process manager (PM2, or a home-grown wrapper like the ones this command replaces) would be
+across reboots. On Windows, best effort, Task Scheduler starts the server at logon and Hallway's own small supervisor
+restarts it if it exits ([details](/concepts/services/#windows)). A second process manager (PM2, or a home-grown wrapper like the ones this command replaces) would be
 one more supervisor on top of them, with its own history of
 boot-integration problems. See [Services and reboots](/concepts/services/).
 

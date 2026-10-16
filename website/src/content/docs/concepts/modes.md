@@ -12,6 +12,7 @@ you're in.
 | Dashboard | `http://localhost:4255` | `https://hallway.localhost` (or your custom domain's apex), and still `http://localhost:4255` |
 | Needs | Nothing | Caddy 2.7 or later; a one-time certificate trust; for custom domains, dnsmasq |
 | Sudo | Never | Once, during [`hallway setup`](/networking/setup-and-doctor/) (and again to undo it) |
+| Platforms | macOS, Linux and Windows (best effort) | macOS and Linux only |
 
 ## Direct mode
 

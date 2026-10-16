@@ -6,6 +6,12 @@ description: The one command that needs sudo, what it changes and why that is sa
 Every step that needs root lives in one command, `hallway setup`, so the daemon never needs privileges. You only need
 it for [fronted mode](/networking/fronted-mode/): direct mode, the default, needs no setup at all.
 
+:::note[Not on Windows]
+Fronted mode is macOS and Linux only. On Windows (best effort) its parts have no user-level equivalent, so
+`hallway setup` refuses before it looks for or changes anything, `hallway teardown` has nothing to undo, and apps keep
+their `http://localhost:<port>` addresses.
+:::
+
 ## `hallway setup`
 
 <span class="ms ms--shipped">v1</span> Run it once, when you want fronted mode:
