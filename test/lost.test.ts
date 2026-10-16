@@ -17,7 +17,7 @@ import { type Platform, type ProcessInfo, type RawListener, currentPlatform, pla
 import { ProviderRegistry } from '../server/providers.ts';
 import type { Observation } from '../server/scanner/types.ts';
 import { Services } from '../server/services/index.ts';
-import { exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -118,7 +118,7 @@ describe('computeLost', () => {
 describe('LostStore', () => {
   test('kept across instances until dismissed; the file goes with the last item', () => {
     const dir = tmpDir('hw-test-lost-');
-    cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(dir));
     const file = path.join(dir, 'state', 'lost.json');
     const s = new LostStore(file);
     assert.equal(s.get(), null);
@@ -166,7 +166,7 @@ async function rebooted() {
   await s.store.patchConfig({ scan: { includeEphemeralPorts: true, minPort: 1 } });
   const projDir = tmpDir('hw-test-lost-proj-');
   const docsDir = tmpDir('hw-test-lost-docs-');
-  cleanups.push(() => fs.rmSync(projDir, { recursive: true, force: true }), () => fs.rmSync(docsDir, { recursive: true, force: true }));
+  cleanups.push(() => rmTmp(projDir), () => rmTmp(docsDir));
   fs.writeFileSync(path.join(projDir, 'package.json'), JSON.stringify({ name: 'scratch-pad' }));
   const [pViz, pDocs, pGone] = await Promise.all([freePort(), freePort(), freePort()]);
   await s.store.createApp('docs', { name: 'Docs deck', port: pDocs, expected: 'adhoc', service: { command: ['node', 'serve.js'], cwd: docsDir, runAtLoad: false, keepAlive: false } });
@@ -195,7 +195,7 @@ async function rebooted() {
   const calls: string[] = [];
   let nextPid = 500;
   const userHome = tmpDir('hw-test-lost-user-');
-  cleanups.push(() => fs.rmSync(userHome, { recursive: true, force: true }));
+  cleanups.push(() => rmTmp(userHome));
   const services = new Services({
     store: s.store,
     platform: platformFor('linux'),

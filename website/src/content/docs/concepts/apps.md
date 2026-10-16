@@ -60,8 +60,12 @@ never named it. What is it?"*
 
 Every two minutes (and on demand, with `hallway scan`), the scanner:
 
-1. **Lists listening TCP sockets** with `lsof` on macOS, or `ss` (falling back to `/proc`) on Linux. Without root it
-   sees only your own processes, which is the intended scope.
+1. **Lists listening TCP sockets** with `lsof` on macOS, `ss` (falling back to `/proc`) on Linux, or `netstat` and
+   `tasklist` on Windows. Without root it sees only your own processes, which is the intended scope. Windows doesn't
+   expose a process's working directory, so there Hallway reads it from the process's own memory with one PowerShell
+   call per scan, which needs no administrator rights for your own processes (elevated, other users' and 32-bit
+   processes are out of reach). On any OS, a listener whose directory can't be read shows its command line in the
+   observed tray instead, with a tooltip saying why.
 2. **Filters out the noise.** On a typical development machine, IDE language servers and agent-tool helpers outnumber
    real dev servers about ten to one. Hallway skips ports below 1024, the ephemeral range 49152–65535 (where those
    helpers live), known non-web daemons (`postgres`, `redis-server`, `sshd` and the like), itself, Caddy, anything in
@@ -72,8 +76,8 @@ Every two minutes (and on demand, with `hallway scan`), the scanner:
    primary clue**. From it Hallway walks up to the project root (the nearest `package.json`, `pyproject.toml`,
    `Cargo.toml`, `go.mod` or `.git`), takes a name and description from `package.json` or the README, reads the git
    branch and last commit, guesses the framework, notes the bind address, and checks the parent process: a parent of
-   PID 1 with no service manager behind it means the session that started it is gone, so it is flagged **orphaned**.
-   A process that launchd or systemd runs (a LaunchAgent, a `brew services` job, a systemd service) has PID 1 as its
+   PID 1 (on Windows, a parent that is no longer running) with no service manager behind it means the session that
+   started it is gone, so it is flagged **orphaned**. A process that launchd or systemd runs (a LaunchAgent, a `brew services` job, a systemd service) has PID 1 as its
    parent too, but it isn't orphaned: Hallway shows what supervises it instead, as `launchd: com.example.api` or
    `systemd: api.service`.
 

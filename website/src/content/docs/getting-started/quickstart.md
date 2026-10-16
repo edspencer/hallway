@@ -3,8 +3,9 @@ title: Quickstart
 description: The first five minutes with Hallway.
 ---
 
-Everything on this page works in the current release, on macOS and Linux, with no sudo. For
-the details of installing (Node version, lingering on Linux), see [Installation](/getting-started/installation/).
+Everything on this page works in the current release, on macOS and Linux, with no sudo, and on Windows (best effort)
+with no administrator rights. For the details of installing (Node version, lingering on Linux, the scheduled task on
+Windows), see [Installation](/getting-started/installation/).
 
 ## 1. Start it
 
@@ -13,6 +14,9 @@ npm i -g hallway
 hallway service install      # run the daemon at every login
 hallway open
 ```
+
+Only trying it out? `npx hallway` runs the dashboard in the foreground, until you close the terminal. Install it as
+above to keep it: Hallway won't install a service from npx's cache, which npm can delete at any time.
 
 The dashboard opens at `http://localhost:4255`. The page title is your machine's name.
 
@@ -106,7 +110,7 @@ See [Working with agents](/agents/overview/).
 - [Services and reboots](/concepts/services/): keep apps running across restarts, and see what the last reboot took
   down.
 - [Fronted mode](/networking/fronted-mode/): `https://slides.localhost` instead of a port, after one
-  `hallway setup`.
+  `hallway setup` (macOS and Linux only).
 - [Thumbnails](/concepts/thumbnails/): screenshots of your apps on their doors, or generated cards.
 - The [MCP server](/agents/mcp/) and the [dev-server hook](/agents/hook/), for coding agents.
 - The [CLI reference](/reference/cli/) and the [file formats](/reference/app-yaml/).

@@ -12,7 +12,7 @@ import { darwinFronting, pfAnchor, resolverText } from '../server/platform/front
 import { dnsmasqConf } from '../server/platform/fronting.ts';
 import { type Facts, type SetupDeps, SetupError, cmdLine, formatPlan, planSetup, runPlan, setup, teardown, versionAtLeast } from '../server/proxy/setup.ts';
 import { HSTS_PRELOADED_TLDS, parseTlds, tldVerdict, delegatedTlds } from '../server/proxy/tld.ts';
-import { onWindows, ROOT, tmpDir } from './fixture.ts';
+import { onWindows, ROOT, tmpDir, rmTmp } from './fixture.ts';
 
 // the goldens hold the POSIX paths a plan has on macOS and Linux; fronted mode is unsupported on Windows (D58)
 const POSIX_PATHS = { skip: onWindows('a plan names data-home paths in the OS\'s own form; fronted mode is unsupported on Windows') };
@@ -207,7 +207,7 @@ describe('base domains', () => {
       const later = Date.now() + 8 * 24 * 3600_000;
       assert.ok((await delegatedTlds(dir, { fetchImpl: bad, now: later }))!.has('net'), 'stale beats nothing');
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   });
 });
@@ -239,7 +239,7 @@ describe('running a plan', () => {
       assert.match(out, /3\. three: already done/);
       assert.match(out, /\$ sudo install x/);
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   });
 

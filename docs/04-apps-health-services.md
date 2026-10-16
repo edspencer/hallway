@@ -94,13 +94,13 @@ named it — what is it?"*
    - cwd: `lsof -a -p <pid> -d cwd -Fn`
    - full command: `ps -o command= -p <pid>`; start time: `ps -o lstart= -p <pid>`
    - parent: `ps -o ppid= -p <pid>` — PPID 1 means reparented to launchd, but launchd is also the parent of every job it
-     runs, so PPID 1 alone isn't an orphan (D61)
+     runs, so PPID 1 alone isn't an orphan (D62)
    - supervisor: on macOS, `launchctl list` (once per scan, and only when something has PPID 1) maps PIDs to the loaded
      jobs' labels; on Linux, `/proc/<pid>/cgroup`'s innermost unit, if it's a `.service`. A supervised process is
      shown as `launchd: <label>` / `systemd: <unit>` and is never **orphaned**: orphaned means PPID 1 (or a subreaper)
      *and* no service manager runs it. Windows has no lookup (a scheduled task's process has a live parent anyway)
    - project root: walk up from cwd to the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `.git`,
-     stopping at a known non-project location (D61): `/`, the home directory, a package-manager prefix
+     stopping at a known non-project location (D62): `/`, the home directory, a package-manager prefix
      (`/opt/homebrew`, `/usr/local/Homebrew`, `/home/linuxbrew/.linuxbrew`, …) or a system directory. A listener
      started there has no project and no git identity (Homebrew's prefix is a git repository on branch `stable`); it
      is named by its supervisor's label (`homebrew.mxcl.<formula>` → `<formula>`), else its executable unless that's

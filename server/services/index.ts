@@ -17,6 +17,7 @@ import { ROOT, VERSION, dataPaths } from '../config.js';
 import { type Platform, type Runner, type ServiceManager, type ServiceSpec, type ServiceStatus, currentPlatform } from '../platform/index.js';
 import type { Store } from '../store/index.js';
 import type { ResolvedNode } from './resolve.js';
+import { transientInstall, transientMessage } from './transient.js';
 import { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, appSpec, daemonSpec, helperSpec, slugOfLabel } from './spec.js';
 
 export { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, logFiles, slugOfLabel } from './spec.js';
@@ -106,8 +107,26 @@ export class Services {
   }
 
   daemonSpec(): ServiceSpec {
+    this.refuseTransient(DAEMON_LABEL);
     if (!fs.existsSync(this.cliScript)) throw new ServiceError(`${this.cliScript} doesn't exist: build Hallway first (npm run build)`);
     return daemonSpec(this.store.home, this.cliScript, { env: this.env, userHome: this.userHome, node: this.node });
+  }
+
+  /**
+   * A job that runs Hallway's own CLI mustn't point into npx's cache or the like (D61): the daemon's, and on Windows
+   * every job (the task runs `hallway supervise`). Throws a ServiceError if this one would; with no label, it's about
+   * an app's job (called before anything is written for it).
+   */
+  refuseTransient(label?: string) {
+    if (label !== DAEMON_LABEL && this.manager.kind !== 'schtasks') return;
+    const t = transientInstall(this.cliScript);
+    if (t) throw new ServiceError(transientMessage(t, label === DAEMON_LABEL ? 'hallway service install' : undefined));
+  }
+
+  /** Write a job's definition: every write goes through here, so none can point Hallway's CLI at a cache. */
+  private write(spec: ServiceSpec): Promise<boolean> {
+    this.refuseTransient(spec.label);
+    return this.manager.write(spec);
   }
 
   manifestFile(label: string) {
@@ -152,7 +171,7 @@ export class Services {
    * asks for it), so it runs what the file now says. Returns whether the definition changed.
    */
   async up(spec: ServiceSpec, { restart = false } = {}): Promise<{ changed: boolean; file: string }> {
-    const changed = await this.manager.write(spec);
+    const changed = await this.write(spec);
     this.writeManifest(spec);
     const st = await this.manager.status(spec.label);
     if (st.running && (changed || restart)) await this.manager.restart(spec, { reload: changed });
@@ -194,7 +213,7 @@ export class Services {
 
   async restartApp(slug: string) {
     const spec = this.appSpec(slug);
-    const changed = await this.manager.write(spec);
+    const changed = await this.write(spec);
     this.writeManifest(spec);
     await this.manager.restart(spec, { reload: changed });
     await this.setExpected(slug, Services.runningExpectation(this.managed(slug)));
@@ -240,7 +259,7 @@ export class Services {
           out.push({ label, changed: false, restarted: false, error: s ? `apps/${s}.yaml has no service: block (remove the job with \`hallway service rm ${s}\`)` : 'not a job Hallway generates here' });
           continue;
         }
-        const changed = await this.manager.write(spec);
+        const changed = await this.write(spec);
         this.writeManifest(spec);
         const st = await this.manager.status(label);
         let restarted = false;
@@ -300,7 +319,7 @@ export class Services {
     const st = await this.manager.status(DAEMON_LABEL);
     if (!st.installed) throw new ServiceError("the daemon isn't installed as a service; install it with `hallway service install`");
     const spec = this.daemonSpec();
-    const changed = await this.manager.write(spec);
+    const changed = await this.write(spec);
     this.writeManifest(spec);
     await this.manager.restart(spec, { reload: changed });
   }

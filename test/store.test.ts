@@ -12,7 +12,7 @@ import { listSnapshots, pruneSnapshots, snapshotName, snapshotsToKeep, takeSnaps
 import { atomicWrite, ExistsError, moveToRemoved } from '../server/store/safefs.ts';
 import { validateConfig } from '../server/store/schema.ts';
 import YAML from 'yaml';
-import { tmpDir, tmpStore } from './fixture.ts';
+import { tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));
@@ -403,7 +403,7 @@ describe('writing', () => {
 describe('safefs', () => {
   test('atomicWrite createOnly never replaces; moveToRemoved never clobbers', () => {
     const dir = tmpDir('hw-test-safefs-');
-    cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(dir));
     const f = path.join(dir, 'a.yaml');
     atomicWrite(f, 'one');
     assert.throws(() => atomicWrite(f, 'two', { createOnly: true }), ExistsError);

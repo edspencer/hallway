@@ -16,7 +16,7 @@ import { WELL_KNOWN_PORTS, assignPort } from '../server/services/ports.ts';
 import { nodeShebang, pathProblem, resolveCommand, resolveNode, servicePath, which } from '../server/services/resolve.ts';
 import { rotateFile, rotateLogs } from '../server/services/rotate.ts';
 import { appSpec, daemonSpec, substitute } from '../server/services/spec.ts';
-import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -34,7 +34,7 @@ const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));
 const tmp = (p: string) => {
   const d = tmpDir(p);
-  cleanups.push(() => fs.rmSync(d, { recursive: true, force: true }));
+  cleanups.push(() => rmTmp(d));
   return d;
 };
 

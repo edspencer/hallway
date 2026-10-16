@@ -1,9 +1,9 @@
-// `node scripts/supervisors-real.mjs`: supervised vs orphaned against the machine's REAL service manager (D61). It
+// `node scripts/supervisors-real.mjs`: supervised vs orphaned against the machine's REAL service manager (D62). It
 // starts one listener as a real job (a LaunchAgent in launchd's gui/<uid> domain on macOS, a transient systemd user
 // service on Linux) and one as a true orphan (its parent shell exits), then runs `hallway scan --json` and checks that
 // the job is reported as supervised (`launchd: <label>` / `systemd: <unit>`), not orphaned, and the orphan as orphaned.
 // CI only, like services-real.mjs: it loads a job into the real service manager, so it refuses to run unless CI=true
-// and HALLWAY_REAL_SERVICES=1. It removes everything it starts. Windows has nothing to check yet (D61): it says so.
+// and HALLWAY_REAL_SERVICES=1. It removes everything it starts. Windows has nothing to check yet (D62): it says so.
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -30,6 +30,7 @@ export async function reviveLost({ services, providers, run }: LostActionDeps, i
   const item = providers.first('lost')?.items.find((i) => i.id === id);
   if (!rec || !item) throw new NotFoundError(`nothing lost at the last reboot has the id '${id}' (it may have been dismissed)`);
 
+  services.refuseTransient(); // before an app file is written for it
   let slug = item.slug;
   const existing = slug ? services.app(slug) : null; // throws for a broken file
   const command = existing?.service ? null : rec.command;

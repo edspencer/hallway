@@ -16,7 +16,7 @@ Each command is marked with the milestone it belongs to. Everything on this page
 | --- | --- | --- |
 | `hallway` / `hallway serve [--port N] [--quiet]` | Run the daemon in the foreground (the default command): the dashboard and API on `http://localhost:<port>`, 127.0.0.1 only. The port is `--port`, else `$PORT`, else `port:` in `config.yaml`, else 4255. `--quiet` (`-q`) prints just the "Hallway on <url>" line. | <span class="ms ms--v0">v0</span> |
 | `hallway open` | Open the dashboard in your browser (`https://hallway.localhost`, or your domain's, in fronted mode). | <span class="ms ms--v0">v0</span> |
-| `hallway service install` | Generate and load the daemon's service, so it runs at every login: `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux. Idempotent. | <span class="ms ms--v0">v0</span> |
+| `hallway service install` | Generate and load the daemon's service, so it runs at every login: `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux, the scheduled task `\hallway.daemon` on Windows (best effort; starts at logon). Idempotent. | <span class="ms ms--v0">v0</span> |
 | `hallway service uninstall` | Unload and remove it. | <span class="ms ms--v0">v0</span> |
 | `hallway service status [--json]` | Whether the daemon's job is loaded and running, and its last exit code. | <span class="ms ms--v0">v0</span> |
 | `hallway service restart` | Restart the daemon's service. | <span class="ms ms--v0">v0</span> |
@@ -42,7 +42,7 @@ Each command is marked with the milestone it belongs to. Everything on this page
 
 | Command | Description | |
 | --- | --- | --- |
-| `hallway run <slug> [--cwd DIR] [--port N] [--persist] [--name N] -- <command...>` | Start a server as a launchd or systemd user service on a stable port, wait for it to listen, print its URL and exit. `$PORT` in the command (quote it: `'$PORT'`) becomes the app's port. See [hallway run](/agents/hallway-run/). | <span class="ms ms--shipped">v1</span> |
+| `hallway run <slug> [--cwd DIR] [--port N] [--persist] [--name N] -- <command...>` | Start a server as a user service (launchd, systemd, or a scheduled task on Windows) on a stable port, wait for it to listen, print its URL and exit. `$PORT` in the command (quote it: `'$PORT'`) becomes the app's port. See [hallway run](/agents/hallway-run/). | <span class="ms ms--shipped">v1</span> |
 | `hallway stop <slug>` / `start <slug>` / `restart <slug>` | Stop, start or restart a managed app. | <span class="ms ms--shipped">v1</span> |
 | `hallway logs <slug> [--lines N] [--follow]` | Tail a managed app's logs. | <span class="ms ms--shipped">v1</span> |
 | `hallway service add <slug> [-- <command...>]` | Keep a declared app running: at login, and restarted if it exits. | <span class="ms ms--shipped">v1</span> |
@@ -62,7 +62,7 @@ Each command is marked with the milestone it belongs to. Everything on this page
 
 | Command | Description | |
 | --- | --- | --- |
-| `hallway setup [--domain BASE] [--print]` | Run Caddy for your apps, redirect ports 443 and 80 to it and trust its certificates, so apps are at `https://<app>.localhost` (or under `BASE`). Prints each step first; the privileged ones run through `sudo`. `--print` shows the plan and runs nothing. See [Setup](/networking/setup-and-doctor/). | <span class="ms ms--shipped">v1</span> |
+| `hallway setup [--domain BASE] [--print]` | Run Caddy for your apps, redirect ports 443 and 80 to it and trust its certificates, so apps are at `https://<app>.localhost` (or under `BASE`). Prints each step first; the privileged ones run through `sudo`. `--print` shows the plan and runs nothing. macOS and Linux only: on Windows it refuses and changes nothing. See [Setup](/networking/setup-and-doctor/). | <span class="ms ms--shipped">v1</span> |
 | `hallway teardown [--uninstall-packages] [--print]` | Undo setup and go back to `http://localhost:<port>` links. `--uninstall-packages` also uninstalls Homebrew's Caddy and dnsmasq. | <span class="ms ms--shipped">v1</span> |
 
 ## Coding agents

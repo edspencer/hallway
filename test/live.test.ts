@@ -12,7 +12,7 @@ import { createApp } from '../server/index.ts';
 import { probeDetail, startLive } from '../server/live.ts';
 import { type Platform, type ProcessInfo, type RawListener, currentPlatform } from '../server/platform/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
-import { exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -65,7 +65,7 @@ describe('the live provider', () => {
     await store.createApp('deck', { name: 'Deck', port: deck.port, expected: 'adhoc' });
 
     const dir = tmpDir('hw-test-live-proj-');
-    cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    cleanups.push(() => rmTmp(dir));
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'scratch-pad', description: 'Notes' }));
     const raw: RawListener[] = [
       { pid: 21, process: 'node', port: svc.port, address: '127.0.0.1' },

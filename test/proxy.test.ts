@@ -14,7 +14,7 @@ import { fallbackHtml } from '../server/proxy/fallback.ts';
 import { restartCommands, startProxy } from '../server/proxy/index.ts';
 import { appHosts, dialAddress, httpsUrl, tldOf } from '../server/proxy/names.ts';
 import { defaultConfig, validateApp } from '../server/store/schema.ts';
-import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore } from './fixture.ts';
+import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
 
@@ -145,7 +145,7 @@ describe('the Caddy config', () => {
       const out = execFileSync(caddy!, ['validate', '--config', file], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
       assert.match(out, /Valid configuration/);
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      rmTmp(dir);
     }
   });
 });

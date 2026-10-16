@@ -98,7 +98,7 @@ jobs:
         env:
           HALLWAY_REAL_SERVICES: '1'
         run: node scripts/services-real.mjs
-      - name: Supervised vs orphaned, for real (D61)
+      - name: Supervised vs orphaned, for real (D62)
         timeout-minutes: 3
         env:
           HALLWAY_REAL_SERVICES: '1'

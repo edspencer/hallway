@@ -7,13 +7,13 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { UsageError, check, parseArgs } from '../server/args.ts';
-import { exitWatchdog, ROOT, tmpDir } from './fixture.ts';
+import { exitWatchdog, ROOT, tmpDir, rmTmp, stopChild } from './fixture.ts';
 import { tildify } from '../server/config.ts';
 
 await exitWatchdog();
 
 const HOME = tmpDir('hw-test-cli-');
-after(() => fs.rmSync(HOME, { recursive: true, force: true }));
+after(() => rmTmp(HOME));
 
 function cliEnv(env: Record<string, string>) {
   const e: Record<string, string | undefined> = { ...process.env };
@@ -152,7 +152,7 @@ describe('hallway CLI', () => {
       assert.equal(res.status, 200);
       assert.equal(((await res.json()) as { ok: boolean }).ok, true);
     } finally {
-      child.kill();
+      await stopChild(child);
     }
   });
   test('serve creates the data home on first run and uses port: from config.yaml', async () => {
@@ -181,7 +181,7 @@ describe('hallway CLI', () => {
       for (const d of ['apps', 'bookmarks', 'state', 'cache', 'generated', 'logs', 'backups', '.gitignore', 'ignore.yaml']) assert.ok(fs.existsSync(path.join(home, d)), d);
       assert.equal(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8'), `version: 1\nport: ${free}\n`, 'never replaced');
     } finally {
-      child.kill();
+      await stopChild(child);
     }
   });
 
