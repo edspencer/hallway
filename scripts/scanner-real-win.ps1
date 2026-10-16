@@ -10,6 +10,8 @@ Copy-Item -Recurse -Force dist "$root\dist"
 Copy-Item -Force scripts\scanner-real-win.mjs "$root\scan.mjs"
 # New-LocalUser, not `net user`: that one stops to ask about passwords over 14 characters
 New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -AccountNeverExpires -PasswordNeverExpires | Out-Null
+# New-LocalUser puts the account in no group at all: Users is what a standard account is
+Add-LocalGroupMember -Group Users -Member $user
 # New-LocalUser adds it to no group at all: Users, as a new account normally is
 Add-LocalGroupMember -Group Users -Member $user
 # a task that runs with a stored password is a batch logon, a right only administrators have by default
@@ -29,20 +31,20 @@ schtasks /Create /TN hwscan /RU $user /RP $pass /SC ONCE /ST 23:59 /TR $cmd /F
 if ($LASTEXITCODE) { throw "schtasks /Create failed ($LASTEXITCODE)" }
 schtasks /Run /TN hwscan
 if ($LASTEXITCODE) { throw "schtasks /Run failed ($LASTEXITCODE)" }
-$deadline = (Get-Date).AddSeconds(90)
-do {
-  Start-Sleep -Seconds 2
-  $state = (Get-ScheduledTask -TaskName hwscan).State
-} while ($state -eq 'Running' -and (Get-Date) -lt $deadline)
+# wait for the verdict itself: the task can still be Ready (not yet started) a moment after /Run, and the first
+# PowerShell on a fresh machine takes 10-15 s
+$verdict = { if (Test-Path "$root\out.txt") { Get-Content "$root\out.txt" | Where-Object { $_ -match '^\{.*\}\s*$' } | Select-Object -Last 1 } }
+$deadline = (Get-Date).AddSeconds(180)
+while (-not (& $verdict) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
 $info = Get-ScheduledTaskInfo -TaskName hwscan
-Write-Host "task state: $state, last result: $($info.LastTaskResult)"
+Write-Host "task state: $((Get-ScheduledTask -TaskName hwscan).State), last result: $($info.LastTaskResult), last run: $($info.LastRunTime)"
 $out = if (Test-Path "$root\out.txt") { Get-Content -Raw "$root\out.txt" } else { '(no output)' }
 Write-Host $out
+$v = & $verdict
 schtasks /Delete /TN hwscan /F | Out-Null
 Remove-LocalUser -Name $user
-$v = $out | Select-String -Pattern '^\{.*\}\s*$' | Select-Object -Last 1
 if (-not $v) { throw 'no verdict from the standard user' }
-$j = $v.Line | ConvertFrom-Json
+$j = $v | ConvertFrom-Json
 if ($j.user -ne $user) { throw "it ran as $($j.user), not $user" }
 if (-not $j.ok) { throw 'the scanner, as a standard user, did not find its listener with its working directory' }
 Write-Host "ok: as $($j.user), listener on $($j.port) found with cwd $($j.info.cwd)"
