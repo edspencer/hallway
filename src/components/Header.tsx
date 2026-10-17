@@ -2,8 +2,9 @@
 import { forwardRef } from 'react';
 import { Logo } from '../brand/Logo';
 import type { Connection } from '../live';
+import type { DomainsTone } from '../lib/domains';
 import type { Counts } from '../lib/status';
-import { KeyIcon, SearchIcon } from './icons';
+import { GlobeIcon, KeyIcon, SearchIcon } from './icons';
 
 export interface HeaderProps {
   title: string;
@@ -15,9 +16,12 @@ export interface HeaderProps {
   onFilterKey(e: React.KeyboardEvent<HTMLInputElement>): void;
   matches: number | null;
   onHelp(): void;
+  /** Local domains (D63): off (opens how to turn them on) or on (the dashboard's host and how the checks went). */
+  domains?: { state: 'off' } | { state: 'on'; host: string; tone: DomainsTone; text: string } | null;
+  onDomains?(): void;
 }
 
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ title, counts, checking, connection, filter, onFilter, onFilterKey, matches, onHelp }, ref) {
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ title, counts, checking, connection, filter, onFilter, onFilterKey, matches, onHelp, domains, onDomains }, ref) {
   return (
     <header className="hw-header">
       <div className="hw-header-inner">
@@ -67,6 +71,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
             </span>
           )}
           {counts && counts.total > 0 && (checking ? <CountLine c={counts} /> : <span className="hw-pill" title="No prober is running in this daemon, so no app has been checked">Health checks off</span>)}
+          {domains && onDomains && <DomainsButton d={domains} onClick={onDomains} />}
           <button type="button" className="hw-icon-btn hw-help-btn" onClick={onHelp} aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)">
             <KeyIcon />
           </button>
@@ -75,6 +80,23 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
     </header>
   );
 });
+
+function DomainsButton({ d, onClick }: { d: NonNullable<HeaderProps['domains']>; onClick(): void }) {
+  if (d.state === 'off')
+    return (
+      <button type="button" className="hw-domains-btn" onClick={onClick} aria-haspopup="dialog" title="Local domains are off: how to turn on https://<app>.localhost">
+        <GlobeIcon />
+        <span className="hw-domains-btn-label">Local domains</span>
+        <span className="hw-domains-btn-off">off</span>
+      </button>
+    );
+  return (
+    <button type="button" className={`hw-domains-btn hw-domains-btn--${d.tone}`} onClick={onClick} aria-haspopup="dialog" aria-label={`Local domains: ${d.host}, ${d.text}`} title={`Local domains: ${d.text}`}>
+      <span className={`hw-domains-dot hw-domains-dot--${d.tone}`} aria-hidden="true" />
+      <span className="hw-domains-btn-label">{d.host}</span>
+    </button>
+  );
+}
 
 function CountLine({ c }: { c: Counts }) {
   return (

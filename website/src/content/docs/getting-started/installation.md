@@ -23,7 +23,13 @@ npx hallway                  # the dashboard, in the foreground
 
 That runs Hallway from npx's cache until you close the terminal. It's the quick way to try it, not to keep it:
 npm can delete that cache at any time, so `hallway service install` refuses to run from it (and `hallway doctor`
-flags a service that already does). To keep it, install it with the two commands above.
+flags a service that already does). To keep it, install it with the two commands above; the startup banner says so
+too. If the service is already running, `npx hallway` just tells you where and exits.
+
+The banner also says whether **local domains** are on. They're off until you run
+[`hallway setup`](/networking/setup-and-doctor/), so `https://hallway.localhost` isn't there yet (a browser says the
+connection was refused): use `http://localhost:4255`, or turn them on. The dashboard explains them in a panel you can
+dismiss.
 
 `hallway service install` registers the daemon with your OS's own service manager and starts it, so the dashboard is
 always there without you starting anything:

@@ -163,5 +163,6 @@ export function stateView(ctx: ViewContext, url: string, startedAt: Date): State
     ignore: ctx.store.currentIgnore(),
     problems,
     lost: ctx.providers.first('lost'),
+    fronting: ctx.providers.first('fronting'),
   };
 }

@@ -18,7 +18,10 @@ hallway open
 Only trying it out? `npx hallway` runs the dashboard in the foreground, until you close the terminal. Install it as
 above to keep it: Hallway won't install a service from npx's cache, which npm can delete at any time.
 
-The dashboard opens at `http://localhost:4255`. The page title is your machine's name.
+The dashboard opens at `http://localhost:4255`. The page title is your machine's name. A **Local domains are off**
+panel at the top explains how to get `https://hallway.localhost` and `https://<app>.localhost` instead (one
+`hallway setup`; see [Fronted mode](/networking/fronted-mode/)). Dismiss it if you're happy with ports: the
+**Local domains** button at the top right brings it back.
 
 ## 2. Meet what is already running
 

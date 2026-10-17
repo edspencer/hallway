@@ -8,8 +8,11 @@ import type {
   BookmarkGroupView,
   BookmarksResponse,
   ClaimRequest,
+  ConfigView,
   ErrorResponse,
+  FrontingResponse,
   HealthResponse,
+  HintsRequest,
   HistoryWindow,
   IgnoreRequest,
   LostActionRequest,
@@ -33,6 +36,9 @@ export const getState = (signal?: AbortSignal) => getJson<StateResponse>('/api/s
 export const getApps = () => getJson<AppsResponse>('/api/apps').then((r) => r.apps);
 export const getBookmarks = () => getJson<BookmarksResponse>('/api/bookmarks').then((r) => r.groups);
 export const getObserved = () => getJson<ObservedResponse>('/api/observed').then((r) => r.observed);
+
+/** Local domains, with doctor's checks in fronted mode (`fresh`: run them again rather than reuse the last run). */
+export const getFronting = (fresh = false) => getJson<FrontingResponse>(`/api/fronting${fresh ? '?fresh=1' : ''}`);
 
 /** One app, or null when it's gone. */
 export async function getApp(slug: string): Promise<AppView | null> {
@@ -95,6 +101,9 @@ export const ignore = (id: string, by: IgnoreRequest['by']) => write<{ ok: true 
 export const reviveLost = (id: string, how: 'restart' | 'service', req: LostActionRequest = {}) => write<LostActionResponse>('POST', `/api/lost/${encodeURIComponent(id)}/${how}`, req);
 /** Dismiss one lost item, or (no id) the whole notice. */
 export const dismissLost = (id?: string) => write<{ dismissed: number; lost: LostNotice | null }>('POST', id ? `/api/lost/${encodeURIComponent(id)}/dismiss` : '/api/lost/dismiss', {});
+
+/** Show (true) or dismiss (false) a dashboard hint: `dashboard.hints` in config.yaml, so every browser agrees (D63). */
+export const setHints = (hints: HintsRequest) => write<ConfigView>('PATCH', '/api/hints', hints);
 
 /** Where a card's thumbnail is: the etag in the query, so a new picture is a new URL. */
 export const thumbUrl = (slug: string, etag: string) => `${app(slug)}/thumb?v=${encodeURIComponent(etag.replace(/"/g, ''))}`;

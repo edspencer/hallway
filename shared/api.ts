@@ -133,7 +133,16 @@ export interface HallwayConfig {
   services: { startGraceSeconds: number; logMaxBytes: number; logGenerations: number };
   scan: { enabled: boolean; intervalSeconds: number; includeEphemeralPorts: boolean; minPort: number };
   thumbnails: { mode: ThumbKind };
-  dashboard: { title: string | null; sections: DashboardSection[]; theme: 'auto' | 'dark' | 'light' };
+  dashboard: { title: string | null; sections: DashboardSection[]; theme: 'auto' | 'dark' | 'light'; hints: DashboardHints };
+}
+
+/**
+ * `dashboard.hints` in config.yaml: which of the dashboard's one-off suggestions to show. Dismissing one sets it false
+ * (`PATCH /api/hints`), in the file, so it stays dismissed in every browser (D63).
+ */
+export interface DashboardHints {
+  /** The "Local domains" panel, shown in direct mode where fronted mode can work. */
+  localDomains: boolean;
 }
 
 /** The three tiers of thumbnail (docs/05-ui.md, D13), and `thumbnails.mode`'s values. */
@@ -427,7 +436,50 @@ export interface StateResponse {
   problems: FileProblem[];
   /** "Lost at last reboot": null when there's nothing to show. Absent from daemons older than the field. */
   lost?: LostNotice | null;
+  /** Local domains (fronted mode): null without a fronting provider; absent from daemons older than the field. */
+  fronting?: FrontingInfo | null;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Local domains: fronted mode (docs/03-networking.md; D47, D48, D63)
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * Local domains as the dashboard shows them: `fronting` in `/api/state`, and in `GET /api/fronting`. Cheap: config and
+ * the daemon's last push to Caddy, no probing. The daemon never turns fronted mode on itself: that's `hallway setup`.
+ */
+export interface FrontingInfo {
+  /** Null where fronted mode can work; else why it can't (Windows, D58), and the dashboard says nothing about it. */
+  unsupported: string | null;
+  mode: Mode;
+  /** The dashboard's address in fronted mode (`https://hallway.localhost`); in direct mode, what setup would give. */
+  dashboardUrl: string;
+  /** What an app's address looks like: `https://<app>.localhost`. */
+  appUrl: string;
+  /** `domain.base`: `localhost`, or a custom domain such as `myname.internal`. */
+  base: string;
+  /** Fronted mode: why the daemon's last push to Caddy failed (Caddy isn't running?), else null. */
+  pushError: string | null;
+}
+
+/** One of `hallway doctor`'s fronted-mode checks (server/proxy/doctor.ts), with its fix. `info`: a fact, not a problem. */
+export interface FrontingCheck {
+  id: string;
+  status: 'pass' | 'warn' | 'fail' | 'skip' | 'info';
+  message: string;
+  fix?: string;
+}
+
+/** `GET /api/fronting` (`?fresh=1` skips the cache): the info, plus doctor's checks in fronted mode (null in direct). */
+export interface FrontingResponse {
+  fronting: FrontingInfo;
+  checks: FrontingCheck[] | null;
+  /** When the checks ran (they're cached for a few seconds). */
+  checkedAt: string | null;
+}
+
+/** `PATCH /api/hints`: show (true) or dismiss (false) a dashboard hint. Answers with `GET /api/config`'s view. */
+export type HintsRequest = Partial<DashboardHints>;
 
 /** `GET /api/apps`. */
 export interface AppsResponse {

@@ -15,7 +15,7 @@
 // /api/state must answer in milliseconds). Several providers can be registered; for each slot the first one that
 // returns a non-null answer wins, in registration order. A provider that throws is skipped for that call (and
 // logged), never taking the API down.
-import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, HistoryWindow, ListenerIdentity, LostNotice, ObservedListener, ThumbKind } from '../shared/api.js';
+import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, FrontingCheck, FrontingInfo, HistoryWindow, ListenerIdentity, LostNotice, ObservedListener, ThumbKind } from '../shared/api.js';
 import type { LostRecord } from './lost/index.js';
 
 /** What the API tells a provider about a declared app. */
@@ -57,6 +57,10 @@ export interface StateProvider {
   lostChanged?(id: string, slug: string): Promise<void>;
   /** A bookmark's favicon (`GET /api/bookmarks/:group/icon?url=`), from its `url` and `icon:` (the thumbnailer). */
   bookmarkIcon?(link: { url: string; icon: string }, group?: string): { body: Uint8Array; contentType: string; etag: string } | null;
+  /** Local domains: can fronted mode work here, is it on, and its addresses (server/proxy/status.ts). */
+  fronting?(): FrontingInfo | null;
+  /** Doctor's fronted-mode checks, cached briefly (`fresh`: run them again). Resolves null in direct mode. */
+  frontingChecks?(fresh?: boolean): Promise<{ checks: FrontingCheck[]; checkedAt: string } | null>;
 }
 
 export class ProviderRegistry {

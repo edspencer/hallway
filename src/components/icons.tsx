@@ -46,3 +46,11 @@ export const KeyIcon = () =>
       <path d="M4 6.5h.1M6.5 6.5h.1M9 6.5h.1M11.5 6.5h.1M5 9.5h6" />
     </>,
   );
+/** Local domains: a globe. */
+export const GlobeIcon = () =>
+  svg(
+    <>
+      <circle cx="8" cy="8" r="6.2" />
+      <path d="M1.8 8h12.4M8 1.8c1.7 1.8 2.6 3.8 2.6 6.2S9.7 12.4 8 14.2C6.3 12.4 5.4 10.4 5.4 8S6.3 3.6 8 1.8z" />
+    </>,
+  );

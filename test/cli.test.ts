@@ -116,14 +116,16 @@ describe('hallway CLI', () => {
     assert.match(env.stderr, /PORT must be a port number/);
   });
 
-  test('a port already in use exits 1 with a friendly message', async () => {
-    const blocker = net.createServer();
+  test('a port already in use by something else exits 1 with a friendly message', async () => {
+    // it accepts connections and never answers HTTP: serve asks whether it's a Hallway (no), then says so. Reading the
+    // sockets lets them close when the CLI exits, so close() below can finish
+    const blocker = net.createServer((s) => s.resume());
     await new Promise<void>((r) => blocker.listen(0, '127.0.0.1', r));
     const port = (blocker.address() as net.AddressInfo).port;
     try {
       const r = await hallway(['serve', '--port', String(port)]);
       assert.equal(r.code, 1, r.stderr);
-      assert.match(r.stderr, new RegExp(`^hallway: port ${port} is already in use; pick another with --port <n>`));
+      assert.match(r.stderr, new RegExp(`^hallway: port ${port} is already in use by something that isn't Hallway; pick another with --port <n>`));
       assert.doesNotMatch(r.stderr, /Usage:/);
     } finally {
       await new Promise((r) => blocker.close(r));
@@ -151,6 +153,15 @@ describe('hallway CLI', () => {
       const res = await fetch(`${url}/api/health`);
       assert.equal(res.status, 200);
       assert.equal(((await res.json()) as { ok: boolean }).ok, true);
+      // not a terminal: no banner and no colour, but the hint that local domains are off (D63)
+      assert.ok(!out.includes('█') && !out.includes('\x1b['), out);
+      assert.ok(out.startsWith('Hallway on '), out);
+
+      // `npx hallway` with the service already running: say where it is, exit 0 (not EADDRINUSE)
+      const again = await hallway(['serve', '--port', url!.split(':').pop()!]);
+      assert.equal(again.code, 0, again.stderr);
+      assert.match(again.stdout, new RegExp(`^Hallway is already running at ${url!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}, version \\d`));
+      assert.equal(again.stderr, '');
     } finally {
       await stopChild(child);
     }

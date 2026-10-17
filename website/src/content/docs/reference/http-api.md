@@ -36,6 +36,8 @@ Every route below is in the current release. In fronted mode the same API is als
 | `GET` | `/api/lost` | [Lost at last reboot](/concepts/services/#lost-at-last-reboot): `{ lost }`, null when there's nothing. Also `lost` in `/api/state`. |
 | `POST` | `/api/lost/:id/restart`, `/api/lost/:id/service` | Body `{}` or `{ "slug": "..." }`. Start it again, once or as a service, as `hallway run` would. Answers 200 even when it didn't come up, with `ok: false`, the reason and the last log lines. |
 | `POST` | `/api/lost/:id/dismiss`, `/api/lost/dismiss` | Dismiss one, or the whole notice. |
+| `GET` | `/api/fronting` | [Local domains](/networking/fronted-mode/): `{ fronting, checks, checkedAt }`. `fronting` (also in `/api/state`) says whether they can work on this platform, whether they're on, and the addresses; in fronted mode `checks` are `hallway doctor`'s networking checks, cached for a few seconds (`?fresh=1` runs them again). It never changes anything: turning them on is `hallway setup`. |
+| `PATCH` | `/api/hints` | `{ "localDomains": false }` dismisses the dashboard's Local domains panel (`true` shows it again), in `config.yaml`. |
 | `GET` | `/api/events` | The live event stream (below). |
 | `GET` | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | The [agent guide](/agents/agent-guide/), with live data. |
 | `POST` | `/mcp` | The [MCP server](/agents/mcp/), Streamable HTTP and stateless. `GET` and `DELETE` get 405. |

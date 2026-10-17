@@ -55,6 +55,8 @@ dashboard:
   title: null                   # defaults to the machine's hostname
   sections: [apps, observed, bookmarks]   # order and presence; remove one to hide it
   theme: auto                   # auto | dark | light
+  hints:
+    localDomains: true          # the "Local domains" panel; Dismiss on the dashboard sets it false
 ```
 
 ## Keys
@@ -89,6 +91,7 @@ dashboard:
 | `dashboard.title` | hostname | The page title. |
 | `dashboard.sections` | `[apps, observed, bookmarks]` | Which sections show, and in what order. |
 | `dashboard.theme` | `auto` | `auto` follows the system; or force `dark` or `light`. |
+| `dashboard.hints.localDomains` | `true` | The dashboard's "Local domains" panel, shown in direct mode (never on Windows). **Dismiss** sets it to `false` here, so it stays dismissed in every browser; the header's **Local domains** button brings it back. |
 
 ## Rules for every file
 
