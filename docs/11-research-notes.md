@@ -604,7 +604,16 @@ Debian's `libnss3-tools`, unpacked into a temp directory; a throwaway `HOME` and
   reload). The unit tests drive the pipe through a WebSocket upgrade, half-close, a 32 MB transfer to a paused reader
   (the upstream is made to wait: backpressure), a refused upstream (said once, still accepting) and a client reset.
 
-*Not run here, so unverified until CI's macOS job or a real Mac:* everything launchd does with the forwarders' plists
+**CI's macOS runner (macos-latest), run 39051974164, 2026-10-17, passed every check:** 0.6.0's System-wide setup from
+npm (pf anchor, `hallway.pf`, System keychain), then this build's `setup --trust system`: the pf files and rules gone,
+the four forwarders loaded, `https://hallway.localhost` answering throughout and after, on `127.0.0.1` and `[::1]`
+(443 and 80); doctor named 0.6.0's pf redirect as left over before the move. Then the v1 criteria with launchd's
+sockets; pf loaded with `set skip on lo0` and 443 still answered; a TLS connection to 443 idle for 30 s, then a request,
+answered; the custom domain; No admin as a plan; No prompts for real (`http://review.localhost` through the forwarder on
+80, nothing on 443); teardown leaving no forwarder, pf file or trust. One bug it found: once launchd had started the
+forwarders, `lsof` showed `node` on 443/80 and setup refused to run again; it now recognises its own `cli.js forward`.
+
+*Not run here, so unverified until CI's macOS job or a real Mac (the macOS job now covers what isn't listed below):* everything launchd does with the forwarders' plists
 (`Sockets` with inetd `Wait`, the fd 0 handover to Node, on 443 and 80, `127.0.0.1` and `::1`), and the macOS trust
 steps. CI's "Fronted mode (real launchd, keychain)" job runs all of it except the No admin trust step (a Touch ID
 dialog nobody can answer on a runner), including migrating from 0.6.0's pf redirect. **Still unverified on a real
