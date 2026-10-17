@@ -23,9 +23,9 @@ h "1b. caddy: unprivileged bind on 127.0.0.1:443 and 0.0.0.0:443"
 for addr in 127.0.0.1 0.0.0.0; do
   printf '{\n admin off\n}\nhttp://:443 {\n bind %s\n respond "caddy on %s:443"\n}\n' $addr $addr > "$WORK/bind-$addr.Caddyfile"
   T 6 caddy run --adapter caddyfile --config "$WORK/bind-$addr.Caddyfile" > "$WORK/bind-$addr.log" 2>&1 &
-  sleep 3
+  sleep 4
   echo "-- $addr: curl http://127.0.0.1:443 -> $(curl -s -m 2 http://127.0.0.1:443/ || echo 'no answer')"
-  grep -iE 'error|permission|listening' "$WORK/bind-$addr.log" | head -3
+  grep -vE '"level":"(debug)"' "$WORK/bind-$addr.log" | grep -iE "error|permission|listen|bind" | head -4
   wait
 done
 
@@ -33,9 +33,9 @@ h "1c. IP_BOUND_IF lo0 on a wildcard listener, probed from another interface (fe
 if sudo ifconfig feth0 create && sudo ifconfig feth1 create && sudo ifconfig feth0 peer feth1; then
   sudo ifconfig feth0 inet 10.99.0.1/24 up; sudo ifconfig feth1 up
   sudo arp -s 10.99.0.2 "$(ifconfig feth1 | awk '/ether/{print $2}')"
-  $PY -m pip install -q scapy 2>&1 | tail -1
+  VENV=$WORK/venv; $PY -m venv $VENV && $VENV/bin/pip install -q scapy 2>&1 | tail -1
   $PY boundif.py serve & SRV=$!; sleep 1
-  sudo T 30 $PY boundif.py probe
+  sudo perl -e 'alarm shift; exec @ARGV' 30 $VENV/bin/python boundif.py probe
   echo "-- the same three from loopback:"
   for p in 8443 8444 8445; do nc -z -G 2 127.0.0.1 $p && echo "127.0.0.1:$p connects" || echo "127.0.0.1:$p refused"; done
   kill $SRV; sudo ifconfig feth1 destroy; sudo ifconfig feth0 destroy
@@ -117,9 +117,8 @@ echo "-- caddy output:"; grep -vE '"level":"debug"' "$WORK/caddy.out" | head -20
 
 h "2. user-domain trust (no sudo)"
 echo "-- authorization rights:"
-security authorizationdb read com.apple.trust-settings.user 2>/dev/null | grep -A1 -E '<key>(rule|class|shared|authenticate-user|session-owner|group)</key>'
-security authorizationdb read com.apple.trust-settings.admin 2>/dev/null | grep -A1 -E '<key>(rule|class|shared|authenticate-user|session-owner|group)</key>'
-echo | openssl s_client -connect 127.0.0.1:443 -servername hallway.localhost 2>/dev/null | openssl x509 > "$WORK/leaf.pem"
+for r in com.apple.trust-settings.user com.apple.trust-settings.admin; do echo "[$r]"; security authorizationdb read $r 2>/dev/null | plutil -convert json -o - - ; echo; done
+echo | T 10 openssl s_client -connect 127.0.0.1:443 -servername hallway.localhost 2>/dev/null | openssl x509 > "$WORK/leaf.pem"
 echo "-- before: verify-cert -> $(security verify-cert -c "$WORK/leaf.pem" -p ssl -s hallway.localhost 2>&1 | tail -1)"
 echo "-- before: /usr/bin/curl https://hallway.localhost/ -> $(/usr/bin/curl -sS -m 5 https://hallway.localhost/ 2>&1 | head -1)"
 security list-keychains -d user; security show-keychain-info ~/Library/Keychains/login.keychain-db 2>&1

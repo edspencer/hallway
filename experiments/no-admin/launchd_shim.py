@@ -5,6 +5,7 @@
   launchd_shim.py exec NAME... -- CMD... dup2 the sockets to fds 3, 4, ... and exec CMD (Caddy with `fd/3`, ...)
 """
 import ctypes
+import fcntl
 import os
 import socket
 import sys
@@ -52,7 +53,11 @@ elif mode == 'exec':
     sep = sys.argv.index('--')
     names, cmd = sys.argv[2:sep], sys.argv[sep + 1:]
     fds = [fd for name in names for fd in activate(name)]
-    for i, fd in enumerate(fds):
+    # Move them out of the way first (launchd's fds may already sit on 3..n with close-on-exec set), then onto 3..n.
+    high = [os.dup(fd) for fd in fds]
+    high = [fcntl.fcntl(fd, fcntl.F_DUPFD, 100 + i) for i, fd in enumerate(high)]
+    for i, fd in enumerate(high):
         os.dup2(fd, 3 + i, inheritable=True)
+        os.set_inheritable(3 + i, True)
     print(f'exec {cmd} with fds 3..{2 + len(fds)}', flush=True)
     os.execv(cmd[0], cmd)
