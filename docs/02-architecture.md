@@ -169,6 +169,8 @@ dashboard:
   title: null                   # defaults to the machine's hostname
   sections: [apps, observed, bookmarks]   # order and presence; remove one to hide it
   theme: auto                   # auto | dark | light
+  hints:
+    localDomains: true          # the "Local domains" panel (D63); the dashboard's Dismiss sets it false
 ```
 
 ### `apps/<slug>.yaml`
@@ -340,6 +342,8 @@ All JSON. All under the security middleware below.
 | GET | `/api/lost` | "Lost at last reboot" (v1, D54): `{ lost: LostNotice \| null }`, also `lost` in `/api/state` |
 | POST | `/api/lost/:id/restart`, `/api/lost/:id/service` | Body `{}` or `{ slug }` → `hallway run` it again, once or as a service; answers `{ ok, slug, url, port, persist, reason?, tail?, lost }` |
 | POST | `/api/lost/:id/dismiss`, `/api/lost/dismiss` | Dismiss one item, or the whole notice |
+| GET | `/api/fronting` | Local domains (D63): `{ fronting, checks, checkedAt }`. `fronting` (also in `/api/state`) says whether fronted mode can work here, whether it's on and its addresses; `checks` are doctor's networking checks in fronted mode (null in direct), cached ~15 s; `?fresh=1` runs them again. Read-only: setup is `hallway setup` |
+| PATCH | `/api/hints` | `{ "localDomains": false }`: dismiss (or show) a dashboard hint, in `config.yaml`'s `dashboard.hints`; nothing else in the file |
 | GET | `/api/events` | SSE |
 | GET | `/llms.txt`, `/llms-full.txt`, `/agent-guide.md` | Agent-facing docs (see `06`) |
 | POST | `/mcp` | MCP Streamable HTTP (D50); GET and DELETE answer 405 |

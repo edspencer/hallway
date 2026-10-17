@@ -45,7 +45,11 @@ hallway open               # or browse to http://localhost:4255
 
 To try it first, `npx hallway` runs the dashboard in the foreground until you close the terminal. To keep it, install
 it: `npm i -g hallway && hallway service install`. (Hallway won't install a service from npx: npm can delete its
-cache at any time, which would break the service at the next login.)
+cache at any time, which would break the service at the next login.) If the service is already running, `npx hallway`
+says where and exits.
+
+Local domains (`https://hallway.localhost`, `https://<app>.localhost`) are off until you run `hallway setup`; the
+startup banner, the dashboard's **Local domains** panel and `hallway doctor` all say so, and how.
 
 Hallway now lists every web server it finds listening on this machine. **Claim** one to give it a door (that writes
 `~/.hallway/apps/<slug>.yaml`), or declare one yourself:

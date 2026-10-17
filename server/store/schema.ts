@@ -279,6 +279,13 @@ export const CONFIG_SCHEMA: Field = {
           doc: 'Which sections to show, in order.',
         },
         theme: { t: 'enum', values: ['auto', 'dark', 'light'], default: 'auto', doc: '`auto` follows the system.' },
+        hints: {
+          t: 'object',
+          doc: "One-off suggestions on the dashboard. Dismissing one there sets it to false here.",
+          fields: {
+            localDomains: { t: 'bool', default: true, doc: 'The "Local domains" panel: how to turn on https://<app>.localhost (`hallway setup`). Shown only in direct mode, and never on Windows.' },
+          },
+        },
       },
     },
   },
