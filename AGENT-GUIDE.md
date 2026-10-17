@@ -244,7 +244,7 @@ One app per file: `apps/<slug>.yaml`. The slug is the file name. The slug: lower
 | `project.dir` | text | `null` | The project directory (`~` allowed). |
 | `project.repo` | text | `null` | The repository URL. |
 | `tags` | list of text | `[]` | Free-form tags, for filtering. |
-| `icon` | text | `auto` | `auto` (the site's favicon), an emoji, a path to an image in the data home, or an image URL. |
+| `icon` | text | `auto` | `auto` (the site's favicon, else a registry-matched brand mark, D66), an emoji, a path to an image in the data home, an image URL, or `si:<slug>` for a specific brand from the registry (src/lib/brands.ts). |
 
 ### `bookmarks/<group>.yaml`
 
@@ -259,7 +259,7 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `links[].title` | text | the URL's host name | The link text. |
 | `links[].url` | text | **required** | Where it goes. |
 | `links[].description` | text | `null` | A tooltip. |
-| `links[].icon` | text | `auto` | `auto` (the site's favicon), an emoji, a path to an image in the data home, or an image URL. |
+| `links[].icon` | text | `auto` | `auto` (the site's favicon, else a registry-matched brand mark, D66), an emoji, a path to an image in the data home, an image URL, or `si:<slug>` for a specific brand from the registry (src/lib/brands.ts). |
 | `links[].tags` | list of text | `[]` | Free-form tags, for filtering. |
 
 ### `ignore.yaml`

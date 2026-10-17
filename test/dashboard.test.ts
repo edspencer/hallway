@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AppHealth, FrontingInfo } from '../shared/api.ts';
+import { BRAND_REGISTRY, explicitBrandSlug, matchBrand } from '../src/lib/brands.ts';
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, shorten, slugify, tildify } from '../src/lib/format.ts';
@@ -150,6 +151,68 @@ describe('door paint', () => {
   test('every door paint is a token', () => {
     const css = fs.readFileSync(path.join(ROOT, 'src/theme/tokens.css'), 'utf8');
     for (let i = 0; i < PAINTS; i++) assert.match(css, new RegExp(`--hw-paint-${i}:`));
+  });
+});
+
+describe('brand icons (D66)', () => {
+  const ollama = () => BRAND_REGISTRY.find((b) => b.slug === 'ollama')!;
+
+  test('every entry has a title, a 6-digit hex and at least one SVG path', () => {
+    assert.ok(BRAND_REGISTRY.length > 20);
+    for (const b of BRAND_REGISTRY) {
+      assert.match(b.hex, /^#[0-9a-f]{6}$/, b.slug);
+      assert.ok(b.title.length > 0, b.slug);
+      assert.ok(b.path.length > 0, b.slug);
+      assert.ok(b.keywords.length > 0, b.slug);
+    }
+  });
+
+  test('no two entries share a well-known port (an ambiguous hint is worse than none)', () => {
+    const seen = new Map<number, string>();
+    for (const b of BRAND_REGISTRY) for (const p of b.ports) assert.ok(!seen.has(p) && seen.set(p, b.slug), `port ${p}: ${b.slug} vs ${seen.get(p)}`);
+  });
+
+  test('matches Ollama by its process name, its command, its supervisor label, or its port alone', () => {
+    assert.equal(matchBrand({ process: 'ollama' })?.slug, 'ollama');
+    assert.equal(matchBrand({ command: '/opt/homebrew/bin/ollama serve' })?.slug, 'ollama');
+    assert.equal(matchBrand({ supervisorLabel: 'homebrew.mxcl.ollama' })?.slug, 'ollama');
+    assert.equal(matchBrand({ port: 11434 })?.slug, 'ollama');
+    assert.equal(matchBrand({ name: 'Ollama' })?.slug, 'ollama');
+  });
+
+  test('never matches a bare runtime, language or generic server module', () => {
+    for (const hints of [{ process: 'node' }, { process: 'python3' }, { command: 'python3 -m http.server' }, { command: 'node dist/index.js' }, { process: 'bun' }, { name: 'My App' }, { port: 3000 }])
+      assert.equal(matchBrand(hints), null, JSON.stringify(hints));
+  });
+
+  test('a port only matches when nothing else does; a real signal wins even if a contradicting port is given', () => {
+    assert.equal(matchBrand({ process: 'postgres', port: 11434 })?.slug, 'postgresql', 'the process name is a real signal, the port a weak and contradicting one');
+    assert.equal(matchBrand({ process: 'node', port: 5432 })?.slug, 'postgresql', 'with no other signal, the port alone is still a hint');
+  });
+
+  test('matching only runs for icon: auto (or unset); a configured custom icon is left to the monogram', () => {
+    assert.equal(matchBrand({ process: 'ollama', icon: 'auto' })?.slug, 'ollama');
+    assert.equal(matchBrand({ process: 'ollama', icon: null })?.slug, 'ollama');
+    assert.equal(matchBrand({ process: 'ollama' })?.slug, 'ollama');
+    assert.equal(matchBrand({ process: 'ollama', icon: '🦙' }), null);
+    assert.equal(matchBrand({ process: 'ollama', icon: 'https://example.com/icon.png' }), null);
+    assert.equal(matchBrand({ process: 'ollama', icon: '/images/custom.png' }), null);
+  });
+
+  test('icon: si:<slug> is explicit and wins over every hint, even a contradicting one', () => {
+    assert.equal(matchBrand({ icon: 'si:postgresql', process: 'ollama', port: 11434 })?.slug, 'postgresql');
+    assert.equal(explicitBrandSlug('si:ollama'), 'ollama');
+    assert.equal(explicitBrandSlug('auto'), null);
+    assert.equal(explicitBrandSlug(null), null);
+  });
+
+  test('an unknown si: slug is a miss, not a fall-through to auto-matching', () => {
+    assert.equal(matchBrand({ icon: 'si:not-a-real-brand', process: 'ollama' }), null);
+  });
+
+  test('a custom registry (tests) is used verbatim: Ollama is only in the real one', () => {
+    assert.equal(matchBrand({ process: 'ollama' }, []), null);
+    assert.equal(matchBrand({ process: 'ollama' }, [ollama()])?.slug, 'ollama');
   });
 });
 

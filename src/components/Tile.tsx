@@ -1,7 +1,9 @@
-// A favicon or monogram tile (docs/05-ui.md, "Thumbnails", tier 1), and the dominant colour of the icon, which becomes
-// the door's paint. The colour is read from the image in a canvas (src/lib/colour.ts); icons come from the daemon,
-// so the canvas is never tainted.
+// A favicon, brand or monogram tile (docs/05-ui.md, "Thumbnails", tier 1), and the dominant colour of the icon, which
+// becomes the door's paint. The colour is read from the image in a canvas (src/lib/colour.ts); icons come from the
+// daemon, so the canvas is never tainted. A brand mark (D66, src/lib/brands.ts) needs no canvas: its colour is the
+// registry's hex, known up front.
 import { useEffect, useState } from 'react';
+import type { BrandEntry } from '../lib/brands';
 import { dominantColour, monogram } from '../lib/colour';
 
 const colours = new Map<string, string | null>();
@@ -44,13 +46,17 @@ export function useImageColour(url: string | null): string | null {
 /** Is an `icon:` value text to draw (an emoji) rather than `auto` or an image? */
 export const isGlyph = (icon: string | undefined) => !!icon && icon !== 'auto' && !/^(https?:|\/|~\/|\.\/)/.test(icon) && !/\.\w{2,4}$/.test(icon) && [...icon].length <= 4;
 
-export function Tile({ name, src, glyph, className = '' }: { name: string; src: string | null; glyph?: string | null; className?: string }) {
+export function Tile({ name, src, glyph, brand, className = '' }: { name: string; src: string | null; glyph?: string | null; brand?: BrandEntry | null; className?: string }) {
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [src]);
   return (
-    <span className={`hw-tile ${className}`} aria-hidden="true">
+    <span className={`hw-tile ${brand && !src ? 'hw-tile--brand' : ''} ${className}`} aria-hidden="true">
       {src && !broken ? (
         <img src={src} alt="" width={32} height={32} decoding="async" onError={() => setBroken(true)} />
+      ) : brand ? (
+        <svg className="hw-tile-brand" viewBox="0 0 24 24" role="img" aria-label={brand.title}>
+          <path d={brand.path} />
+        </svg>
       ) : glyph ? (
         <span className="hw-tile-glyph">{glyph}</span>
       ) : (
