@@ -3,7 +3,7 @@
 // named"), and bookmarks by the front door. The tab title and favicon carry the status (D22).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppView, DashboardSection, FrontingResponse, ObservedListener, StateResponse } from '../shared/api';
-import { getFronting, setHints } from './api';
+import { getFronting, getFrontingSetup, setHints, turnOnFronting } from './api';
 import { useAmbientStatus } from './ambient';
 import { Bookmarks, NewGroup } from './components/Bookmarks';
 import { Door } from './components/Door';
@@ -11,13 +11,13 @@ import { Drawer } from './components/Drawer';
 import { FirstRun, Unreachable } from './components/Empty';
 import { Header } from './components/Header';
 import { Help } from './components/Help';
-import { LocalDomainsDialog, LocalDomainsPanel } from './components/LocalDomains';
+import { LocalDomainsDialog, LocalDomainsPanel, type TurnOn } from './components/LocalDomains';
 import { LostBanner } from './components/Lost';
 import { ObservedTray, listenerName } from './components/Observed';
 import { ProblemBanner } from './components/Problems';
 import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
-import { checksSummary, domainsView, hostOfUrl } from './lib/domains';
+import { TIER_LABEL, type TurnOnState, checksSummary, domainsView, hostOfUrl } from './lib/domains';
 import { matchScore } from './lib/filter';
 import { displayUrl, homeDir, hostOf } from './lib/format';
 import { countStates, isScanning, subtitle } from './lib/status';
@@ -122,6 +122,40 @@ export function App() {
     [toasts],
   );
 
+  // the dashboard's Turn on (D65): here, not in the panel, because the panel goes the moment setup switches the mode
+  const [run, setRun] = useState<TurnOnState | null>(null);
+  const turnOn = useMemo<TurnOn>(
+    () => ({
+      state: run,
+      reset: () => setRun(null),
+      start: (trust) => {
+        setRun({ trust, job: null, error: null });
+        void turnOnFronting(trust).then((r) => setRun({ trust, job: r.ok ? r.value : null, error: r.ok ? null : r.error }));
+      },
+    }),
+    [run],
+  );
+  const running = run?.job?.state === 'running';
+  useEffect(() => {
+    if (!running || !run) return;
+    const timer = setInterval(async () => {
+      try {
+        const job = await getFrontingSetup();
+        setRun((r) => (r ? { ...r, job } : r));
+        if (job.state === 'done') {
+          toasts.push(`Local domains are on (${TIER_LABEL[run.trust]})`, 'ok');
+          setDomainsOpen(true);
+          void loadChecks(true);
+        } else if (job.state === 'failed') {
+          setDomainsOpen(true);
+        }
+      } catch {
+        /* the daemon may be restarting its pieces: ask again */
+      }
+    }, 700);
+    return () => clearInterval(timer);
+  }, [running, run, toasts, loadChecks]);
+
   const home = state ? homeDir(state.daemon.dataHome, state.daemon.dataHomeDisplay) : null;
   const q = filter.trim();
   const found = useMemo(() => (state && q ? findAll(state, q, home) : null), [state, q, home]);
@@ -200,7 +234,7 @@ export function App() {
   const matches = found ? found.hits.filter((h) => h.url).length : null;
   const sum = checksSummary(checks?.checks ?? null, domains?.fronting?.pushError ?? null);
   const headerDomains =
-    domains?.header === 'off' ? ({ state: 'off' } as const) : domains?.header === 'on' && domains.fronting ? ({ state: 'on', host: hostOfUrl(domains.fronting.dashboardUrl), tone: sum.tone, text: sum.text } as const) : null;
+    domains?.header === 'off' ? ({ state: 'off' } as const) : domains?.header === 'on' && domains.fronting ? ({ state: 'on', host: hostOfUrl(domains.fronting.dashboardUrl), tier: domains.fronting.trust ? TIER_LABEL[domains.fronting.trust] : null, tone: sum.tone, text: sum.text } as const) : null;
 
   // with no apps yet, the tray leads: that's where the first doors come from
   let order: DashboardSection[] = cfg.dashboard.sections;
@@ -250,7 +284,7 @@ export function App() {
       />
       <main className="hw-main">
         <ProblemBanner problems={banner} />
-        {domains?.panel && domains.fronting && !found ? <LocalDomainsPanel fronting={domains.fronting} onCopy={(t, w) => void copy(t, w)} onDismiss={() => setPanel(false)} /> : null}
+        {domains?.panel && domains.fronting && !found ? <LocalDomainsPanel fronting={domains.fronting} macos={state.daemon.platform === 'darwin'} turnOn={turnOn} onCopy={(t, w) => void copy(t, w)} onDismiss={() => setPanel(false)} /> : null}
         {state.lost?.items.length ? <LostBanner lost={state.lost} home={home} notify={toasts.push} /> : null}
         {nothing && !found ? <FirstRun state={state} /> : null}
         {order.map((s) => sections[s]?.())}
@@ -280,6 +314,8 @@ export function App() {
       {domainsOpen && domains?.fronting && domains.header !== 'hidden' && (
         <LocalDomainsDialog
           fronting={domains.fronting}
+          macos={state.daemon.platform === 'darwin'}
+          turnOn={turnOn}
           dismissed={domains.header === 'off' && !domains.panel}
           result={checks}
           onRecheck={() => void loadChecks(true)}

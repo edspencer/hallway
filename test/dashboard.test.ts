@@ -9,7 +9,7 @@ import { BRAND_REGISTRY, explicitBrandSlug, matchBrand } from '../src/lib/brands
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, shorten, slugify, tildify } from '../src/lib/format.ts';
-import { checksSummary, domainsView, hostOfUrl } from '../src/lib/domains.ts';
+import { TIER_LABEL, checksSummary, domainsView, hostOfUrl, logTail, tierChoices, turnOnWords } from '../src/lib/domains.ts';
 import { bootLabel, lostCommand, lostCount, lostWhere } from '../src/lib/lost.ts';
 import { countStates, doorState, faviconMark, isScanning, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
@@ -321,5 +321,23 @@ describe('local domains (D63)', () => {
   test('the header shows the host', () => {
     assert.equal(hostOfUrl('https://hallway.localhost'), 'hallway.localhost');
     assert.equal(hostOfUrl('https://myname.internal:4443/'), 'myname.internal:4443');
+  });
+});
+
+describe('local domains: the tiers (D65)', () => {
+  const tier = (trust: 'user' | 'system' | 'none', url: string) => ({ trust, name: trust, url, asks: '', note: '', command: `hallway setup --trust ${trust}`, recommended: trust === 'user', canTurnOn: trust !== 'system' });
+  test('what Turn on says before it runs: the new address, and what will ask (macOS: your own Touch ID, not an admin)', () => {
+    const mac = turnOnWords(tier('user', 'https://review.localhost'), true);
+    assert.match(mac.will, /has launchd hold ports 443 and 80 .*switches this dashboard to https:\/\/hallway\.localhost\.$/);
+    assert.match(mac.asks, /macOS will ask for your Touch ID or password.*It isn’t an administrator prompt\./);
+    assert.match(turnOnWords(tier('user', 'https://review.localhost:4443'), false).asks, /^Nothing will ask/);
+    const none = turnOnWords(tier('none', 'http://review.localhost'), true);
+    assert.match(none.will, /ports 80 for it/);
+    assert.match(none.asks, /^Nothing will ask for a password/);
+  });
+  test('an older daemon sends no tiers (the panel falls back to the two commands); the log tail is the last lines', () => {
+    assert.deepEqual(tierChoices({ unsupported: null, mode: 'direct', trust: null, dashboardUrl: '', appUrl: '', base: 'localhost', pushError: null }), []);
+    assert.equal(logTail('a\nb\nc\nd\n', 2), 'c\nd');
+    assert.deepEqual(TIER_LABEL, { user: 'no admin', system: 'system-wide', none: 'no prompts' });
   });
 });

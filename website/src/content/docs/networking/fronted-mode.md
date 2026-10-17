@@ -12,8 +12,10 @@ Until you do, nothing answers at `https://hallway.localhost` or `https://<app>.l
 connection was refused. Hallway says so in three places: the startup banner of `hallway` / `npx hallway`, an info line
 in `hallway doctor`, and a **Local domains** panel on the dashboard with the commands to copy (dismissible; the
 **Local domains** button in the header brings it back). Once it's on, that button shows the dashboard's host and how
-`hallway doctor`'s networking checks went, with each failing check and its fix. Setup itself runs in your terminal,
-where it shows its plan and asks before it changes anything.
+`hallway doctor`'s networking checks went, with each failing check and its fix. The panel shows the three tiers
+below, recommended first, with each one's command to copy; No admin and No prompts also have a **Turn on** button,
+which runs the same setup from the dashboard after saying what will happen and what (if anything) will ask.
+System-wide always runs in your terminal, where setup shows its plan and asks before it changes anything.
 
 :::note[Not on Windows]
 Fronted mode is macOS and Linux only. On Windows (best effort) its parts have no user-level equivalent, so

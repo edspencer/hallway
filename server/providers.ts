@@ -15,7 +15,7 @@
 // /api/state must answer in milliseconds). Several providers can be registered; for each slot the first one that
 // returns a non-null answer wins, in registration order. A provider that throws is skipped for that call (and
 // logged), never taking the API down.
-import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, FrontingCheck, FrontingInfo, HistoryWindow, ListenerIdentity, LostNotice, ObservedListener, ThumbKind } from '../shared/api.js';
+import type { AppConfig, AppHealth, AppHistory, DiscoveredApp, FrontingCheck, FrontingInfo, FrontingSetupJob, Trust, HistoryWindow, ListenerIdentity, LostNotice, ObservedListener, ThumbKind } from '../shared/api.js';
 import type { LostRecord } from './lost/index.js';
 
 /** What the API tells a provider about a declared app. */
@@ -61,6 +61,10 @@ export interface StateProvider {
   fronting?(): FrontingInfo | null;
   /** Doctor's fronted-mode checks, cached briefly (`fresh`: run them again). Resolves null in direct mode. */
   frontingChecks?(fresh?: boolean): Promise<{ checks: FrontingCheck[]; checkedAt: string } | null>;
+  /** The dashboard's Turn on (D65): start setup in a tier that needs no administrator, or say why not. */
+  turnOnFronting?(trust: Trust): FrontingSetupJob | { refused: string; status: 400 | 409 | 503 };
+  /** The Turn on that's running, or the last one. */
+  frontingSetup?(): FrontingSetupJob;
 }
 
 export class ProviderRegistry {

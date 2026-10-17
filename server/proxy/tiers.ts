@@ -7,7 +7,7 @@
 //   Linux      https://review.localhost:4443  https://review.localhost      http://review.localhost:4480
 //              nothing (~/.pki/nssdb)       sudo; --domain                  nothing
 import os from 'node:os';
-import type { HallwayConfig, Trust } from '../../shared/api.js';
+import type { HallwayConfig, TierOption, Trust } from '../../shared/api.js';
 import type { Platform, Runner } from '../platform/index.js';
 import { publicUrl } from './names.js';
 
@@ -24,10 +24,12 @@ export interface MachineFacts {
   admin: boolean;
   /** macOS: enrolled in MDM (`profiles status -type enrollment`), where admin is usually lent, not held. */
   managed: boolean;
+  /** False where System-wide can't work at all (Linux without systemd or nftables): then it isn't recommended. */
+  systemPossible?: boolean;
 }
 
 /** Ask the OS, read-only: `id -Gn`, and on macOS `profiles status -type enrollment` (which needs no privilege). */
-export async function machineFacts(platform: Pick<Platform, 'id'>, run: Runner, uid = process.getuid?.()): Promise<MachineFacts> {
+export async function machineFacts(platform: Pick<Platform, 'id'> & { fronting?: Platform['fronting'] }, run: Runner, uid = process.getuid?.(), env: NodeJS.ProcessEnv = process.env): Promise<MachineFacts> {
   if (platform.id === 'win32') return { admin: false, managed: false };
   const groups = await run('id', ['-Gn']);
   const names = groups.code === 0 ? groups.stdout.trim().split(/\s+/) : [];
@@ -37,14 +39,17 @@ export async function machineFacts(platform: Pick<Platform, 'id'>, run: Runner, 
     const r = await run('profiles', ['status', '-type', 'enrollment']);
     managed = r.code === 0 && /MDM enrollment:\s*Yes/i.test(r.stdout);
   }
-  return { admin, managed };
+  // System-wide's redirect needs systemd and nftables (Linux)
+  const f = platform.fronting;
+  const tools = f && f.lowPorts === 'redirect' && f.redirect && !f.unsupported ? f.detect(env) : null;
+  return { admin, managed, ...(tools && (!tools.systemctl || !tools.nft) ? { systemPossible: false } : {}) };
 }
 
 /** The tier to recommend: No admin on a Mac whose user isn't an admin or that MDM manages, and on Linux without sudo;
  *  otherwise System-wide, which trusts the certificate for everything and (on Linux) keeps the port out of links. */
 export function suggestedTier(platformId: Platform['id'], m: MachineFacts): Trust {
   if (platformId === 'darwin') return !m.admin || m.managed ? 'user' : 'system';
-  return m.admin ? 'system' : 'user';
+  return m.admin && m.systemPossible !== false ? 'system' : 'user';
 }
 
 /** The tier's addresses, for people: the dashboard's and an app's. */
@@ -85,6 +90,13 @@ export function tierText(platformId: Platform['id'], tier: Trust): { name: strin
         note: 'Plain HTTP. Browser APIs that need a secure context still work on .localhost; Safari drops Secure cookies.',
       };
   }
+}
+
+/** The tiers as the dashboard offers them (D65): the recommended one first, each with its URL, what it asks for and
+ *  its command; the dashboard can turn on only the two that need no administrator. */
+export function tierOptions(platformId: Platform['id'], cfg: Pick<HallwayConfig, 'proxy' | 'domain'>, suggested: Trust): TierOption[] {
+  const order = [suggested, ...TIERS.filter((t) => t !== suggested)];
+  return order.map((t) => ({ trust: t, ...tierText(platformId, t), url: tierUrls(platformId, t, cfg).app, command: `hallway setup --trust ${t}`, recommended: t === suggested, canTurnOn: t !== 'system' }));
 }
 
 /** The question `hallway setup` asks on a terminal when no --trust is given (D65). Numbers are fixed (1 user, 2

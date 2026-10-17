@@ -128,7 +128,7 @@ All JSON, on 127.0.0.1 only. Writes need `Content-Type: application/json`.
 | GET | `/api/lost` | What was lost at the last reboot (`null` if nothing) |
 | POST | `/api/lost/<id>/restart`, `/api/lost/<id>/service` | `{}` or `{"slug": "..."}`: start it again once, or as a service |
 | POST | `/api/lost/<id>/dismiss`, `/api/lost/dismiss` | Clear one, or the whole notice |
-| GET | `/api/fronting` | Local domains (`https://<app>.localhost`): on or off, and in fronted mode `hallway doctor`'s networking checks. Turning them on is `hallway setup`, for the user to run |
+| GET | `/api/fronting` | Local domains (`https://<app>.localhost`): on or off, the tiers to choose from, and in fronted mode `hallway doctor`'s networking checks. Turning them on is the user's: `hallway setup`, or the dashboard's Turn on button (`POST /api/fronting/setup`, which agents mustn't call) |
 | POST | `/api/observed/<id>/claim` | `{"slug": "...", "name": "...", "expected": "adhoc"}`: turn one into an app |
 | POST | `/api/observed/<id>/ignore` | `{"by": "port" \| "process" \| "dir"}`: hide it (adds to `ignore.yaml`) |
 | GET | `/api/config` | The settings in force |

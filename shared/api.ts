@@ -468,6 +468,39 @@ export interface FrontingInfo {
   base: string;
   /** Fronted mode: why the daemon's last push to Caddy failed (Caddy isn't running?), else null. */
   pushError: string | null;
+  /** The tier to recommend on this machine (D65), and whether the user is an administrator; null until the daemon has
+   *  asked the OS (or from an older daemon). */
+  suggested?: Trust | null;
+  admin?: boolean | null;
+  /** The three tiers as choices, the recommended one first (empty where fronted mode can't work). */
+  tiers?: TierOption[];
+}
+
+/** One of setup's tiers, as the dashboard offers it (D65). */
+export interface TierOption {
+  trust: Trust;
+  /** `No admin`, `System-wide`, `No prompts`. */
+  name: string;
+  /** An app's address in this tier: `https://review.localhost`. */
+  url: string;
+  /** What it will ask for, on this platform. */
+  asks: string;
+  /** What it gives up, or needs. */
+  note: string;
+  /** The command to copy: `hallway setup --trust user`. */
+  command: string;
+  recommended: boolean;
+  /** The dashboard can turn it on itself (`POST /api/fronting/setup`): No admin and No prompts, never System-wide. */
+  canTurnOn: boolean;
+}
+
+/** `GET /api/fronting/setup`: the dashboard's Turn on, running or done. */
+export interface FrontingSetupJob {
+  state: 'idle' | 'running' | 'done' | 'failed';
+  trust: Trust | null;
+  /** What setup printed, so far. */
+  log: string;
+  error: string | null;
 }
 
 /** One of `hallway doctor`'s fronted-mode checks (server/proxy/doctor.ts), with its fix. `info`: a fact, not a problem. */
