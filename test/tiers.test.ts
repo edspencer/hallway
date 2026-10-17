@@ -18,8 +18,9 @@ describe('which tier to recommend', () => {
     assert.equal(suggestedTier('darwin', { admin: true, managed: true }), 'user');
     assert.equal(suggestedTier('darwin', { admin: true, managed: false }), 'system');
   });
-  test('Linux: System-wide with sudo, else No admin', () => {
+  test('Linux: System-wide with sudo (and systemd and nftables to redirect with), else No admin', () => {
     assert.equal(suggestedTier('linux', { admin: true, managed: false }), 'system');
+    assert.equal(suggestedTier('linux', { admin: true, managed: false, systemPossible: false }), 'user');
     assert.equal(suggestedTier('linux', { admin: false, managed: false }), 'user');
   });
   test('asked of the OS with no privilege: `id -Gn`, and `profiles status -type enrollment` on macOS', async () => {
@@ -30,9 +31,11 @@ describe('which tier to recommend', () => {
     };
     assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone admin', profiles: 'Enrolled via DEP: Yes\nMDM enrollment: Yes (User Approved)\n' }), 501), { admin: true, managed: true });
     assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone', profiles: 'Enrolled via DEP: No\nMDM enrollment: No\n' }), 501), { admin: false, managed: false });
-    assert.deepEqual(await machineFacts(platformFor('linux'), run({ id: 'me adm sudo' }), 1000), { admin: true, managed: false });
-    assert.deepEqual(await machineFacts(platformFor('linux'), run({ id: 'me users' }), 1000), { admin: false, managed: false });
-    assert.deepEqual(await machineFacts(platformFor('linux'), run({ id: 'root' }), 0), { admin: true, managed: false });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me adm sudo' }), 1000), { admin: true, managed: false });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me users' }), 1000), { admin: false, managed: false });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'root' }), 0), { admin: true, managed: false });
+    const noSystemd = { ...platformFor('linux'), fronting: { ...platformFor('linux').fronting, detect: () => ({ nft: null, certutil: null, nssdb: false, systemctl: null, resolved: false, caStore: null }) } };
+    assert.deepEqual(await machineFacts(noSystemd, run({ id: 'me sudo' }), 1000), { admin: true, managed: false, systemPossible: false });
     assert.ok(calls.includes('profiles status -type enrollment'));
     assert.ok(!calls.some((c) => c.startsWith('sudo')));
   });
@@ -125,5 +128,32 @@ describe('choosing the tier in setup', () => {
     assert.match(b.out(), /as set up now/);
     const c = deps({ confirm: { ask: async () => '3' } });
     assert.equal(await chooseTier(c.d, { print: true }), 'user', '--print never asks');
+  });
+});
+
+describe("the dashboard's Turn on runs setup unattended (D65)", () => {
+  test('System-wide is refused; so is any plan with a sudo step (moving off a redirect); the rest runs', async () => {
+    const { setupUnattended, SetupError } = await import('../server/proxy/setup.ts');
+    const { tmpStore, tmpDir, rmTmp } = await import('./fixture.ts');
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const s = await tmpStore();
+    const dir = tmpDir('hw-test-unattended-');
+    try {
+      // a Caddy that says its version, and an "installed" nftables redirect from System-wide
+      fs.writeFileSync(path.join(dir, 'caddy'), '#!/bin/sh\necho v2.11.2\n', { mode: 0o755 });
+      const leftover = path.join(dir, 'redirect.nft');
+      fs.writeFileSync(leftover, '');
+      const linux = platformFor('linux');
+      const platform = { ...linux, listListeners: async () => [], processInfo: async () => new Map(), fronting: { ...linux.fronting, installed: () => ({ redirect: [leftover], trust: [], resolver: [] }) } };
+      let out = '';
+      const deps = { store: s.store, platform, services: () => { throw new Error('no service manager here'); }, env: { PATH: dir }, userHome: dir, query: async () => ({ code: 0, stdout: 'v2.11.2', stderr: '' }), out: (x: string) => void (out += x), isRoot: false, probe443: async () => 'none' as const, tlds: null };
+      await assert.rejects(setupUnattended(deps as never, 'system'), (e) => e instanceof SetupError && /System-wide needs an administrator/.test(e.message));
+      await assert.rejects(setupUnattended(deps as never, 'none'), (e) => e instanceof SetupError && /this needs sudo once \(Remove the redirect.*\), so it runs in a terminal: `hallway setup --trust none`/.test(e.message));
+      assert.equal(out, '', 'nothing ran');
+    } finally {
+      rmTmp(dir);
+      s.cleanup();
+    }
   });
 });

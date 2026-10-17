@@ -1105,6 +1105,9 @@ being `/opt/homebrew`), and showed **exposed** with no explanation.
 
 ### D63 — Local domains are discoverable: the startup banner, a dismissible dashboard panel, a header control, doctor (2026-10-17)
 
+> **Updated by D65 (2026-10-17):** the panel offers the three tiers, and the dashboard *can* now run setup, for No admin
+> and No prompts only (the open "set it up from here" question, answered for the tiers that need no administrator).
+
 Run on a real Mac as a service, 0.5.2 gave `ERR_CONNECTION_REFUSED` at `https://hallway.localhost`: fronted mode is
 opt-in (D15, D47) and nothing in the CLI or the dashboard said it existed, that it was off, or how to turn it on.
 
@@ -1360,6 +1363,16 @@ no sudo and no prompt, not reachable on en0.
 - **D64's pf-skip detection is gone** with the pf redirect: launchd's sockets aren't subject to pf's `set skip`
   (checked in CI). doctor names an old pf redirect as left over (`leftover-redirect`: "`hallway setup --trust <tier>`
   removes it (it needs admin, this once)"), and a leftover system-wide trust in another tier (`leftover-trust`).
+- **The dashboard** (PR B): `FrontingInfo` gains `suggested`, `admin` (from `machineFacts`, asked once when the daemon
+  starts) and `tiers` (`TierOption`s, the recommended first: name, URL, what it asks for, the command, `canTurnOn`).
+  D63's panel shows the three as cards with a Copy button each, and **Turn on** for No admin and No prompts, which says
+  what will happen and what will ask, then `POST /api/fronting/setup {"trust":"user"|"none"}` (the usual Host, Origin
+  and Content-Type checks; 400 for `system` or anything else; 409 while one runs). The daemon runs
+  `setupUnattended`: the same facts and plan as `hallway setup`, refused if the plan has any sudo step (moving off
+  System-wide: "this needs sudo once (…), so it runs in a terminal"), output captured, never a terminal prompt. The
+  page follows `GET /api/fronting/setup` (state, log, error) from App level, since the panel goes away the moment
+  config.yaml says fronted; on success a toast and the dialog with doctor's checks. The header names the tier
+  (`hallway.localhost · no admin`). An older daemon sends no tiers, and the panel falls back to its two commands.
 - **CI** (`scripts/fronted-real.mjs`): 0.6.0's System-wide setup from npm, migrated by this build; the criteria
   System-wide (launchd on macOS, `[::1]` too, a 30 s idle TLS connection through the forwarder, pf told to skip lo0
   without effect); a custom domain; then No admin as a plan (macOS) and for real (Linux, NSS), No prompts for real

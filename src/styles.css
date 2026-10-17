@@ -2497,6 +2497,125 @@ kbd {
   font-size: 13px;
 }
 
+/* the tiers (D65): one row each, the recommended one marked, with its command and (no admin, no prompts) Turn on */
+.hw-domains-actions--tiers {
+  /* a block, not the wrapping flex row: a wrapping column would size the grid at its narrowest */
+  display: block;
+}
+.hw-domains-actions--tiers .hw-domains-docs {
+  margin-top: 10px;
+}
+.hw-tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hw-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 12px;
+  border-radius: var(--hw-radius-small);
+  border: 1px solid var(--hw-line);
+  background: var(--hw-bg);
+}
+.hw-tier--recommended {
+  border-color: var(--hw-accent);
+}
+.hw-tier-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.hw-tier-name {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.hw-tier-badge {
+  padding: 0 7px;
+  border-radius: var(--hw-radius-pill);
+  background: var(--hw-accent);
+  color: var(--hw-ink);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.hw-tier-url {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--hw-accent-text);
+  overflow-wrap: anywhere;
+}
+.hw-tier-asks,
+.hw-tier-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.hw-tier-note {
+  color: var(--hw-text-subtle);
+}
+.hw-tier-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+.hw-tier-actions .hw-domains-cmd {
+  font-size: 12px;
+}
+.hw-tier-on {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  margin-left: auto;
+}
+.hw-tier-terminal {
+  font-size: 11.5px;
+  color: var(--hw-text-faint);
+}
+.hw-tier-confirm,
+.hw-tier-run {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--hw-radius-small);
+  background: var(--hw-bg-sunken);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.hw-tier-confirm p,
+.hw-tier-run p {
+  margin: 0 0 6px;
+}
+.hw-tier-confirm-asks {
+  color: var(--hw-text-muted);
+}
+.hw-tier-confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+.hw-tier-run-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+}
+.hw-tier-log {
+  margin: 0 0 6px;
+  max-height: 9em;
+  overflow: auto;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--hw-text-muted);
+}
+
 .hw-domains-btn {
   display: inline-flex;
   align-items: center;

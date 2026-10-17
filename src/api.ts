@@ -11,6 +11,7 @@ import type {
   ConfigView,
   ErrorResponse,
   FrontingResponse,
+  FrontingSetupJob,
   HealthResponse,
   HintsRequest,
   HistoryWindow,
@@ -101,6 +102,10 @@ export const ignore = (id: string, by: IgnoreRequest['by']) => write<{ ok: true 
 export const reviveLost = (id: string, how: 'restart' | 'service', req: LostActionRequest = {}) => write<LostActionResponse>('POST', `/api/lost/${encodeURIComponent(id)}/${how}`, req);
 /** Dismiss one lost item, or (no id) the whole notice. */
 export const dismissLost = (id?: string) => write<{ dismissed: number; lost: LostNotice | null }>('POST', id ? `/api/lost/${encodeURIComponent(id)}/dismiss` : '/api/lost/dismiss', {});
+
+/** The dashboard's Turn on (D65): setup in a tier that needs no administrator, run by the daemon. */
+export const turnOnFronting = (trust: 'user' | 'none') => write<FrontingSetupJob>('POST', '/api/fronting/setup', { trust });
+export const getFrontingSetup = () => getJson<FrontingSetupJob>('/api/fronting/setup');
 
 /** Show (true) or dismiss (false) a dashboard hint: `dashboard.hints` in config.yaml, so every browser agrees (D63). */
 export const setHints = (hints: HintsRequest) => write<ConfigView>('PATCH', '/api/hints', hints);

@@ -8,6 +8,7 @@ import type {
   ClaimRequest,
   ErrorResponse,
   FrontingResponse,
+  FrontingSetupJob,
   HistoryWindow,
   IgnoreRequest,
   LostActionRequest,
@@ -177,8 +178,7 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
     }
   });
 
-  // local domains: what fronted mode gives, whether it's on, and (in fronted mode) doctor's checks. Read-only: setup is
-  // `hallway setup`, never the daemon (AGENTS.md)
+  // local domains: what fronted mode gives, whether it's on, and (in fronted mode) doctor's checks
   api.get('/fronting', async (c) => {
     const fronting = providers.first('fronting');
     if (!fronting) return fail(c, 503, { error: 'local domains are not available in this daemon (no fronting provider is running)' });
@@ -188,6 +188,27 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
     } catch (e) {
       return handle(c, e);
     }
+  });
+
+  // the dashboard's Turn on (D65): setup in a tier that needs no administrator, run by the daemon. A write like any
+  // other (Host, Origin and Content-Type checked by the middleware), and only `user` or `none`, never `system`
+  api.post('/fronting/setup', async (c) => {
+    try {
+      const body = await jsonBody(c);
+      const trust = (body as { trust?: unknown } | null)?.trust;
+      if (trust !== 'user' && trust !== 'none') throw new ValidationError(trust === 'system' ? 'System-wide needs an administrator, so it runs in a terminal: `hallway setup --trust system`' : 'trust must be "user" or "none"');
+      if (!providers.first('fronting')) return fail(c, 503, { error: 'local domains are not available in this daemon' });
+      const job = providers.first('turnOnFronting', trust);
+      if (!job) return fail(c, 503, { error: "this daemon can't run setup; run `hallway setup` in a terminal" });
+      if ('refused' in job) return fail(c, job.status, { error: job.refused });
+      return c.json(job, 202);
+    } catch (e) {
+      return handle(c, e);
+    }
+  });
+  api.get('/fronting/setup', (c) => {
+    const job = providers.first('frontingSetup');
+    return job ? c.json(job satisfies FrontingSetupJob) : fail(c, 503, { error: 'local domains are not available in this daemon' });
   });
 
   // ---------------- apps ----------------

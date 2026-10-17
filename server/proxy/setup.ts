@@ -728,14 +728,8 @@ export async function chooseTier(deps: SetupDeps, opts: SetupOptions): Promise<T
     deps.out('A custom domain needs System-wide (--trust system): the system resolver is pointed at it, which needs an administrator.\n\n');
     return 'system';
   }
-  const machine = deps.machine ?? (await machineFacts(deps.platform, deps.query));
-  let suggested = suggestedTier(deps.platform.id, machine);
-  // System-wide's redirect needs systemd and nftables (Linux): without them, don't recommend what would be refused
-  const f = deps.platform.fronting;
-  if (suggested === 'system' && f.lowPorts === 'redirect' && f.redirect) {
-    const tools = f.detect(deps.env);
-    if (!tools.systemctl || !tools.nft) suggested = 'user';
-  }
+  const machine = deps.machine ?? (await machineFacts(deps.platform, deps.query, process.getuid?.(), deps.env));
+  const suggested = suggestedTier(deps.platform.id, machine);
   const ask = deps.confirm?.ask;
   if (ask && !deps.confirm?.yes && !opts.print) {
     const q = tierQuestion(deps.platform.id, cfg, suggested, current);
@@ -871,4 +865,42 @@ function readOr(file: string): string | null {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The dashboard's Turn on (D65)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** A command's output, captured: the daemon has no terminal, and nothing here may prompt on one. */
+export const captureExec =
+  (out: (s: string) => void) =>
+  (argv: string[], opts: { quiet?: boolean } = {}) =>
+    new Promise<number>((resolve) => {
+      const p = spawn(argv[0], argv.slice(1), { stdio: ['ignore', 'pipe', 'pipe'] });
+      const timer = setTimeout(() => p.kill('SIGTERM'), COMMAND_TIMEOUT_MS);
+      p.stdout.on('data', (d) => out(String(d)));
+      p.stderr.on('data', (d) => !opts.quiet && out(String(d)));
+      p.on('error', () => (clearTimeout(timer), resolve(127)));
+      p.on('exit', (code) => (clearTimeout(timer), resolve(code ?? 1)));
+    });
+
+/**
+ * Setup with nobody at a terminal: what the dashboard's Turn on runs in the daemon. Only No admin and No prompts, and
+ * only when the plan has no sudo step (moving off System-wide has some: that's for a terminal). macOS may still show
+ * its own trust dialog (No admin): that one is the user's, on their screen. Throws SetupError with why not.
+ */
+export async function setupUnattended(deps: SetupDeps, trust: Trust): Promise<void> {
+  if (deps.platform.fronting.unsupported) throw new SetupError(deps.platform.fronting.unsupported);
+  if (trust === 'system') throw new SetupError('System-wide needs an administrator: run `hallway setup --trust system` in a terminal');
+  const facts = await gatherFacts(deps, { trust });
+  const plan = planSetup(facts, deps.platform, deps.store.home, setupActions(deps, facts));
+  if (plan.refusals.length) throw new SetupError(plan.refusals.join(' '));
+  const sudo = plan.steps.filter((s) => !s.done && s.kind === 'run' && s.recipe.cmds.some((c) => c.sudo));
+  if (sudo.length && !deps.isRoot)
+    throw new SetupError(`this needs sudo once (${sudo.map((s) => s.why.replace(/ \(.*\)$/, '')).join('; ')}), so it runs in a terminal: \`hallway setup --trust ${trust}\``);
+  for (const w of plan.warnings) deps.out(`! ${w}\n`);
+  const ahead = promptsAhead(plan, deps.platform, deps.isRoot);
+  deps.out(`${ahead}\n\n`);
+  await runPlan(plan, deps);
+  deps.out(`\nDone. The dashboard is at ${publicUrl(facts.dashboard, { scheme: facts.scheme, publicPort: facts.publicPort })}.\n`);
 }

@@ -8,6 +8,7 @@ import type { AppView, BookmarkGroupView, ConfigView, FrontingCheck, FrontingRes
 import { darwinFronting } from '../server/platform/fronting-darwin.ts';
 import { win32Fronting } from '../server/platform/win32.ts';
 import { frontingInfo, frontingProvider, tildifyText } from '../server/proxy/status.ts';
+import type { FrontingSetupJob } from '../shared/api.ts';
 import { createApp } from '../server/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
 import { appUrl } from '../server/views.ts';
@@ -351,7 +352,7 @@ describe('local domains (D63)', () => {
     assert.equal((await req('/api/fronting')).status, 503);
     providers.register(frontingProvider({ store, platform: { fronting: darwinFronting }, checks: async () => [] }));
     const f = ((await (await req('/api/state')).json()) as StateResponse).fronting;
-    assert.deepEqual(f, { unsupported: null, mode: 'direct', trust: null, dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null });
+    assert.deepEqual(f, { suggested: null, admin: null, tiers: [], unsupported: null, mode: 'direct', trust: null, dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null });
     await store.patchConfig({ mode: 'fronted', domain: { base: 'myname.internal' }, proxy: { publicPort: 4443 } });
     const g = ((await (await req('/api/state')).json()) as StateResponse).fronting!;
     assert.equal(g.mode, 'fronted');
@@ -450,3 +451,67 @@ describe('appUrl', () => {
     assert.equal(appUrl('a', 5173, '127.0.0.1', { ...cfg, mode: 'fronted', domain: { ...cfg.domain, base: 'myname.internal' } }), 'https://a.myname.internal');
   });
 });
+
+describe("the dashboard's Turn on (D65)", () => {
+  const until = async (f: () => Promise<boolean>) => {
+    for (let i = 0; i < 100 && !(await f()); i++) await new Promise((r) => setTimeout(r, 20));
+  };
+  test('tiers in /api/state once the OS has been asked: the recommended first, System-wide never turned on here', async () => {
+    const { req, providers, store } = await setup();
+    providers.register(frontingProvider({ store, platform: { id: 'darwin', fronting: darwinFronting }, machine: async () => ({ admin: false, managed: true }), checks: async () => [] }));
+    let f = ((await (await req('/api/state')).json()) as StateResponse).fronting!;
+    await until(async () => !!(f = ((await (await req('/api/state')).json()) as StateResponse).fronting!).suggested);
+    assert.equal(f.suggested, 'user');
+    assert.equal(f.admin, false);
+    assert.deepEqual(f.tiers!.map((t) => [t.trust, t.url, t.command, t.recommended, t.canTurnOn]), [
+      ['user', 'https://review.localhost', 'hallway setup --trust user', true, true],
+      ['system', 'https://review.localhost', 'hallway setup --trust system', false, false],
+      ['none', 'http://review.localhost', 'hallway setup --trust none', false, true],
+    ]);
+  });
+
+  test('POST /api/fronting/setup runs setup for user or none, one at a time; never system; GET follows it', async () => {
+    const { req, providers, store } = await setup();
+    const ran: string[] = [];
+    let finish!: () => void;
+    providers.register(
+      frontingProvider({
+        store,
+        platform: { id: 'linux', fronting: darwinFronting },
+        runSetup: (trust, out) => {
+          ran.push(trust);
+          out(`setting up ${trust} in /home/me/x\n`);
+          return new Promise<void>((r) => (finish = r));
+        },
+        checks: async () => [],
+      }),
+    );
+    const post = (body: unknown, headers: Record<string, string> = {}) => req('/api/fronting/setup', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...headers } });
+    assert.equal((await post({ trust: 'system' })).status, 400);
+    assert.equal((await post({ trust: 'root' })).status, 400);
+    assert.equal((await post({ trust: 'none' }, { origin: 'https://evil.example.com' })).status, 403);
+    assert.deepEqual(ran, []);
+    const r = await post({ trust: 'none' });
+    assert.equal(r.status, 202);
+    assert.equal(((await r.json()) as FrontingSetupJob).state, 'running');
+    assert.equal((await post({ trust: 'user' })).status, 409, 'one at a time');
+    finish();
+    let job!: FrontingSetupJob;
+    await until(async () => (job = (await (await req('/api/fronting/setup')).json()) as FrontingSetupJob).state === 'done');
+    assert.equal(job.state, 'done');
+    assert.equal(job.trust, 'none');
+    assert.deepEqual(ran, ['none']);
+  });
+
+  test('a failed run says why; with no runner (an older daemon) the route says to use a terminal', async () => {
+    const { req, providers, store } = await setup();
+    const post = () => req('/api/fronting/setup', { method: 'POST', body: '{"trust":"user"}', headers: { 'content-type': 'application/json' } });
+    assert.equal((await post()).status, 503, 'no provider');
+    providers.register(frontingProvider({ store, platform: { id: 'linux', fronting: darwinFronting }, runSetup: async () => { throw new Error('this needs sudo once'); }, checks: async () => [] }));
+    assert.equal((await post()).status, 202);
+    let job!: FrontingSetupJob;
+    await until(async () => (job = (await (await req('/api/fronting/setup')).json()) as FrontingSetupJob).state === 'failed');
+    assert.equal(job.error, 'this needs sudo once');
+  });
+});
+

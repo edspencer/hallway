@@ -131,6 +131,18 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
     frontingProvider({
       store,
       platform,
+      machine: async () => {
+        const [{ machineFacts }, { defaultRunner }] = await Promise.all([import('./proxy/tiers.js'), import('./platform/index.js')]);
+        return machineFacts(platform, defaultRunner);
+      },
+      // the dashboard's Turn on (D65): No admin or No prompts only, refused if the plan has a sudo step
+      runSetup: async (trust, out) => {
+        const [{ setupUnattended, captureExec }, { Services }, { defaultRunner }, os] = await Promise.all([import('./proxy/setup.js'), import('./services/index.js'), import('./platform/index.js'), import('node:os')]);
+        await setupUnattended(
+          { store, platform, services: () => new Services({ store, platform }), env: process.env, userHome: os.homedir(), query: defaultRunner, out, exec: captureExec(out), isRoot: process.getuid?.() === 0, confirm: { yes: true } },
+          trust,
+        );
+      },
       proxyStatus: proxy.status,
       checks: async () => {
         const [{ networkChecks }, { Services }, { defaultRunner }, os] = await Promise.all([import('./proxy/doctor.js'), import('./services/index.js'), import('./platform/index.js'), import('node:os')]);

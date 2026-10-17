@@ -17,7 +17,7 @@ export interface HeaderProps {
   matches: number | null;
   onHelp(): void;
   /** Local domains (D63): off (opens how to turn them on) or on (the dashboard's host and how the checks went). */
-  domains?: { state: 'off' } | { state: 'on'; host: string; tone: DomainsTone; text: string } | null;
+  domains?: { state: 'off' } | { state: 'on'; host: string; tier?: string | null; tone: DomainsTone; text: string } | null;
   onDomains?(): void;
 }
 
@@ -91,9 +91,10 @@ function DomainsButton({ d, onClick }: { d: NonNullable<HeaderProps['domains']>;
       </button>
     );
   return (
-    <button type="button" className={`hw-domains-btn hw-domains-btn--${d.tone}`} onClick={onClick} aria-haspopup="dialog" aria-label={`Local domains: ${d.host}, ${d.text}`} title={`Local domains: ${d.text}`}>
+    <button type="button" className={`hw-domains-btn hw-domains-btn--${d.tone}`} onClick={onClick} aria-haspopup="dialog" aria-label={`Local domains: ${d.host}${d.tier ? `, ${d.tier}` : ''}, ${d.text}`} title={`Local domains${d.tier ? ` · ${d.tier}` : ''}: ${d.text}`}>
       <span className={`hw-domains-dot hw-domains-dot--${d.tone}`} aria-hidden="true" />
       <span className="hw-domains-btn-label">{d.host}</span>
+      {d.tier && <span className="hw-domains-btn-off">· {d.tier}</span>}
     </button>
   );
 }
