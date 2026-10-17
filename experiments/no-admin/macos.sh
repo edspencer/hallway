@@ -25,7 +25,7 @@ for addr in 127.0.0.1 0.0.0.0; do
   T 6 caddy run --adapter caddyfile --config "$WORK/bind-$addr.Caddyfile" > "$WORK/bind-$addr.log" 2>&1 &
   sleep 4
   echo "-- $addr: curl http://127.0.0.1:443 -> $(curl -s -m 2 http://127.0.0.1:443/ || echo 'no answer')"
-  grep -vE '"level":"(debug)"' "$WORK/bind-$addr.log" | grep -iE "error|permission|listen|bind" | head -4
+  tail -4 "$WORK/bind-$addr.log" | cut -c1-260
   wait
 done
 
@@ -80,7 +80,7 @@ cat > "$WORK/caddy.json" <<EOF
   "storage": {"module": "file_system", "root": "$WORK/caddy"},
   "apps": {
     "http": {"servers": {
-      "tls": {"listen": ["fd/3", "fd/4"], "tls_connection_policies": [{}], "automatic_https": {"disable": true},
+      "tls": {"listen": ["fd/3", "fd/4"], "protocols": ["h1", "h2"], "tls_connection_policies": [{}], "automatic_https": {"disable": true},
               "routes": [{"handle": [{"handler": "static_response", "body": "hello from caddy on launchd's 443, host {http.request.host}\n"}]}]},
       "plain": {"listen": ["fd/5"], "automatic_https": {"disable": true},
               "routes": [{"handle": [{"handler": "static_response", "status_code": 308, "headers": {"Location": ["https://{http.request.host}{http.request.uri}"]}}]}]}}},
@@ -122,7 +122,16 @@ echo | T 10 openssl s_client -connect 127.0.0.1:443 -servername hallway.localhos
 echo "-- before: verify-cert -> $(security verify-cert -c "$WORK/leaf.pem" -p ssl -s hallway.localhost 2>&1 | tail -1)"
 echo "-- before: /usr/bin/curl https://hallway.localhost/ -> $(/usr/bin/curl -sS -m 5 https://hallway.localhost/ 2>&1 | head -1)"
 security list-keychains -d user; security show-keychain-info ~/Library/Keychains/login.keychain-db 2>&1
-echo "-- add-trusted-cert into the user domain (login keychain), 90 s limit:"
+echo "-- add-trusted-cert into the user domain (login keychain), 90 s limit, first with nobody answering the dialog:"
+START=$(date +%s)
+T 30 security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "$ROOT"; echo "exit=$? after $(( $(date +%s) - START ))s"
+echo "-- again, answering SecurityAgent's dialog with the user's (CI-set) password via System Events:"
+PW="hw-exp-$RANDOM$RANDOM"; sudo dscl . -passwd /Users/runner "$PW" && echo "runner password set"
+( for i in $(seq 1 40); do
+    if pgrep -x SecurityAgent >/dev/null; then sleep 2
+      osascript -e 'tell application "System Events" to tell process "SecurityAgent" to get {name, entire contents} of window 1' 2>&1 | head -c 1500; echo
+      osascript -e "tell application \"System Events\" to tell process \"SecurityAgent\"" -e "set frontmost to true" -e "keystroke \"$PW\"" -e "keystroke return" -e "end tell" 2>&1 && echo "typed into SecurityAgent"
+      break; fi; sleep 0.5; done ) &
 START=$(date +%s)
 T 90 security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "$ROOT"; echo "exit=$? after $(( $(date +%s) - START ))s"
 echo "-- user trust settings now:"; security dump-trust-settings 2>&1 | head -12
@@ -133,7 +142,7 @@ echo "-- after: node --use-system-ca fetch -> $(node --use-system-ca -e 'fetch("
 echo "-- after: node (bundled CAs) fetch -> $(node -e 'fetch("https://hallway.localhost/").then(r=>r.text()).then(t=>console.log(t.trim()),e=>console.log("ERR",e.cause?.code||e.message))' 2>&1)"
 echo "$ROOT" > "$WORK/root-path"; echo "ROOT=$ROOT" >> "$GITHUB_ENV"
 echo "-- browsers against https://hallway.localhost/ with the user-domain trust:"
-cd "$EXP" && npm i -s --no-save playwright@1 >/dev/null 2>&1 && npx -y playwright install webkit firefox >/dev/null 2>&1
+cd "$EXP" && npm i -s --no-save playwright@1 >/dev/null 2>&1 && npx -y playwright install chromium webkit firefox >/dev/null 2>&1
 node -e '
 const { webkit, firefox, chromium } = require("playwright");
 (async () => {
@@ -155,4 +164,52 @@ SHA=$(openssl x509 -in "$ROOT" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :
 T 30 security delete-certificate -Z "$SHA" ~/Library/Keychains/login.keychain-db; echo "delete-certificate exit=$?"
 echo "-- after removal: verify-cert -> $(security verify-cert -c "$WORK/leaf.pem" -p ssl -s hallway.localhost 2>&1 | tail -1)"
 launchctl bootout "$DOMAIN/hallway.exp.sock"; rm -f "$PLIST"
+h "3. launchd's 443 without a native shim (Caddy as the user on 127.0.0.1:4443, same CA)"
+launchctl bootout "$DOMAIN/hallway.exp.sock" 2>/dev/null
+sed -e 's|"listen": \["fd/3", "fd/4"\]|"listen": ["127.0.0.1:4443"]|' -e 's|"listen": \["fd/5"\]|"listen": ["127.0.0.1:4480"]|' "$WORK/caddy.json" > "$WORK/caddy-hi.json"
+HOME=$WORK XDG_DATA_HOME=$WORK/xdg XDG_CONFIG_HOME=$WORK/xdg caddy run --config "$WORK/caddy-hi.json" > "$WORK/caddy-hi.out" 2>&1 & CHI=$!
+for i in $(seq 1 20); do curl -s -m 1 --cacert "$ROOT" https://hallway.localhost:4443/ >/dev/null && break; sleep 0.5; done
+bench() { # 20 new TLS connections, each a separate curl
+  local s=$(perl -MTime::HiRes=time -e 'print time'); local ok=0
+  for i in $(seq 1 20); do curl -s -m 5 --cacert "$ROOT" "$1" >/dev/null && ok=$((ok+1)); done
+  echo "$ok/20 ok, $(perl -MTime::HiRes=time -e "printf '%.1f', (time-$s)*1000/20") ms per new connection: $1"
+}
+echo "-- direct to Caddy:"; bench https://hallway.localhost:4443/
+mkjob() { # label, program args (xml), extra keys (xml)
+  cat > ~/Library/LaunchAgents/$1.plist <<EOP
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>Label</key><string>$1</string>
+<key>ProgramArguments</key><array>$2</array>$3
+<key>StandardErrorPath</key><string>$WORK/$1.err</string></dict></plist>
+EOP
+  echo "bootstrap $1: $(launchctl bootstrap "$DOMAIN" ~/Library/LaunchAgents/$1.plist 2>&1; echo exit=$?)"
+}
+SOCK443='<key>Sockets</key><dict><key>Listeners</key><dict><key>SockNodeName</key><string>127.0.0.1</string><key>SockServiceName</key><string>443</string><key>SockFamily</key><string>IPv4</string></dict></dict>'
+
+echo "-- 3a. inetd mode, Wait=false: launchd accepts, one /usr/bin/nc 127.0.0.1 4443 per connection"
+mkjob hallway.exp.nc '<string>/usr/bin/nc</string><string>127.0.0.1</string><string>4443</string>' "<key>inetdCompatibility</key><dict><key>Wait</key><false/></dict>$SOCK443"
+sleep 1; bench https://hallway.localhost/
+launchctl bootout "$DOMAIN/hallway.exp.nc"; cat "$WORK/hallway.exp.nc.err" 2>/dev/null | head -3
+
+echo "-- 3b. inetd mode, Wait=true: one Node process gets the listening socket as fd 0 and forwards"
+NODE=$(command -v node)
+mkjob hallway.exp.fwd "<string>$NODE</string><string>$EXP/fwd.mjs</string><string>4443</string>" "<key>inetdCompatibility</key><dict><key>Wait</key><true/></dict>$SOCK443<key>StandardOutPath</key><string>$WORK/fwd.out</string>"
+sleep 1; bench https://hallway.localhost/
+cat "$WORK/fwd.out" "$WORK/hallway.exp.fwd.err" 2>/dev/null | head -5
+launchctl print "$DOMAIN/hallway.exp.fwd" | grep -E '^\s*(state|pid|runs) ' | head -3
+echo "   (a second burst reuses the same process?)"; bench https://hallway.localhost/; launchctl print "$DOMAIN/hallway.exp.fwd" | grep -E '^\s*(pid|runs) ' | head -2
+launchctl bootout "$DOMAIN/hallway.exp.fwd"
+echo "-- 3c. does a LaunchAgent survive bootout/bootstrap of a *second* agent wanting the same port? (conflict behaviour)"
+mkjob hallway.exp.nc '<string>/usr/bin/nc</string><string>127.0.0.1</string><string>4443</string>' "<key>inetdCompatibility</key><dict><key>Wait</key><false/></dict>$SOCK443"
+mkjob hallway.exp.nc2 '<string>/usr/bin/nc</string><string>127.0.0.1</string><string>4443</string>' "<key>inetdCompatibility</key><dict><key>Wait</key><false/></dict>$SOCK443"
+launchctl print "$DOMAIN/hallway.exp.nc2" 2>&1 | grep -iE 'state|error' | head -3
+launchctl bootout "$DOMAIN/hallway.exp.nc" 2>/dev/null; launchctl bootout "$DOMAIN/hallway.exp.nc2" 2>/dev/null
+echo "-- 3d. a user process already on 0.0.0.0:443, then a LaunchAgent wanting 127.0.0.1:443"
+node -e 'require("net").createServer().listen(443,"0.0.0.0",()=>console.log("squatter on 0.0.0.0:443"))' & SQ=$!; sleep 1
+mkjob hallway.exp.nc '<string>/usr/bin/nc</string><string>127.0.0.1</string><string>4443</string>' "<key>inetdCompatibility</key><dict><key>Wait</key><false/></dict>$SOCK443"
+sleep 1; echo "curl -> $(curl -s -m 3 --cacert "$ROOT" https://hallway.localhost/ || echo 'failed')"
+launchctl bootout "$DOMAIN/hallway.exp.nc" 2>/dev/null; kill $SQ
+kill $CHI
+
 exit 0
