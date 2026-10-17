@@ -34,16 +34,14 @@ export const QUICKSTART = {
 	label: 'Install',
 	/** The pill in the terminal bar. */
 	tag: 'On npm',
-	blurb: 'macOS and Linux, and Windows best effort (no HTTPS names there, and not yet tried on a real Windows desktop). Node 22.13+. The second command runs Hallway at every login (a LaunchAgent on macOS, a systemd user unit on Linux, a scheduled task on Windows); then open http://localhost:4255.',
 	command: `${INSTALL_COMMAND} && hallway service install`,
-	link: { text: 'The first five minutes', href: '/getting-started/quickstart/' },
 } as const;
 
 /** The second item in the strip: a link, not a tab (see CommandTabs.astro). */
 export const SECONDARY_LINK = {
-	label: 'Roadmap',
-	href: '/roadmap/',
-	title: 'What shipped in v0, v1 and v2, and what is left',
+	label: 'Quick start',
+	href: '/getting-started/quickstart/',
+	title: 'Install Hallway and see your first app in five minutes',
 } as const;
 
 /** The hero buttons, repeated in the closing section. */
