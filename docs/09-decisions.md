@@ -1092,3 +1092,51 @@ being `/opt/homebrew`), and showed **exposed** with no explanation.
   only at `/` and `~` (as before): `/opt/homebrew` is a git repository, so a prefix has to be named.
 - **Observation ids** hash the project root or else the cwd, so a listener that used to be identified by a prefix's
   repository gets a new id (and a new row in `observed.json`) once; nothing else changes for it.
+
+### D64 — pf told to skip loopback: diagnosed by doctor, cleared by setup when that's safe, never at boot (2026-10-17)
+
+On the author's Mac (0.5.2, the first real-Mac run of fronted mode; research notes), `hallway setup` did everything
+but the final check: nothing answered on 443. The anchor's four rdr rules were loaded, the `hallway.pf` LaunchDaemon
+had exited 0, Caddy answered on 4443, and `pfctl -s Interfaces -v` showed **`lo0 (skip)`**. Something other than
+Hallway (pf's enable references named a `pfd`, long gone, from boot) had loaded a ruleset with `set skip on lo0`,
+which makes pf ignore loopback entirely, Hallway's rdr rules with it. `set skip on lo0` is in OpenBSD's example pf.conf
+and in most VPN kill-switch and firewall-app rulesets, so others will hit this. Loading `/etc/pf.conf` again cleared it
+(a main-ruleset load resets the skip flags) and `launchctl kickstart -k system/hallway.pf` loaded the anchor again.
+
+- **Detection lives in the platform layer** (`Fronting.loopbackSkip`, macOS only): `pfctl -s Interfaces -v` for the
+  skip, then, only if it's set, `pfctl -s References` (who holds pf enabled, Hallway's own `pfctl` left out),
+  `pfctl -s nat` and `pfctl -s rules` (is the main ruleset macOS's stock one: nothing but the `com.apple/*` hooks,
+  `rdr-anchor` among them) and `/etc/pf.conf` (does it `set skip on` lo0 itself). pfctl needs root, so each query runs
+  as `sudo -n pfctl …`: read-only, and `-n` never prompts; without a cached password it fails and the answer is
+  "couldn't check", with how to let it look (`sudo -v`, then doctor again). The parsers are pure, against fixtures.
+- **doctor** asks only when nothing answers on 443 with the redirect expected, and then the `redirect` line itself
+  says why: "pf is set to skip loopback (lo0), so the redirect is ignored; something other than Hallway set this
+  (pf was turned on by …)", with the fix `sudo pfctl -f /etc/pf.conf && sudo launchctl kickstart -k system/hallway.pf`
+  and a note that the skip comes back if that tool sets it again. If `/etc/pf.conf` sets it itself, the fix says
+  reloading won't help; if the main ruleset has rules of its own, it says reloading would drop them.
+- **setup** asks while gathering facts (usually "couldn't check": sudo hasn't been used yet) and plans a `[sudo]` step
+  right after the redirect, which reloads `/etc/pf.conf` and kickstarts `hallway.pf`. The step is checked again just
+  before it runs (sudo has a cached password by then) and runs only if the skip is set, `/etc/pf.conf` doesn't set it,
+  and the main ruleset is stock; otherwise it prints why and does nothing (and a skip already known to be unsafe to
+  clear is a warning, not a step). The final check reports the skip as the cause instead of "nothing answered".
+- **The boot LaunchDaemon does not clear the skip.** It stays one fixed `pfctl -E -a com.apple/hallway -f …`. Whatever
+  set the skip runs at boot too, in an order launchd doesn't promise: if it runs after `hallway.pf`, a reload at boot
+  is undone anyway; if before, reloading `/etc/pf.conf` at boot replaces that tool's main ruleset, which may be a VPN
+  kill switch's block rules, a silent security regression on every boot that no one was shown. setup's reload is
+  different: it's printed, run once, when someone is watching, and only when the ruleset it replaces is stock.
+- **Rejected:**
+  - clearing the skip at boot (above), or a watcher that clears it whenever it reappears: it fights the other tool,
+    forever, as root;
+  - editing `/etc/pf.conf` to remove a `set skip on lo0` it contains: OS updates rewrite it, someone put the line
+    there on purpose, and Hallway never edits pf.conf (D47);
+  - `set skip` with an interface list that leaves lo0 out, loaded by Hallway: it's a main-ruleset option, so the same
+    reload under another name;
+  - a root TCP forwarder on 127.0.0.1:443 (a LaunchDaemon with launchd `Sockets`) instead of pf: immune to pf's skip,
+    but a privileged process handling every byte of every request, and a binary Hallway would have to ship or vet.
+    Worth revisiting only if the skip turns out to come back at every boot on many machines;
+  - running pfctl through an interactive `sudo` in doctor: doctor is read-only and must never prompt.
+- **Smaller fixes from the same run:** setup's `brew install` runs as
+  `/usr/bin/env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1 brew install …`, so
+  Homebrew's auto-update and hints don't bury setup's steps; and the redirect's first `launchctl bootout` (expected to
+  fail: nothing is loaded yet) is `quiet`, its stderr dropped, so "Boot-out failed: 3: No such process" no longer
+  looks like an error. sudo prompts on the terminal, not stderr, so a password prompt still shows.

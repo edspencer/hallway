@@ -172,6 +172,45 @@ try {
     assert.deepEqual(bad, []);
   });
 
+  if (darwin) {
+    // the first real-Mac run (research notes, 2026-10-17): another tool had loaded a ruleset with `set skip on lo0`,
+    // so pf ignored loopback and with it the redirect. Here it's macOS's own pf.conf with the skip in front, as a
+    // VPN's or a firewall app's ruleset would have it; /etc/pf.conf itself is untouched.
+    step("D64: something sets `set skip on lo0` → doctor names it, setup clears it, and so does doctor's fix");
+    const RELOAD = 'sudo pfctl -f /etc/pf.conf && sudo launchctl kickstart -k system/hallway.pf';
+    const skipLoopback = () => {
+      const r = sh('sh', ['-c', "(echo 'set skip on lo0'; cat /etc/pf.conf) | sudo -n pfctl -f -"]);
+      assert.equal(r.code, 0, r.out);
+      assert.match(sh('sudo', ['-n', 'pfctl', '-s', 'Interfaces', '-v']).out, /^lo0 \(skip\)/m);
+    };
+    const health = () => status(curl('https://hallway.localhost/api/health'));
+    const redirectCheck = () => {
+      const r = hw('doctor', '--json');
+      return JSON.parse(r.out.slice(r.out.indexOf('{'))).checks.find((c) => c.id === 'redirect');
+    };
+    await check('with the skip, 443 stops answering and doctor says why, with the fix', async () => {
+      skipLoopback();
+      await until('443 to stop answering', async () => health() !== 200, 10000);
+      const c = redirectCheck();
+      assert.equal(c.status, 'fail');
+      assert.match(c.message, /^pf is set to skip loopback \(lo0\), so the redirect is ignored; something other than Hallway set this/);
+      assert.ok(c.fix.includes(RELOAD), c.fix);
+    });
+    await check('setup clears it (the main ruleset is stock, so it may), and 443 answers again', async () => {
+      assert.match(must('setup'), /\$ sudo pfctl -f \/etc\/pf\.conf/);
+      await until('443 through the redirect', async () => health() === 200, 15000);
+      assert.doesNotMatch(sh('sudo', ['-n', 'pfctl', '-s', 'Interfaces', '-v']).out, /lo0 \(skip\)/);
+      assert.equal(redirectCheck().status, 'pass');
+    });
+    await check("doctor's fix, run as it's printed, does the same", async () => {
+      skipLoopback();
+      await until('443 to stop answering', async () => health() !== 200, 10000);
+      const r = sh('sh', ['-c', RELOAD.replace(/sudo /g, 'sudo -n ')]);
+      assert.equal(r.code, 0, r.out);
+      await until('443 through the redirect', async () => health() === 200, 15000);
+    });
+  }
+
   step('criterion 7: with the daemon stopped, the dashboard host serves the fallback page');
   must('service', 'uninstall');
   await check('fallback lists every app', async () => {

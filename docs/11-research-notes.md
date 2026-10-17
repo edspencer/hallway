@@ -397,6 +397,43 @@ Mac:*
   squatter refused, idempotent re-run, doctor, the fallback, the custom domain, `.local` refused, and teardown leaving
   nothing behind (no anchor, LaunchDaemon, resolver file, keychain certificate or LaunchAgent).
 
+### Fronted mode on a real Mac: pf skipping loopback (D64), 2026-10-17
+
+The first run of fronted mode on a desktop Mac (the author's laptop, Hallway 0.5.2; macOS's version wasn't
+recorded). `hallway setup` succeeded at every step but its final check: "✗ https://hallway.localhost: nothing
+answered"; doctor: "✗ nothing answers on 127.0.0.1:443: the redirect from 443 to 4443 isn't in place". *Verified on
+that Mac:*
+
+- pf was enabled; the main ruleset was stock (`rdr-anchor "com.apple/*"` present); `sudo pfctl -a com.apple/hallway
+  -s nat` listed all four rdr rules; the `hallway.pf` LaunchDaemon had exited 0.
+- Caddy was fine: `curl --resolve hallway.localhost:4443:127.0.0.1 https://hallway.localhost:4443/` → 200, while
+  `nc 127.0.0.1 443` was refused.
+- **`sudo pfctl -s Interfaces -v` showed `lo0 (skip)`.** With the skip flag set, pf doesn't evaluate any rule on that
+  interface, so every lo0 rule (all of Hallway's) is dead. Stock macOS doesn't set it. `sudo pfctl -s References`
+  held a token from a process named `pfd`, its pid long gone, enabled about 67 days earlier, at boot: some
+  third-party tool had loaded a ruleset with `set skip on lo0` then. (`set skip on lo0` is in OpenBSD's example
+  pf.conf and in many VPN kill-switch and firewall-app rulesets.)
+- **Fix:** `sudo pfctl -f /etc/pf.conf` (loading a main ruleset resets the skip flags; the main ruleset was stock, so
+  nothing else changed), then `sudo launchctl kickstart -k system/hallway.pf`; 443 answered.
+- **Unverified:** whether the skip comes back after a reboot (if the tool behind `pfd` runs at every boot, it will,
+  and doctor then says so); whether the `kickstart` is needed at all after the reload (the anchor's rules may survive a
+  reload of `com.apple`; it's cheap, so setup and doctor's fix keep it); which tool `pfd` was.
+- **Output formats used by the parsers** (`server/platform/fronting-darwin.ts`, fixtures in `test/fixtures/platform/`):
+  `pfctl -s Interfaces -v` prints one interface per line, `lo0 (skip)` for a skipped one (pf's OpenBSD heritage);
+  `pfctl -s References` (macOS only) prints `TOKENS:`, then a `PID  Process Name  TOKEN  TIMESTAMP` table; the stock
+  main ruleset is `nat-anchor`/`rdr-anchor "com.apple/*" all` in `-s nat` and `scrub-anchor "com.apple/*" all
+  fragment reassemble`, `anchor "com.apple/*" all` in `-s rules`. The interface and References fixtures are
+  reconstructed from that run and from published examples, not captured byte for byte: CI's macOS job checks the
+  parsers against the real pfctl (below).
+- **CI** (`scripts/fronted-real.mjs`, macOS only): after setup passes, it loads macOS's own pf.conf with
+  `set skip on lo0` in front (`(echo 'set skip on lo0'; cat /etc/pf.conf) | sudo pfctl -f -`), checks that 443 stops
+  answering and doctor's `redirect` line names the skip with the fix, runs `hallway setup` (which must clear it), then
+  sets the skip again and runs doctor's fix as printed.
+- **From the same run, smaller:** Homebrew's auto-update and hints buried setup's steps (setup now runs `brew install`
+  with `HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1`), and the first
+  `launchctl bootout system/hallway.pf` printed "Boot-out failed: 3: No such process" (expected: nothing was loaded
+  yet; now quiet).
+
 ## Windows (D58), GitHub's hosted runners, 2026-10-16
 
 Everything here was seen on `windows-latest` (Windows Server 2025, an administrator account, no interactive desktop),

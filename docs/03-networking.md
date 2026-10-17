@@ -277,8 +277,18 @@ platform recipes in `server/platform/fronting-darwin.ts` and `fronting-linux.ts`
 
 - `hallway setup`: check → (macOS, if missing: `brew install caddy`, as you) → write `generated/caddy.json` and check
   it with `caddy validate` → install and start the `hallway.caddy` user job → wait for its admin socket and CA →
-  **sudo**: trust the root → **sudo**: install the redirect → set `mode: fronted` → check
-  `https://hallway.localhost` answers through the redirect with Hallway's certificate.
+  **sudo**: trust the root → **sudo**: install the redirect → (macOS, if pf skips loopback and it's safe to clear:
+  **sudo** reload `/etc/pf.conf` and the anchor, below) → set `mode: fronted` → check `https://hallway.localhost`
+  answers through the redirect with Hallway's certificate. (Homebrew runs with `HOMEBREW_NO_AUTO_UPDATE`,
+  `HOMEBREW_NO_INSTALL_CLEANUP` and `HOMEBREW_NO_ENV_HINTS`, so its output doesn't bury setup's.)
+- **pf told to skip loopback (macOS, D64).** A ruleset with `set skip on lo0`, loaded by another tool (a VPN's kill
+  switch, a firewall app), makes pf ignore lo0 and so the redirect, which stays installed but dead. Setup asks pf
+  (read-only, `sudo -n pfctl -s Interfaces -v`; `-s References`, `-s nat`, `-s rules` when the skip is set) and plans
+  a step after the redirect, checked again just before it runs: `sudo pfctl -f /etc/pf.conf` (a main-ruleset load
+  resets the skip flags), then `sudo launchctl kickstart -k system/hallway.pf`. It runs only when the skip is set,
+  `/etc/pf.conf` doesn't set it itself, and the main ruleset loaded now is macOS's stock one (only the `com.apple/*`
+  hooks), so nobody's rules are dropped; otherwise setup prints why and leaves pf alone. The `hallway.pf`
+  LaunchDaemon doesn't do this at boot: if the other tool sets the skip again, doctor says so.
 - `hallway setup --domain <base>`: also checks the TLD (below), writes `generated/dnsmasq.conf`, starts the
   `hallway.dnsmasq` user job, and (**sudo**) installs the resolver; `config.yaml` gets `domain.base`.
 - Every step is printed before it runs: `[Hallway]` steps (its own files and user-level jobs), `[you]` (Homebrew),
@@ -312,6 +322,8 @@ Read-only diagnostics, each with a pass/warn/fail line and a suggested fix:
 - (fronted) Caddy installed and at least 2.7; its job installed and running; its admin socket answering, private
   (`0600`), and holding the config in `generated/caddy.json`
 - (fronted) Caddy's ports, and 80/443, held by nothing else — or **who holds them instead** (name and PID)
+- (fronted, macOS) when nothing answers on 443: whether pf skips loopback (above), who enabled pf, and the fix, or
+  that it couldn't check without a password (`sudo -n`; doctor never prompts)
 - (fronted) `https://<dashboard>` reaches Hallway's Caddy through the redirect, with a certificate that verifies
   against Hallway's root; `http://` redirects
 - (fronted) Hallway's root trusted by the system; a Firefox note when Firefox is installed

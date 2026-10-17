@@ -4,7 +4,8 @@
 //             dnsmasq for a custom domain), edit config.yaml
 //   you       a command run as you (installing Caddy with Homebrew)
 //   sudo      the privileged recipes from the platform layer (server/platform/fronting*.ts): the 443/80 redirect,
-//             trusting the local CA, the custom-domain resolver. Each command is printed, then run through sudo.
+//             trusting the local CA, the custom-domain resolver, and (macOS) clearing a pf skip on loopback that
+//             another tool set (D64). Each command is printed, then run through sudo.
 // Everything is idempotent: a part that's already in place (checked by asking the real thing where possible) is
 // skipped, so re-running setup only fixes what's missing. `--print` gathers the same facts and prints the plan,
 // running nothing. Gathering facts is read-only; planning is a pure function of the facts (tested with fixtures).
@@ -13,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { HallwayConfig } from '../../shared/api.js';
 import { dataPaths, tildify } from '../config.js';
-import { type Cmd, type FrontingEnv, FrontingUnsupported, type Platform, type Recipe, type Runner, type StagedFile, dnsmasqConf, mergeListeners } from '../platform/index.js';
+import { type Cmd, type FrontingEnv, FrontingUnsupported, type LoopbackSkip, type Platform, type Recipe, type Runner, type StagedFile, dnsmasqConf, mergeListeners } from '../platform/index.js';
 import { findTool } from '../platform/fronting.js';
 import type { Services } from '../services/index.js';
 import type { Store } from '../store/index.js';
@@ -55,6 +56,8 @@ export interface Facts {
   env: FrontingEnv;
   /** Already in place. */
   done: { trust: boolean; redirect: boolean; resolver: boolean; config: boolean };
+  /** Whether the firewall ignores loopback, where that can happen (macOS) and the redirect isn't working (D64). */
+  loopbackSkip?: LoopbackSkip | null;
 }
 
 export interface SetupDeps {
@@ -66,8 +69,8 @@ export interface SetupDeps {
   /** Captures output (version, read-only queries). */
   query: Runner;
   out: (s: string) => void;
-  /** Runs a command with the terminal attached (sudo may prompt), resolving with its exit code. */
-  exec?: (argv: string[]) => Promise<number>;
+  /** Runs a command with the terminal attached (sudo may prompt), resolving with its exit code; `quiet` drops stderr. */
+  exec?: (argv: string[], opts?: { quiet?: boolean }) => Promise<number>;
   /** Is this process root already? (Then commands run without sudo.) */
   isRoot?: boolean;
   /** For tests: probes and the TLD list. */
@@ -168,7 +171,9 @@ export async function gatherFacts(deps: SetupDeps, opts: { domain?: string } = {
     resolver: custom ? safe(() => installedAsStaged(f.resolver(fenv).files)) : true,
     config: cfg.mode === 'fronted' && cfg.domain.base === base && cfg.domain.dashboard === dashboard,
   };
-  return { platform: platform.id, base, custom, dashboard, httpsPort, httpPort, dnsPort, noRedirect, tld, caddy, dnsmasq, conflicts, warnings, env: fenv, done };
+  // only worth asking (through sudo -n, read-only) when the redirect isn't working
+  const loopbackSkip = !done.redirect && f.loopbackSkip ? await f.loopbackSkip(deps.query) : null;
+  return { platform: platform.id, base, custom, dashboard, httpsPort, httpPort, dnsPort, noRedirect, tld, caddy, dnsmasq, conflicts, warnings, env: fenv, done, loopbackSkip };
 }
 
 const safe = (f: () => boolean) => {
@@ -212,7 +217,8 @@ export async function isTrusted(deps: Pick<SetupDeps, 'platform' | 'query'>, env
 
 export type Step =
   | { kind: 'hallway'; why: string; detail?: string[]; done?: boolean; action: () => Promise<void> }
-  | { kind: 'run'; why: string; recipe: Pick<Recipe, 'files' | 'cmds'>; done?: boolean; recheck?: () => Promise<boolean> };
+  // recheck, just before it runs: true is done already; a string is why it isn't needed (or won't be done)
+  | { kind: 'run'; why: string; recipe: Pick<Recipe, 'files' | 'cmds'>; done?: boolean; recheck?: () => Promise<boolean | string> };
 
 export interface Plan {
   /** Reasons not to go ahead at all. */
@@ -229,10 +235,12 @@ export interface PlanActions {
   setConfig(): Promise<void>;
   verify(): Promise<void>;
   isTrusted(): Promise<boolean>;
+  /** Ask the firewall again whether it skips loopback (null where it can't). */
+  loopbackSkip(): Promise<LoopbackSkip | null>;
 }
 
 const noop = async () => {};
-export const NO_ACTIONS: PlanActions = { writeCaddy: noop, startCaddy: noop, writeDnsmasq: noop, startDnsmasq: noop, setConfig: noop, verify: noop, isTrusted: async () => false };
+export const NO_ACTIONS: PlanActions = { writeCaddy: noop, startCaddy: noop, writeDnsmasq: noop, startDnsmasq: noop, setConfig: noop, verify: noop, isTrusted: async () => false, loopbackSkip: async () => null };
 
 /** Setup's steps, from the facts. Pure (the actions are only called when it runs). */
 export function planSetup(facts: Facts, platform: Platform, home: string, a: PlanActions = NO_ACTIONS): Plan {
@@ -293,6 +301,27 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
   }
   if (recipes.trust) steps.push({ kind: 'run', why: recipes.trust.why, recipe: recipes.trust, done: facts.done.trust, recheck: a.isTrusted });
   if (recipes.redirect) steps.push({ kind: 'run', why: recipes.redirect.why, recipe: recipes.redirect, done: facts.done.redirect });
+  // pf told to skip loopback by another tool (D64). Asked once more just before: sudo -n can usually see by then,
+  // since the redirect step has just used sudo. Cleared only when that can't take anyone else's rules with it.
+  const skip = facts.loopbackSkip;
+  if (recipes.redirect && !facts.done.redirect && f.unskip && skip && skip.skipped !== false) {
+    if (skip.skipped && !skip.repairable) warnings.push(`${skip.message}. Hallway won't change that itself: ${skip.fix}`);
+    else {
+      const r = f.unskip();
+      steps.push({
+        kind: 'run',
+        why: skip.skipped ? r.why : `${r.when}. Checked just before it runs; done only if that can't take anyone else's rules with it`,
+        recipe: r,
+        recheck: async () => {
+          const now = await a.loopbackSkip();
+          if (!now || now.skipped === false) return "not needed: pf doesn't skip loopback";
+          if (now.skipped === null) return "skipped: couldn't ask pf without a password prompt; `hallway doctor` looks again";
+          if (!now.repairable) return `not done: ${now.message}. ${now.fix}`;
+          return false;
+        },
+      });
+    }
+  }
   if (recipes.resolver) steps.push({ kind: 'run', why: recipes.resolver.why, recipe: recipes.resolver, done: facts.done.resolver });
   steps.push({
     kind: 'hallway',
@@ -340,9 +369,9 @@ export class SetupError extends Error {}
 /** How long one command may take. sudo's password prompt counts, so it's generous; a hung GUI prompt still ends. */
 export const COMMAND_TIMEOUT_MS = 5 * 60_000;
 
-const defaultExec = (argv: string[]) =>
+const defaultExec = (argv: string[], opts: { quiet?: boolean } = {}) =>
   new Promise<number>((resolve) => {
-    const p = spawn(argv[0], argv.slice(1), { stdio: 'inherit' });
+    const p = spawn(argv[0], argv.slice(1), { stdio: opts.quiet ? ['inherit', 'inherit', 'ignore'] : 'inherit' });
     const timer = setTimeout(() => {
       process.stderr.write(`hallway: \`${argv.join(' ')}\` took longer than ${COMMAND_TIMEOUT_MS / 60_000} minutes (is it waiting for a prompt?); stopping it\n`);
       p.kill('SIGTERM');
@@ -363,7 +392,14 @@ export async function runPlan(plan: Plan, deps: Pick<SetupDeps, 'out' | 'exec' |
   let n = 0;
   for (const s of plan.steps) {
     n++;
-    if (s.kind === 'run' && s.recheck && !s.done) s.done = await s.recheck();
+    if (s.kind === 'run' && s.recheck && !s.done) {
+      const r = await s.recheck();
+      if (typeof r === 'string') {
+        deps.out(`${n}. ${s.why}\n   ${r}\n`);
+        continue;
+      }
+      s.done = r;
+    }
     if (s.done) {
       deps.out(`${n}. ${s.why}: already done\n`);
       continue;
@@ -380,7 +416,7 @@ export async function runPlan(plan: Plan, deps: Pick<SetupDeps, 'out' | 'exec' |
     }
     for (const c of s.recipe.cmds) {
       deps.out(`   $ ${cmdLine(c, deps.isRoot)}\n`);
-      const code = await exec(c.sudo && !deps.isRoot ? ['sudo', ...c.argv] : c.argv);
+      const code = await exec(c.sudo && !deps.isRoot ? ['sudo', ...c.argv] : c.argv, { quiet: c.quiet });
       if (code !== 0 && !c.mayFail) throw new SetupError(`that failed (exit ${code}); nothing after it ran. Fix it and run the command again: it skips what's already done`);
     }
   }
@@ -406,6 +442,7 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
   const { store } = deps;
   const paths = caddyPaths(store.home);
   const gen = dataPaths(store.home).generated;
+  const loopbackSkip = async () => (deps.platform.fronting.loopbackSkip ? deps.platform.fronting.loopbackSkip(deps.query) : null);
   return {
     async writeCaddy() {
       const config = targetConfig(store.currentConfig(), facts);
@@ -463,7 +500,10 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
       await until(async () => (h = await httpProbe(http, facts.dashboard))?.status === 308, 5_000);
       const plain = `http://${facts.dashboard}${http === 80 ? '' : `:${http}`}`;
       const lines: string[] = [];
+      // nothing answering through an installed redirect: say why, if it's the firewall ignoring loopback (D64)
+      const skip = !t && !facts.noRedirect ? await loopbackSkip() : null;
       if (t?.ours) lines.push(`   ✓ ${httpsUrl(facts.dashboard, https)} answers with Hallway's certificate`);
+      else if (skip?.skipped) lines.push(`   ✗ ${httpsUrl(facts.dashboard, https)}: nothing answered: ${skip.message}\n     fix: ${skip.fix}`);
       else lines.push(`   ✗ ${httpsUrl(facts.dashboard, https)}: ${t ? `a certificate from ${t.issuer ?? 'someone else'} (${t.error})` : 'nothing answered'}`);
       if (h?.status === 308 && h.location?.startsWith(`https://${facts.dashboard}`)) lines.push(`   ✓ ${plain} redirects to HTTPS`);
       else lines.push(`   ✗ ${plain}: ${h ? `HTTP ${h.status}` : 'nothing answered'}`);
@@ -477,6 +517,7 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
       if (!t?.ours) throw new SetupError(`fronted mode is set up but not answering on ${https}; \`hallway doctor\` says why`);
     },
     isTrusted: () => isTrusted(deps, facts.env),
+    loopbackSkip,
   };
 }
 

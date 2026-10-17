@@ -8,6 +8,7 @@
 // them, so `hallway setup --print` shows exactly what would run and the tests pin it on every OS.
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Runner } from './services.js';
 
 export interface Cmd {
   argv: string[];
@@ -15,6 +16,21 @@ export interface Cmd {
   sudo: boolean;
   /** A failure is fine (e.g. unloading something that isn't loaded). */
   mayFail?: boolean;
+  /** Its error output is expected noise (a mayFail command's complaint), so it isn't shown. sudo prompts on the
+   *  terminal, not on stderr, so a password prompt still is. */
+  quiet?: boolean;
+}
+
+/** Whether the firewall ignores loopback altogether, which leaves the redirect installed but dead (macOS: pf's
+ *  `set skip on lo0`, D64). The words are the platform's. */
+export interface LoopbackSkip {
+  /** true: loopback is skipped; false: it isn't; null: couldn't check (it needs root, and `sudo -n` can't prompt). */
+  skipped: boolean | null;
+  /** For people: what's wrong, or why it couldn't be checked. */
+  message: string;
+  fix: string;
+  /** `hallway setup` may clear it by itself: only when that can't take anyone else's rules with it. */
+  repairable: boolean;
 }
 
 /** A file Hallway writes, as the user, into generated/setup/, for a command to install as root at `dest`. */
@@ -70,6 +86,10 @@ export interface Fronting {
   installed(env: FrontingEnv): { redirect: string[]; trust: string[]; resolver: string[] };
   /** A read-only command whose output contains `rootSha1` iff the root is in the system store; null: compare files. */
   trustedQuery?(env: FrontingEnv): Cmd;
+  /** Where the firewall can be told to ignore loopback (macOS): is it? Read-only commands only, through `sudo -n`. */
+  loopbackSkip?(run: Runner): Promise<LoopbackSkip>;
+  /** Clear that skip, then load the redirect again; `when` is its `why` for a plan that couldn't check yet. */
+  unskip?(): Recipe & { when: string };
   /** Hallway's own service manager words for people (`LaunchAgent` / `systemd user unit`). */
   userServiceNoun: string;
   /** Find the tools the recipes need. */
