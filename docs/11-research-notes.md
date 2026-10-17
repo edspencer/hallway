@@ -437,6 +437,151 @@ that Mac:*
   `launchctl bootout system/hallway.pf` printed "Boot-out failed: 3: No such process" (expected: nothing was loaded
   yet; now quiet).
 
+### Fronted mode without admin rights (D65, proposed), 2026-10-17
+
+The question: can fronted mode work on a Mac where the user isn't an admin (an MDM-managed work Mac that grants
+admin only for minutes at a time)? Today `hallway setup` needs admin twice: the pf redirect, and trusting the root
+in the System keychain. Run on GitHub's runners from the scratch branch `exp/no-admin-fronting` (never merged; the
+scripts are in `experiments/no-admin/` there), runs 39037424530, 39039221534, 39039581511 and 39039930886:
+**macos-latest** = macOS 26.6.2 (25G83), Apple silicon VM, user `runner` (uid 501, logged in at the console, so
+`gui/501` exists), Caddy 2.11.7 from Homebrew, Node 24; **ubuntu-latest** = Ubuntu 24.04.5, kernel 6.17, systemd 255.
+Everything below ran as the ordinary user unless it says sudo. *Verified* unless marked.
+
+**1. Low ports without root.**
+- macOS, Node as the user: `127.0.0.1:443` EACCES, `[::1]:443` EACCES, `127.0.0.1:80` EACCES, `[::1]:80` EACCES,
+  `127.0.0.1:1023` EACCES, `127.0.0.1:1024` OK; **`0.0.0.0:443`, `[::]:443`, `0.0.0.0:80` OK**. The same as the
+  author's machine in 2026-10-14 (above): since Mojave the reserved-port check is skipped only for the wildcard
+  address. (The same test with Caddy was inconclusive: the throwaway Caddyfile never logged a listener in either
+  case, a harness problem, not a finding; Node's result is the kernel's.)
+- **A wildcard listener can't be confined to loopback.** `IP_BOUND_IF` = lo0 on a `0.0.0.0` listener, probed with a
+  SYN injected through a `feth` pair (so it arrives on another interface, as a LAN packet would): **SYN-ACK**, the same
+  as a plain wildcard listener; the `127.0.0.1` listener answered RST. So "bind `0.0.0.0:443` and filter" stays
+  rejected (D47): the socket is open to the network whatever the process does after `accept`.
+- **launchd binds loopback 443 and 80 for a LaunchAgent, with no sudo.** A LaunchAgent in `~/Library/LaunchAgents`,
+  bootstrapped into `gui/501` by the user, with a `Sockets` dictionary asking for `127.0.0.1:443`, `::1:443` and
+  `127.0.0.1:80`: `launchctl bootstrap` exit 0; `sudo lsof` shows **`launchd` (PID 1, root) listening on exactly
+  those three**; the job's process (as the user) gets them with `launch_activate_socket(3)` and served HTTP on each
+  (`curl http://127.0.0.1:443/`, `http://[::1]:443/`, `http://127.0.0.1:80/`). The runner's own address
+  (`192.168.64.x:443`) got no answer. launchd creates the sockets as root for the agent, so the kernel's check never
+  sees the user. (Prior art: puma-dev's `-install` uses the same `Sockets` key, but on `0.0.0.0`, which needs no
+  privilege anyway.)
+- **Caddy serves TLS on launchd's sockets.** A LaunchAgent with those three sockets runs a shim that calls
+  `launch_activate_socket`, moves the fds to 3, 4, 5 (clearing close-on-exec) and `exec`s `caddy run`, whose config
+  listens on `fd/3`, `fd/4` (TLS) and `fd/5` (HTTP). `curl --cacert <root> https://hallway.localhost/` and
+  `https://app.localhost/` (over `::1`) answered with Caddy's response **on port 443, with no redirect and no sudo**;
+  `http://hallway.localhost/` gave Hallway's 308 to `https://hallway.localhost/`. Two traps: Caddy refuses to start
+  if HTTP/3 is on (`network 'fd' cannot handle HTTP/3`; Hallway already sets `protocols: [h1, h2]`), and the fds
+  launchd returns can already sit on 3–5 with close-on-exec set, so the shim must `dup` them away first. (The shim
+  was Python with `ctypes` here; macOS ships no interpreter that can call `launch_activate_socket` without the
+  Command Line Tools, so a product needs a tiny native helper or one of the two below.)
+- **Without a native shim**, Caddy on `127.0.0.1:4443` as today, 20 new TLS connections each with `curl`:
+  - direct to `https://hallway.localhost:4443/`: 13.3 ms per connection;
+  - **inetd mode, `Wait` false**: launchd accepts on `127.0.0.1:443` and runs `/usr/bin/nc 127.0.0.1 4443` per
+    connection, its stdin/stdout the client: 20/20, **27.2 ms** per connection (TLS stays end to end; Caddy sees the
+    real SNI). Only request/response tested: a long-lived WebSocket and half-close through `nc` are *unverified*;
+  - **inetd mode, `Wait` true**: launchd passes the listening socket as fd 0 to one long-lived process; Node's
+    `server.listen({ fd: 0 })` accepts on it (`address()` reports `127.0.0.1:443`) and pipes each connection to 4443:
+    20/20, **17.3 ms**, then 11.3 ms on a second burst, same PID, `runs = 1`. One socket per job, though: three
+    addresses is three Node processes.
+- **Conflicts.** A second agent asking for the same `127.0.0.1:443`: `bootstrap` still exits 0 and the job sits
+  "not running"; nothing reports the clash, so doctor's TLS handshake that checks Hallway's CA is what catches it. A
+  user process already on `0.0.0.0:443` did *not* stop launchd binding `127.0.0.1:443`, and loopback connections went
+  to the more specific socket (launchd's). Something already on `127.0.0.1:443` itself (Docker Desktop and friends)
+  is *unverified* (expected `EADDRINUSE`).
+- Linux: `net.ipv4.ip_unprivileged_port_start` is **1024** on ubuntu-latest, set in no `sysctl.d` file (the kernel
+  default); Node as the user gets EACCES on `127.0.0.1:443`, `[::1]:443`, **`0.0.0.0:443`** and `127.0.0.1:80`. A
+  **systemd user socket unit** with `ListenStream=127.0.0.1:443`: "Failed to create listening socket
+  (127.0.0.1:443): Permission denied", result `resources` (the user manager runs as the user; unlike launchd it binds
+  nothing on the user's behalf). *Reported:* no mainstream desktop distribution lowers the sysctl by default; container
+  runtimes set it to 0 inside containers, which is no evidence about hosts. Lowering it is machine-wide and root (D47
+  already rejected it).
+
+**2. Trusting the root for the user only.**
+- The authorisation rights (`security authorizationdb read`, macOS 26.6): `com.apple.trust-settings.user` is
+  **`entitled-session-owner-or-authenticate-session-owner`** ("For modifying per-user Trust Settings"), while
+  `com.apple.trust-settings.admin` is `entitled` or **`authenticate-admin`**. So
+  `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db <root.crt>`, no sudo, needs the
+  logged-in user's *own* password (or Touch ID), never an admin's.
+- Run headless, it **waits for that dialog and never returns** (killed after 30 s and after 90 s; no trust settings
+  written). SecurityAgent's window, read with System Events, says "You are making changes to your Certificate Trust
+  Settings. Enter your password to allow this." with a password field. Answering it on CI wasn't possible: the
+  runner's password is unknown and can't be reset (`sysadminctl`: "Operation is not permitted without secure token
+  unlock"). So: **no admin, one prompt of the user's own** is verified; that the user-domain trust then satisfies
+  Safari, Chrome, Apple's curl and `node --use-system-ca` is *unverified on a real Mac* (*reported*: Safari and Chrome
+  use the system's trust evaluation, which honours user trust settings; Firefox imports OS-trusted roots with
+  `security.enterprise_roots.enabled`, the default on macOS in current releases). Hallway must never run this from a
+  job with no GUI session (it hangs), and its timeout matters.
+- Before trust, as a control: `security verify-cert -p ssl -s hallway.localhost` on the leaf says "Unable to find at
+  least 2 signed certificate timestamps" (the CT check fails first for an unknown root), Apple's curl `(60)`, Chrome
+  `ERR_CERT_AUTHORITY_INVALID`, WebKit "certificate … is invalid", Firefox `SEC_ERROR_UNKNOWN_ISSUER` with or without
+  `enterprise_roots`.
+- `security remove-trusted-cert` (user domain) on a root with no trust settings exits 1 at once; `delete-certificate
+  -Z` from the login keychain, no sudo, exit 0. Whether removing *real* user trust settings prompts too is
+  *unverified* (it edits the same right, so expect the same dialog).
+- *Reported, unverified:* MDM can push trusted roots, but there is no documented restriction that blocks a user from
+  trusting a root in their own domain; corporate TLS-inspection or endpoint tools may still flag it.
+
+**3. No certificate at all: secure context of `http://*.localhost`** (Q-SECURE-CONTEXT). A page served on
+`0.0.0.0:<port>`, loaded by Playwright's engines (Chromium 156, Firefox 157, WebKit 27.2) and Google Chrome 155, on
+both runners:
+
+| Origin | `isSecureContext` | `crypto.subtle` | service worker registers | `getUserMedia`, clipboard | a `Secure` cookie set over http |
+|---|---|---|---|---|---|
+| `http://localhost:<p>`, `http://127.0.0.1:<p>` | true everywhere | yes | yes | present | kept (Chromium, Chrome, Firefox); **dropped (WebKit)** |
+| `http://app.localhost:<p>`, `http://a.b.localhost:<p>` | **true everywhere** | yes | yes | present | the same: **dropped in WebKit** |
+| `http://<LAN address>:<p>` (control) | false everywhere | undefined | no API | absent | dropped |
+
+Every engine resolved `app.localhost` and `a.b.localhost` to loopback by itself (WebKit on Linux through
+systemd-resolved's `nss-myhostname`; on macOS through the system resolver). So plain HTTP on `*.localhost` keeps the
+secure-context APIs; what it loses is `Secure` cookies in Safari's engine (apps whose auth cookies are `Secure` won't
+log in there), `__Secure-`/`__Host-` cookies with them, and anything that insists on `https:` (OAuth redirect URIs
+registered as https, apps that build `https://` absolute URLs). `.localhost` names aren't on the HSTS preload list,
+so nothing forces HTTPS. Custom domains get none of this: `http://app.myname.internal` is not a secure context.
+
+**4. A publicly trusted certificate.** *Reported, not run.* No CA issues for `.localhost` or `.internal` (not
+public names; Caddy never tries). A domain the user owns works: a wildcard `*.dev.example.com` from Let's Encrypt over
+**DNS-01** (HTTP-01 can't reach 127.0.0.1), with public `A 127.0.0.1` / `AAAA ::1` records for `*.dev.example.com`, so
+no resolver file and no trust prompt, and browsers, curl and Node all trust it. The costs: a domain; a DNS provider
+API token in the data home; a Caddy **built with that provider's module** (`xcaddy` or caddyserver.com's download
+builder; Homebrew's `caddy` has none), which Hallway would then manage; only the wildcard name in CT logs (apps'
+names don't leak, unlike per-name certificates); and **DNS-rebinding protection**: resolvers that drop public answers
+pointing into 127.0.0.0/8 or private ranges (dnsmasq's `stop-dns-rebind`, OpenWrt's and pfSense's defaults, some
+corporate resolvers) make the names fail to resolve on those networks, so it can't be the default. A shared,
+Hallway-owned domain with one wildcard certificate and its key shipped in the package is **not an option**: the
+CA/Browser Forum Baseline Requirements (4.9.1.1) oblige the CA to revoke a certificate whose private key is
+compromised or "publicly distributed in a software package", within 24 hours to 5 days. The workable form of that idea
+is plex.direct's: a service that issues each installation its own certificate under its own subdomain, which is a
+hosted service Hallway would have to run (out of scope).
+
+#### The same, verified on a real Mac (2026-10-17)
+
+Run by the author on his own Mac (current macOS, not MDM-managed, his user an admin, but nothing run with sudo).
+*Verified on a real Mac:*
+
+- **User-domain trust works, with Touch ID only.** A throwaway CA (openssl: RSA 2048, `CA:TRUE`, `keyCertSign`) and a
+  leaf for `trust-test.localhost` (SAN, `serverAuth`) it signed, served by Caddy on `127.0.0.1:8443` with
+  `auto_https off`. `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db ca.crt`, no
+  sudo, asked only for **Touch ID**, the user's own (no administrator name and password; to a person it reads as
+  "changing system settings"). Then Apple's `/usr/bin/curl` reached the page with exit 0, and **Safari and Chrome
+  both loaded it with no warning**. Firefox wasn't installed, so `enterprise_roots` with a user-domain root is still
+  unverified. Resolves Q-USER-TRUST for Safari, Chrome and Apple's curl.
+- **launchd's `Sockets` on a privileged loopback port, for a user LaunchAgent.** A LaunchAgent in
+  `~/Library/LaunchAgents` with `Sockets` → `127.0.0.1:444` and `inetdCompatibility` `Wait` false running
+  `/usr/bin/printf`, loaded with `launchctl bootstrap gui/$(id -u)`, no sudo and no prompt:
+  `curl http://127.0.0.1:444/` → "launchd works"; the same port on the Mac's en0 address → refused (curl exit 7).
+  `lsof` without sudo listed nothing (the socket is root's, launchd's). Port 444 because the pf redirect from today's
+  setup intercepts 443 on loopback; the reserved-port rule is the same for every port below 1024. No "Background Items
+  Added" notification was mentioned (whether one appeared is unknown).
+- Not covered: persistence across logout/login and reboot, 443 and 80 themselves, `[::1]`, Docker or similar already
+  holding `127.0.0.1:443`, an MDM-managed Mac.
+- **Caddy binds :80 unless told not to.** Caddy given its own certificate (a manual `tls`) still starts the HTTP→HTTPS
+  redirect on port 80 and, as the user, fails with EACCES unless `auto_https off` (or an `http_port`) is set. Hallway's
+  generated config sets `http_port` and does its own redirect (D47), so it isn't affected; anything hand-written for
+  the no-admin design must do the same.
+- **zsh's paste handling.** With oh-my-zsh's `url-quote-magic`, pasting multi-line commands escaped `;`, `>` and `(`
+  that followed URLs, breaking them. Commands Hallway prints for copying should avoid shell metacharacters right after
+  a URL, or say to run them in bash (D65).
+
 ## Windows (D58), GitHub's hosted runners, 2026-10-16
 
 Everything here was seen on `windows-latest` (Windows Server 2025, an administrator account, no interactive desktop),
