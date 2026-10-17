@@ -65,7 +65,9 @@ function facts(over: Partial<Facts> & { os: 'darwin' | 'linux'; base?: string } 
 const plan = (f: Facts) => planSetup(f, platformFor(f.platform), HOME);
 
 describe('setup --print', () => {
-  test('golden: macOS, *.localhost', POSIX_PATHS, () => golden('setup-darwin.txt', formatPlan(plan(facts({ os: 'darwin' })), { printOnly: true })));
+  // sudo -n couldn't ask pf whether it skips loopback, as on a first run: the conditional step (D64)
+  test('golden: macOS, *.localhost', POSIX_PATHS, () =>
+    golden('setup-darwin.txt', formatPlan(plan(facts({ os: 'darwin', loopbackSkip: { skipped: null, message: '', fix: '', repairable: false } })), { printOnly: true })));
   test('golden: macOS, a custom domain, Caddy and dnsmasq to install with Homebrew', POSIX_PATHS, () =>
     golden(
       'setup-darwin-custom.txt',

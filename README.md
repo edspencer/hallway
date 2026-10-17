@@ -13,8 +13,8 @@ Hallway gives them all a front door:
 - **Health at a glance** — state and uptime history for each, calm when things are intentionally off, loud only when
   something that should be running isn't.
 - **Memorable HTTPS hostnames** — `https://review.localhost` instead of `localhost:5622`, with no DNS setup by
-  default (or under your own domain). `hallway setup` runs Caddy as you, never as root, and prints each privileged
-  step before it runs it.
+  default (or under your own domain). `hallway setup` runs Caddy as you, never as root, shows its whole plan and
+  asks before it runs any of it.
 - **Survives reboots** — the things you want kept alive run as native OS services (launchd on macOS, systemd on
   Linux, a per-user scheduled task on Windows), and after a restart Hallway lists what was running before and didn't come back, with one click to start
   each again.

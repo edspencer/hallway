@@ -1,0 +1,4 @@
+scrub-anchor "com.apple/*" all fragment reassemble
+block drop out quick on ! utun0 all
+pass out quick on utun0 all flags S/SA keep state
+anchor "com.apple/*" all

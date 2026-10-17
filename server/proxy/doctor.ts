@@ -116,7 +116,7 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   const url = httpsUrl(dashboard, https);
   if (!t && (await isListening(https, '127.0.0.1', 1000)))
     add({ id: 'redirect', status: 'fail', message: `something answers on 127.0.0.1:${https}, but not with TLS: it isn't Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
-  else if (!t) add({ id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${https}${noRedirect ? '' : `: the redirect from 443 to ${cfg.proxy.httpsPort} isn't in place`}`, fix: SETUP });
+  else if (!t) add(await nothingOn443(deps, https, cfg.proxy.httpsPort, noRedirect));
   else if (!t.issuer?.startsWith(CA_NAME)) add({ id: 'redirect', status: 'fail', message: `127.0.0.1:${https} answers with a certificate from ${t.issuer ?? 'someone else'}, not Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
   else if (!t.ours) add({ id: 'redirect', status: 'fail', message: `${url} answers with Hallway's CA, but its certificate doesn't verify (${t.error})`, fix: 'restart Caddy: `hallway setup`' });
   else add({ id: 'redirect', status: 'pass', message: `${url} reaches Hallway's Caddy${noRedirect ? '' : ' through the redirect from 443'}` });
@@ -168,6 +168,18 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
     }
   }
   return out;
+}
+
+/** Nothing answers where the redirect should be. On macOS the usual reason, with the redirect installed, is pf told
+ *  by another tool to skip loopback (D64): ask it (read-only, `sudo -n`), and say so. */
+export async function nothingOn443(deps: Pick<NetDeps, 'platform' | 'query'>, https: number, httpsPort: number, noRedirect: boolean): Promise<NetCheck> {
+  const generic: NetCheck = { id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${https}${noRedirect ? '' : `: the redirect from 443 to ${httpsPort} isn't in place`}`, fix: SETUP };
+  const f = deps.platform.fronting;
+  if (noRedirect || !f.loopbackSkip) return generic;
+  const skip = await f.loopbackSkip(deps.query);
+  if (skip.skipped) return { id: 'redirect', status: 'fail', message: skip.message, fix: skip.fix };
+  if (skip.skipped === null) return { ...generic, fix: `${SETUP}; if it is installed, pf may be set to skip loopback (lo0), which Hallway couldn't check without a password prompt: ${skip.fix}` };
+  return generic;
 }
 
 async function helperStatus(services: Services, label: string) {

@@ -39,7 +39,10 @@
      $ sudo install -m 0644 -o root -g wheel /home/me/.hallway/generated/setup/hallway.pf.plist /Library/LaunchDaemons/hallway.pf.plist
      $ sudo launchctl bootout system/hallway.pf   (may fail harmlessly)
      $ sudo launchctl bootstrap system /Library/LaunchDaemons/hallway.pf.plist
-5. [Hallway] Switch config.yaml to fronted mode: links become https://<app>.localhost
-6. [Hallway] Check https://hallway.localhost answers through the redirect, with Hallway's certificate
+5. [sudo] If pf has been told to skip loopback (lo0), which makes it ignore the redirect: load macOS's own /etc/pf.conf again (that clears the skip), then the redirect. Checked just before it runs; done only if that can't take anyone else's rules with it
+     $ sudo pfctl -f /etc/pf.conf
+     $ sudo launchctl kickstart -k system/hallway.pf
+6. [Hallway] Switch config.yaml to fronted mode: links become https://<app>.localhost
+7. [Hallway] Check https://hallway.localhost answers through the redirect, with Hallway's certificate
 
 Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

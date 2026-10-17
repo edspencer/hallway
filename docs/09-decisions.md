@@ -1136,6 +1136,54 @@ opt-in (D15, D47) and nothing in the CLI or the dashboard said it existed, that 
   - a warning (not `info`) in doctor for direct mode: it's the default and a fine way to run; a warning would make
     every fresh install look unhealthy.
 
+### D64 — pf told to skip loopback: diagnosed by doctor, cleared by setup when that's safe, never at boot (2026-10-17)
+
+On the author's Mac (0.5.2, the first real-Mac run of fronted mode; research notes), `hallway setup` did everything
+but the final check: nothing answered on 443. The anchor's four rdr rules were loaded, the `hallway.pf` LaunchDaemon
+had exited 0, Caddy answered on 4443, and `pfctl -s Interfaces -v` showed **`lo0 (skip)`**. Something other than
+Hallway (pf's enable references named a `pfd`, long gone, from boot) had loaded a ruleset with `set skip on lo0`,
+which makes pf ignore loopback entirely, Hallway's rdr rules with it. `set skip on lo0` is in OpenBSD's example pf.conf
+and in most VPN kill-switch and firewall-app rulesets, so others will hit this. Loading `/etc/pf.conf` again cleared it
+(a main-ruleset load resets the skip flags) and `launchctl kickstart -k system/hallway.pf` loaded the anchor again.
+
+- **Detection lives in the platform layer** (`Fronting.loopbackSkip`, macOS only): `pfctl -s Interfaces -v` for the
+  skip, then, only if it's set, `pfctl -s References` (who holds pf enabled, Hallway's own `pfctl` left out),
+  `pfctl -s nat` and `pfctl -s rules` (is the main ruleset macOS's stock one: nothing but the `com.apple/*` hooks,
+  `rdr-anchor` among them) and `/etc/pf.conf` (does it `set skip on` lo0 itself). pfctl needs root, so each query runs
+  as `sudo -n pfctl …`: read-only, and `-n` never prompts; without a cached password it fails and the answer is
+  "couldn't check", with how to let it look (`sudo -v`, then doctor again). The parsers are pure, against fixtures.
+- **doctor** asks only when nothing answers on 443 with the redirect expected, and then the `redirect` line itself
+  says why: "pf is set to skip loopback (lo0), so the redirect is ignored; something other than Hallway set this
+  (pf was turned on by …)", with the fix `sudo pfctl -f /etc/pf.conf && sudo launchctl kickstart -k system/hallway.pf`
+  and a note that the skip comes back if that tool sets it again. If `/etc/pf.conf` sets it itself, the fix says
+  reloading won't help; if the main ruleset has rules of its own, it says reloading would drop them.
+- **setup** asks while gathering facts (usually "couldn't check": sudo hasn't been used yet) and plans a `[sudo]` step
+  right after the redirect, which reloads `/etc/pf.conf` and kickstarts `hallway.pf`. The step is checked again just
+  before it runs (sudo has a cached password by then) and runs only if the skip is set, `/etc/pf.conf` doesn't set it,
+  and the main ruleset is stock; otherwise it prints why and does nothing (and a skip already known to be unsafe to
+  clear is a warning, not a step). The final check reports the skip as the cause instead of "nothing answered".
+- **The boot LaunchDaemon does not clear the skip.** It stays one fixed `pfctl -E -a com.apple/hallway -f …`. Whatever
+  set the skip runs at boot too, in an order launchd doesn't promise: if it runs after `hallway.pf`, a reload at boot
+  is undone anyway; if before, reloading `/etc/pf.conf` at boot replaces that tool's main ruleset, which may be a VPN
+  kill switch's block rules, a silent security regression on every boot that no one was shown. setup's reload is
+  different: it's printed, run once, when someone is watching, and only when the ruleset it replaces is stock.
+- **Rejected:**
+  - clearing the skip at boot (above), or a watcher that clears it whenever it reappears: it fights the other tool,
+    forever, as root;
+  - editing `/etc/pf.conf` to remove a `set skip on lo0` it contains: OS updates rewrite it, someone put the line
+    there on purpose, and Hallway never edits pf.conf (D47);
+  - `set skip` with an interface list that leaves lo0 out, loaded by Hallway: it's a main-ruleset option, so the same
+    reload under another name;
+  - a root TCP forwarder on 127.0.0.1:443 (a LaunchDaemon with launchd `Sockets`) instead of pf: immune to pf's skip,
+    but a privileged process handling every byte of every request, and a binary Hallway would have to ship or vet.
+    Worth revisiting only if the skip turns out to come back at every boot on many machines;
+  - running pfctl through an interactive `sudo` in doctor: doctor is read-only and must never prompt.
+- **Smaller fixes from the same run:** setup's `brew install` runs as
+  `/usr/bin/env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1 brew install …`, so
+  Homebrew's auto-update and hints don't bury setup's steps; and the redirect's first `launchctl bootout` (expected to
+  fail: nothing is loaded yet) is `quiet`, its stderr dropped, so "Boot-out failed: 3: No such process" no longer
+  looks like an error. sudo prompts on the terminal, not stderr, so a password prompt still shows.
+
 ### D66 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
 
 The author, on a real Mac: Ollama (port 11434) shows a plain "O" monogram, because its server answers "Ollama is
@@ -1203,3 +1251,30 @@ itself a click target, and the port already appears in the address line undernea
     not attempted here — it would need `server/platform/darwin.ts` to read and decode an `.icns`/`Info.plist`, which
     is new daemon-side scope beyond this PR's door/thumbs-only diff, and no app on the author's own machine (Paddock,
     Ollama) is bundle-launched, so there was nothing to verify it against.
+
+### D67 — setup and teardown ask before they act: the plan, what will prompt, `Continue? [y/N]` (2026-10-17)
+
+Asked for by the author after the first real-Mac run: `hallway setup` started changing the machine the moment it was
+typed. Its steps were printed as they ran, but the first sudo prompt arrived before anyone had seen the whole plan,
+and the second prompt (macOS's own dialog for the trust step) came as a surprise.
+
+- **Before anything runs** (after the facts are gathered and nothing refuses), setup prints the plan, the same text
+  `--print` shows, and then one line saying what will ask for what: sudo's password in the terminal, and, on macOS
+  when the trust step is still to do, a separate system dialog (Touch ID or password) for changing certificate trust
+  settings, which macOS has required since Big Sur even for root. Then `Continue? [y/N]`.
+- **The default is no.** Only `y`/`yes` (any case) goes ahead; Enter, Ctrl-D or anything else prints "Nothing was
+  run." and exits 1 (it didn't do what was asked; scripts can tell).
+- **`--yes`** skips the question (and the up-front plan: each step is still printed as it runs, so a log shows
+  everything). It's for scripts and CI; the agent guide tells agents never to pass it for the user.
+- **No terminal and no `--yes` is a usage error** (exit 2, with the usage), before anything runs: a question nobody can
+  answer must not turn into a silent yes or a hang. "A terminal" is stdin and stdout both TTYs.
+- **teardown** asks the same way (its plan, what will prompt, the question). Its "Nothing to undo" and Windows'
+  "nothing to undo" exit before asking, and so does a setup that refuses.
+- The words for the OS dialog are the platform's (`Fronting.trustDialog`, macOS only); a plan step that may raise it is
+  marked `dialog` (setup's trust step). Teardown's untrust (`security delete-certificate`, D47's research notes) ran
+  headless on CI, so it isn't marked; unverified on a desktop Mac.
+- **Rejected:**
+  - asking before each sudo step instead of once: more questions, and still no view of the whole plan first;
+  - default yes (`[Y/n]`): the point is that typing the command alone changes nothing;
+  - treating no terminal as yes (as some installers do): a pipe or an agent's shell would then run sudo steps unasked;
+  - `-y` as well: one spelling, and a short flag is easy to add later, hard to take back.

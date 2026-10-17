@@ -49,11 +49,13 @@ Bookmarks
   bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
 
 Fronted mode (https://<app>.localhost, or your own domain)
-  setup [--domain BASE] [--print]   Run Caddy for your apps, redirect ports 443 and 80 to it and trust its
-                                    certificates. Prints each step first; the privileged ones run through sudo.
-                                    --print shows the plan and runs nothing.
-  teardown [--uninstall-packages] [--print]
-                                    Undo setup and go back to http://localhost:<port> links.
+  setup [--domain BASE] [--print] [--yes]
+                                    Run Caddy for your apps, redirect ports 443 and 80 to it and trust its
+                                    certificates. Shows the plan and asks before it runs anything; the privileged
+                                    steps run through sudo. --print shows the plan and runs nothing; --yes doesn't
+                                    ask (needed without a terminal).
+  teardown [--uninstall-packages] [--print] [--yes]
+                                    Undo setup and go back to http://localhost:<port> links. Asks first, like setup.
 
 Coding agents
   mcp                               An MCP server on stdio, for agents that want one: a bridge to the running
