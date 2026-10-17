@@ -1092,3 +1092,113 @@ being `/opt/homebrew`), and showed **exposed** with no explanation.
   only at `/` and `~` (as before): `/opt/homebrew` is a git repository, so a prefix has to be named.
 - **Observation ids** hash the project root or else the cwd, so a listener that used to be identified by a prefix's
   repository gets a new id (and a new row in `observed.json`) once; nothing else changes for it.
+
+### D65 — **Proposed** (awaiting the author): fronted mode without admin rights, in three tiers (2026-10-17)
+
+**Status: a proposal, not built.** The author asked whether fronted mode can work on a Mac where admin is granted only
+briefly (MDM). The experiments are in `11-research-notes.md`, "Fronted mode without admin rights"; the parts still
+*unverified on a real Mac* are listed at the end. Nothing here changes D47 or D48 until it's approved.
+
+**What the experiments changed.** D47 assumed loopback 443 needs root on macOS, hence the pf redirect. It doesn't
+have to: **launchd binds `127.0.0.1:443`, `[::1]:443` and `127.0.0.1:80` for an ordinary LaunchAgent** (its
+`Sockets` key; the sockets are created by launchd, as root, and handed to the job), with no sudo and no prompt, and
+Caddy served `https://hallway.localhost/` on them. And trusting a root **for the user only** needs the user's own
+password (`com.apple.trust-settings.user` is `authenticate-session-owner`), never an admin's. Linux has neither: no
+unprivileged 443 (`ip_unprivileged_port_start` 1024; user socket units get EACCES), but the user's NSS database (what
+Chrome reads) is writable without any prompt.
+
+**The tiers.** What each costs, and what links look like (the dashboard, an app `review`):
+
+| | **No prompts** | **No admin** (proposed default on macOS) | **System-wide** (today's setup) |
+|---|---|---|---|
+| macOS URLs | `http://hallway.localhost`, `http://review.localhost` | `https://hallway.localhost`, `https://review.localhost` | the same, and custom domains (`https://review.myname.internal`) |
+| macOS asks for | nothing | the user's **own** password or Touch ID, once (trusting the root for this account) | an admin password (the root in the System keychain; for custom domains the resolver file) |
+| Linux URLs | `http://review.localhost:4480` | `https://review.localhost:4443` | `https://review.localhost` (and custom domains) |
+| Linux asks for | nothing | nothing (the root goes into `~/.pki/nssdb`) | sudo (nftables redirect, the system CA store, the resolver) |
+| Trusted by | n/a (no certificate) | *reported, unverified:* Safari, Chrome and Apple's tools that use the keychain; Firefox with `enterprise_roots`. Linux: Chrome/Chromium only | everything that reads the system store, for every account |
+| Breaks | `Secure` cookies in Safari (and `__Host-`/`__Secure-`); apps that insist on `https:`; no custom domains | tools with their own CA bundle (Node without `--use-system-ca`, Python's certifi, Homebrew's curl, containers), as today; no custom domains | nothing new |
+
+- **One mechanism for 443/80 on macOS, in every tier: launchd's sockets.** The `hallway.caddy` LaunchAgent gains a
+  `Sockets` dictionary (`127.0.0.1` and `::1`, 443 and 80) and Caddy listens on the fds instead of 4443/4480. If it
+  holds up on a real Mac, **the pf redirect is retired**: no LaunchDaemon, no anchor, no D64 `set skip on lo0`
+  failure, and the System-wide tier needs admin only for trust and the resolver. Teardown keeps removing an old
+  install's anchor and LaunchDaemon. How Caddy gets the fds is the one open choice:
+  1. **(Preferred) a tiny native helper**, `hallway-sockets` (about 40 lines of C: `launch_activate_socket`, `dup` the
+     fds onto 3…n without close-on-exec, `exec` Caddy with `fd/3`…), shipped prebuilt in the npm package as a
+     universal, ad-hoc-signed Mach-O. One process, Caddy on the real sockets, no extra hop. Cost: the package's first
+     native file, a macOS build step in the release workflow, and allow-listing tools (e.g. Santa) on managed Macs may
+     block an unknown binary, though they may block Homebrew's Caddy too.
+  2. **No native code: Node forwarders.** One LaunchAgent per socket with `inetdCompatibility { Wait = true }`, each
+     running `hallway forward 4443` (a byte pipe on `listen({ fd: 0 })`; measured 11–17 ms per new connection vs 13 ms
+     direct). Only Node, which every Hallway user already runs, but three more processes and a hop.
+  (`/usr/bin/nc` per connection also works, 27 ms, but spawns a process per connection and its handling of
+  long-lived WebSockets is unverified: rejected as the main path.)
+- **Trust per tier.** No admin: `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db
+  <root>` (no `-d`, no sudo); teardown `security remove-trusted-cert <root>` (may prompt the user again) and
+  `security delete-certificate -Z <sha1>`. Only from a command the user runs in a GUI session: headless it waits on
+  the dialog forever (verified), so setup keeps its timeout and, with no console user, says to run it at the Mac. On
+  Linux: `certutil -A -d sql:$HOME/.pki/nssdb -t C,, -n "Hallway Local CA" -i <root>` (what setup already does
+  alongside the system store), plus a note for Firefox profiles. System-wide: today's commands.
+- **Custom domains stay System-wide only.** `/etc/resolver/<base>` and the resolved drop-in need root, and plain HTTP
+  on a custom name isn't a secure context (D6). The one admin-free custom name is a domain the user owns with public
+  DNS → 127.0.0.1 and a DNS-01 certificate: possible later as an advanced option (it needs an API token, a Caddy
+  built with a DNS module, and fails on resolvers with rebinding protection), not part of this.
+
+**`hallway setup`.** On a terminal with no tier given, it asks (the default marked; "recommended" is No admin when the
+user isn't in the `admin` group or the Mac is MDM-enrolled, from `profiles status -type enrollment`, which needs no
+privilege):
+
+```
+Local domains: open your apps by name instead of by port.
+
+  1) No admin       https://review.localhost   macOS asks for your own password once, to trust
+                                               Hallway's certificate for your account.   (recommended)
+  2) System-wide    https://review.localhost   Needs an administrator: trusts it for every account;
+                                               custom domains (--domain) need this.
+  3) No prompts     http://review.localhost    Plain HTTP. Browser APIs that need a secure context still
+                                               work on .localhost; Safari drops Secure cookies.
+Which? [1]
+```
+
+Flags for scripts and the dashboard: `--trust user` (1), `--trust system` (2), `--trust none` (3); `--domain`
+implies `--trust system` and says so. `--print` gains a fourth tag beside `[Hallway]`, `[you]` and `[sudo]`:
+**`[your password]`** for the user-domain trust step, with the line "macOS will ask for your password or Touch ID to
+change *your* certificate trust settings. This is not an administrator prompt." Setup records the choice in
+`config.yaml` as `proxy.trust: user | system | none` (doctor reads it) and, on Linux, sets `proxy.publicPort` to
+`httpsPort` (or `httpPort` for none) when it installs no redirect; `none` also sets `proxy.scheme: http`. Switching
+tier is re-running setup with another `--trust`; it removes what the old tier added.
+
+**`hallway doctor`** (lines as printed; `i` is D63's info status):
+- every macOS tier: `✓ 443 and 80 on loopback: launchd, for hallway.caddy` (from `launchctl print` and a connection)
+  or `✗ something else answers on 127.0.0.1:443 (<name, pid>)`; the TLS (or HTTP) check against
+  `https://hallway.localhost` as today.
+- No admin: `✓ Hallway's root is trusted for your account` (`security dump-trust-settings`, user domain);
+  `i Not trusted system-wide: other accounts, and tools that bring their own CA list, won't trust it`, with
+  `NODE_OPTIONS=--use-system-ca` / `NODE_EXTRA_CA_CERTS=<root>` for Node; Linux: `i Only Chrome/Chromium trust it;
+  curl, Node and Firefox need <root>`.
+- No prompts: `✓ http://hallway.localhost answers (plain HTTP)`; `i Safari won't keep Secure cookies over plain HTTP:
+  an app that signs in with them won't stay signed in there. hallway setup --trust user adds HTTPS with one password
+  prompt.`
+- Leftovers: an old pf anchor or LaunchDaemon still installed after the switch: `⚠ … no longer used; hallway teardown removes
+  it (needs admin, once)`.
+
+**The dashboard** (D63's panel and header control): the "Local domains are off" panel shows the three tiers as three
+choices, each with its URL, what it will ask for, and its command to copy (`hallway setup --trust user`, …), the
+machine's recommended one first (`FrontingInfo` gains `suggested: 'user' | 'system' | 'none'` and `admin: boolean`).
+Because tiers 1 and 3 need no sudo, D63's open "set it up from here" becomes possible for them: a **Turn on** button
+that asks the daemon to run setup with `--trust none` (no prompt at all) or `--trust user` (the macOS dialog appears
+on the user's screen; *unverified* that it does when the daemon, a LaunchAgent, triggers it rather than Terminal).
+That adds a write route that installs a LaunchAgent; it would get the same Host/Origin checks as every write and
+accept only those two tiers, never `system`. The header control, once on, names the tier ("Local domains · no
+admin").
+
+**Rejected:** a user Caddy on `0.0.0.0:443` with any filter (LAN exposure; `IP_BOUND_IF` lo0 was verified *not* to
+stop inbound packets on another interface); Linux user socket units (EACCES, verified) or `setcap`/the sysctl (D47);
+a Hallway-owned public domain with its certificate's key in the package (the CA must revoke it, BR 4.9.1.1); making
+plain HTTP the default (Safari's `Secure` cookies, and HTTPS keeps the question closed, D6).
+
+**To verify on a real Mac before building:** user-domain trust honoured by Safari, Chrome, Apple's curl and Firefox's
+`enterprise_roots`; the dialog when setup runs from a LaunchAgent; Touch ID; launchd's sockets after logout/login and a
+reboot; `[::1]:80`; what happens when Docker Desktop (or similar) already holds `127.0.0.1:443`; Vite HMR's WebSocket
+through Caddy on launchd's fds; on a managed Mac, the "Background Items Added" notification and whether MDM blocks
+user LaunchAgents with `Sockets`.

@@ -101,7 +101,8 @@ Why this shape:
 - **macOS lets an unprivileged process bind low ports only on the wildcard address.** Verified: as a normal user,
   binding `127.0.0.1:444` and `[::1]:446` fails with `EACCES`, while `0.0.0.0:445` succeeds. A user Caddy on
   `0.0.0.0:443` would expose every fronted app to the local network (rejected), so a user Caddy on loopback needs a
-  port above 1024 and a redirect.
+  port above 1024 and a redirect. **But** launchd will bind loopback 443/80 for a user's LaunchAgent (its `Sockets`
+  key) with no sudo, verified 2026-10-17: D65 (proposed) would use that instead of pf.
 - **A root Caddy is a privilege-escalation path.** Its admin API is unauthenticated: any local process could POST a
   config with, say, a `file_server` rooted at `/`, and read root-only files without a password prompt. A Unix socket
   limited to the user doesn't help (the user's own processes are the threat: a malicious install script is enough),
@@ -226,8 +227,9 @@ a managed app). The HTTP status stays the upstream error's (502).
 
 `http://localhost:<port>` is a **secure context** in browsers. `http://app.myname.internal` is **not**. Without
 TLS, moving an app behind a custom hostname silently breaks `crypto.subtle`, service workers, `getUserMedia`, the
-async clipboard API and anything else gated on secure contexts. (`http://*.localhost` is treated as potentially
-trustworthy by modern browsers — verify per browser, Q-SECURE-CONTEXT — but HTTPS everywhere removes the question.)
+async clipboard API and anything else gated on secure contexts. (`http://*.localhost` *is* a secure context in
+Chromium, Firefox and WebKit, verified 2026-10-17, but WebKit still drops `Secure` cookies over plain HTTP; HTTPS
+removes the question. D65 proposes plain HTTP on `*.localhost` only as an opt-in "no prompts" tier.)
 
 ## DNS for custom domains (dnsmasq)
 
