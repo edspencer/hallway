@@ -155,11 +155,6 @@ On macOS the redirect can also be installed but ignored: a VPN or firewall app t
 can do so without dropping anyone else's rules; see
 [pf is skipping loopback](/networking/setup-and-doctor/#pf-is-skipping-loopback-macos).
 
-On macOS the redirect can also be installed but ignored: a VPN or firewall app that loads a pf ruleset with
-`set skip on lo0` makes pf skip loopback altogether. `hallway doctor` names that, and `hallway setup` clears it when it
-can do so without dropping anyone else's rules; see
-[pf is skipping loopback](/networking/setup-and-doctor/#pf-is-skipping-loopback-macos).
-
 ## When the daemon or an app is down
 
 If the daemon isn't running, Caddy serves a static fallback page (`generated/fallback.html`, rewritten by the daemon
