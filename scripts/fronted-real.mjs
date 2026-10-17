@@ -1,7 +1,11 @@
-// `node scripts/fronted-real.mjs`: fronted mode for real (v1 acceptance criteria 1–4, 7–11; D47), with the built
-// CLI, on a CI runner with passwordless sudo: `hallway setup` installs the 443/80 redirect (pf on macOS, nftables on
-// Linux), trusts Hallway's CA system-wide and starts Caddy as a user-level job; then a custom domain (dnsmasq and the
-// resolver); then `hallway teardown` must leave nothing behind. It changes the machine's firewall, trust store and
+// `node scripts/fronted-real.mjs`: fronted mode for real (v1 acceptance criteria 1–4, 7–11; D47, D65), with the built
+// CLI, on a CI runner with passwordless sudo. First the System-wide setup of the last release (0.6.0, from npm: pf on
+// macOS), which this build's `hallway setup --trust system` must migrate (launchd's sockets on macOS, no pf); then the
+// criteria, System-wide: 443/80 (launchd on macOS, nftables on Linux), the CA trusted system-wide, Caddy as a
+// user-level job; then a custom domain (dnsmasq and the resolver); then the other tiers, each switched to from the
+// last: No prompts (plain HTTP) everywhere, No admin for real on Linux (the NSS database) and as a plan on macOS (its
+// trust step waits for a Touch ID dialog nobody can answer on a runner); then `hallway teardown` must leave nothing
+// behind. It changes the machine's firewall, trust store and
 // resolver, so it refuses to run unless CI=true and HALLWAY_REAL_FRONTED=1. The data home is a throwaway; the labels
 // and system paths are the real ones, which is why it must never run on a machine that uses Hallway.
 import { execFileSync, spawn } from 'node:child_process';
@@ -79,11 +83,26 @@ function strictApp() {
   return new Promise((r) => child.stdout.once('data', (d) => r({ child, port: Number(String(d).trim()) })));
 }
 
+const FORWARDERS = ['https', 'https6', 'http', 'http6'].map((n) => `hallway.forward.${n}`);
+const agent = (label) => path.join(os.homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
 const leftovers = () =>
   [
     ...(darwin ? ['/etc/pf.anchors/hallway', '/Library/LaunchDaemons/hallway.pf.plist', '/etc/resolver/myname.internal'] : ['/etc/hallway/redirect.nft', '/etc/systemd/system/hallway-redirect.service', '/etc/systemd/resolved.conf.d/hallway.conf', '/usr/local/share/ca-certificates/hallway-local-ca.crt']),
-    ...(darwin ? ['hallway.caddy.plist', 'hallway.dnsmasq.plist'].map((f) => path.join(os.homedir(), 'Library', 'LaunchAgents', f)) : ['hallway-caddy.service', 'hallway-dnsmasq.service'].map((f) => path.join(os.homedir(), '.config', 'systemd', 'user', f))),
+    ...(darwin ? ['hallway.caddy', 'hallway.dnsmasq', ...FORWARDERS].map(agent) : ['hallway-caddy.service', 'hallway-dnsmasq.service'].map((f) => path.join(os.homedir(), '.config', 'systemd', 'user', f))),
   ].filter((p) => fs.existsSync(p));
+const pfGone = () => {
+  assert.ok(!fs.existsSync('/Library/LaunchDaemons/hallway.pf.plist'), 'the hallway.pf LaunchDaemon is gone');
+  assert.ok(!fs.existsSync('/etc/pf.anchors/hallway'), 'the pf anchor file is gone');
+  assert.doesNotMatch(sh('sudo', ['-n', 'pfctl', '-a', 'com.apple/hallway', '-s', 'nat']).out, /rdr/, 'no rdr rules loaded');
+};
+const systemTrusted = () =>
+  darwin
+    ? /Hallway/.test(sh('security', ['find-certificate', '-a', '-c', 'Hallway Local CA', '/Library/Keychains/System.keychain']).out)
+    : fs.existsSync('/usr/local/share/ca-certificates/hallway-local-ca.crt');
+const doctorFails = (ids) => {
+  const r = hw('doctor', '--json');
+  return JSON.parse(r.out.slice(r.out.indexOf('{'))).checks.filter((c) => c.status === 'fail' && ids.includes(c.id));
+};
 
 const failures = [];
 async function check(name, fn) {
@@ -105,6 +124,47 @@ try {
   must('service', 'install');
   await until('the daemon', async () => (await fetch('http://localhost:4255/api/health').catch(() => null))?.ok);
 
+  step('migration: the System-wide setup of 0.6.0 (from npm; pf on macOS), then this build');
+  // npx's copy of the last release, run against the same data home: what a user upgrading from it has
+  await check('0.6.0 sets up System-wide', async () => {
+    const r = sh('npx', ['-y', 'hallway@0.6.0', 'setup', '--yes'], { env, timeout: 8 * 60_000 });
+    process.stdout.write(r.out.replace(/^/gm, '    | '));
+    assert.equal(r.code, 0);
+    assert.equal(status(curl('https://hallway.localhost/api/health')), 200);
+    if (darwin) assert.ok(fs.existsSync('/Library/LaunchDaemons/hallway.pf.plist'), "0.6.0's pf redirect");
+  });
+  await check('this build plans the move: on macOS the pf redirect goes, with one sudo step; the trust stays', async () => {
+    const out = must('setup', '--print', '--trust', 'system');
+    if (darwin) {
+      assert.match(out, /\[sudo\] Remove the pf redirect an older Hallway installed/);
+      assert.match(out, /Have launchd hold loopback ports 443 and 80/);
+    }
+    assert.match(out, /System keychain|system-wide.*\(already done\)|trust store.*\(already done\)/);
+  });
+  await check('doctor on the 0.6.0 setup: on macOS the pf redirect is named as left over', async () => {
+    if (!darwin) return;
+    const r = hw('doctor', '--json');
+    const c = JSON.parse(r.out.slice(r.out.indexOf('{'))).checks.find((x) => x.id === 'leftover-redirect');
+    assert.equal(c?.status, 'warn');
+    assert.match(c.fix, /hallway setup --trust system/);
+  });
+  await check('migrating: 443 answers throughout and after, through launchd on macOS; no pf left', async () => {
+    must('setup', '--yes', '--trust', 'system');
+    assert.equal(status(curl('https://hallway.localhost/api/health')), 200);
+    if (darwin) {
+      pfGone();
+      for (const l of FORWARDERS) assert.ok(fs.existsSync(agent(l)), `${l} installed`);
+      assert.equal(sh('launchctl', ['print', `gui/${process.getuid()}/hallway.forward.https`]).code, 0, 'loaded');
+      // [::1] too
+      assert.equal(status(curl('https://hallway.localhost/api/health', ['--resolve', 'hallway.localhost:443:::1'])), 200);
+      assert.match(sh('curl', ['-sS', '-o', '/dev/null', '-w', '%{http_code}', '--resolve', 'hallway.localhost:80:::1', 'http://hallway.localhost/']).out, /^308/);
+    }
+    assert.ok(systemTrusted(), 'the root is still trusted system-wide');
+  });
+  // back to nothing, so the criteria below start from a fresh machine
+  must('teardown', '--yes');
+  assert.deepEqual(leftovers(), []);
+
   step('criterion 8: something else on 443 → setup and doctor name it and stop');
   // root's, so on macOS lsof (as the user) can't see it: setup has to notice it by connecting. An absolute Node, since
   // sudo's secure_path may not have python3 or node on it.
@@ -113,7 +173,7 @@ try {
   await until('the squatter on 443', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0, 10000);
   await sleep(1500);
   await check('setup refuses, before doing anything', async () => {
-    const r = hw('setup', '--yes');
+    const r = hw('setup', '--yes', '--trust', 'system');
     assert.notEqual(r.code, 0);
     assert.match(r.out, /port 443|443 answers/);
     assert.match(r.out, /Setup stopped before doing anything/);
@@ -126,7 +186,7 @@ try {
 
   step('criterion 1: setup --print prints the plan and runs nothing');
   await check('--print', async () => {
-    const out = must('setup', '--print');
+    const out = must('setup', '--print', '--trust', 'system');
     assert.match(out, /\$ sudo /);
     assert.match(out, /Nothing was run/);
     assert.deepEqual(leftovers(), []);
@@ -134,19 +194,19 @@ try {
 
   step('D67: with no terminal and no --yes, setup refuses (it would ask first), and changes nothing');
   await check('setup with no TTY', async () => {
-    const r = hw('setup');
+    const r = hw('setup', '--trust', 'system');
     assert.equal(r.code, 2, 'a usage error');
     assert.match(r.out, /no terminal to ask on: run it in one, or pass --yes/);
     assert.deepEqual(leftovers(), []);
   });
 
   step('criteria 1–2: setup, for real');
-  must('setup', '--yes');
+  must('setup', '--yes', '--trust', 'system');
   const ca = path.join(data, 'state', 'caddy', 'data', 'pki', 'authorities', 'local', 'root.crt');
   await check('https://hallway.localhost serves the dashboard with a certificate the system trusts', async () => {
     const r = curl('https://hallway.localhost/api/health');
     assert.equal(status(r), 200, r.out);
-    assert.match(must('setup', '--print'), /already done/, 'nothing left to do');
+    assert.match(must('setup', '--print', '--trust', 'system'), /already done/, 'nothing left to do');
     assert.match(r.out, /"ok":true/);
   });
   await check('http:// redirects to https://', async () => {
@@ -168,7 +228,7 @@ try {
 
   step('idempotent: setup again does only what is missing');
   await check('re-running setup', async () => {
-    const out = must('setup', '--yes');
+    const out = must('setup', '--yes', '--trust', 'system');
     assert.match(out, /already done/);
   });
 
@@ -176,46 +236,26 @@ try {
   await check('doctor has no networking failures', async () => {
     const r = hw('doctor', '--json');
     const checks = JSON.parse(r.out.slice(r.out.indexOf('{'))).checks;
-    const bad = checks.filter((c) => c.status === 'fail' && ['caddy', 'caddy-service', 'caddy-config', 'caddy-socket', 'caddy-ports', 'ports-80-443', 'redirect', 'ca'].includes(c.id));
+    const bad = checks.filter((c) => c.status === 'fail' && ['caddy', 'caddy-service', 'caddy-config', 'caddy-socket', 'caddy-ports', 'ports-80-443', 'low-ports', 'redirect', 'ca'].includes(c.id));
     assert.deepEqual(bad, []);
   });
 
   if (darwin) {
-    // the first real-Mac run (research notes, 2026-10-17): another tool had loaded a ruleset with `set skip on lo0`,
-    // so pf ignored loopback and with it the redirect. Here it's macOS's own pf.conf with the skip in front, as a
-    // VPN's or a firewall app's ruleset would have it; /etc/pf.conf itself is untouched.
-    step("D64: something sets `set skip on lo0` → doctor names it, setup clears it, and so does doctor's fix");
-    const RELOAD = 'sudo pfctl -f /etc/pf.conf && sudo launchctl kickstart -k system/hallway.pf';
-    const skipLoopback = () => {
+    step("D65: launchd holds 443 and 80, so pf can't take them away (D64's `set skip on lo0` no longer matters)");
+    await check('with pf told to skip loopback, 443 still answers', async () => {
       const r = sh('sh', ['-c', "(echo 'set skip on lo0'; cat /etc/pf.conf) | sudo -n pfctl -f -"]);
       assert.equal(r.code, 0, r.out);
-      assert.match(sh('sudo', ['-n', 'pfctl', '-s', 'Interfaces', '-v']).out, /^lo0 \(skip\)/m);
-    };
-    const health = () => status(curl('https://hallway.localhost/api/health'));
-    const redirectCheck = () => {
-      const r = hw('doctor', '--json');
-      return JSON.parse(r.out.slice(r.out.indexOf('{'))).checks.find((c) => c.id === 'redirect');
-    };
-    await check('with the skip, 443 stops answering and doctor says why, with the fix', async () => {
-      skipLoopback();
-      await until('443 to stop answering', async () => health() !== 200, 10000);
-      const c = redirectCheck();
-      assert.equal(c.status, 'fail');
-      assert.match(c.message, /^pf is set to skip loopback \(lo0\), so the redirect is ignored; something other than Hallway set this/);
-      assert.ok(c.fix.includes(RELOAD), c.fix);
+      assert.equal(status(curl('https://hallway.localhost/api/health')), 200);
+      sh('sudo', ['-n', 'pfctl', '-f', '/etc/pf.conf']);
     });
-    await check('setup clears it (the main ruleset is stock, so it may), and 443 answers again', async () => {
-      assert.match(must('setup', '--yes'), /\$ sudo pfctl -f \/etc\/pf\.conf/);
-      await until('443 through the redirect', async () => health() === 200, 15000);
-      assert.doesNotMatch(sh('sudo', ['-n', 'pfctl', '-s', 'Interfaces', '-v']).out, /lo0 \(skip\)/);
-      assert.equal(redirectCheck().status, 'pass');
-    });
-    await check("doctor's fix, run as it's printed, does the same", async () => {
-      skipLoopback();
-      await until('443 to stop answering', async () => health() !== 200, 10000);
-      const r = sh('sh', ['-c', RELOAD.replace(/sudo /g, 'sudo -n ')]);
+    await check('a WebSocket-style long-lived connection through the forwarder: 30 s idle, then still open', async () => {
+      // a TLS connection to 443 that sends nothing for 30 s, then a request: the forwarder has no timeout
+      const r = sh('node', ['-e', `
+        const tls = require('node:tls');
+        const s = tls.connect({ host: '127.0.0.1', port: 443, servername: 'hallway.localhost' }, () => setTimeout(() => s.write('GET /api/health HTTP/1.1\\r\\nHost: hallway.localhost\\r\\nConnection: close\\r\\n\\r\\n'), 30000));
+        let d = ''; s.on('data', (c) => (d += c)); s.on('end', () => { console.log(d.split('\\r\\n')[0]); process.exit(/200/.test(d) ? 0 : 1); });
+        s.on('error', (e) => { console.log(e.message); process.exit(1); });`], { timeout: 60_000, env: { ...env, NODE_EXTRA_CA_CERTS: ca } });
       assert.equal(r.code, 0, r.out);
-      await until('443 through the redirect', async () => health() === 200, 15000);
     });
   }
 
@@ -235,6 +275,10 @@ try {
 
   step('criterion 9: a custom domain');
   must('setup', '--yes', '--domain', 'myname.internal');
+  await check('--domain with another tier is a usage error', async () => {
+    const r = hw('setup', '--yes', '--trust', 'user', '--domain', 'myname.internal');
+    assert.equal(r.code, 2);
+  });
   await check('https://myname.internal is the dashboard', async () => {
     const r = await until('myname.internal', async () => {
       const x = curl('https://myname.internal/api/health');
@@ -266,6 +310,52 @@ try {
     assert.match(r.out, /mDNS/);
   });
 
+  step('D65: the other tiers, switched to from System-wide with a custom domain');
+  await check('No admin, as a plan: no sudo but the removals; the trust step is the user\'s own, and says so', async () => {
+    const out = must('setup', '--print', '--trust', 'user');
+    assert.match(out, /Moving from System-wide to No admin: what the old tier added is removed \(that needs sudo, this once\)/);
+    assert.match(out, /myname\.internal is a custom domain, and those need System-wide/);
+    if (darwin) {
+      assert.match(out, /\[you\] Trust Hallway's local certificate authority for your account only/);
+      assert.match(out, /\$ security add-trusted-cert -r trustRoot -k \S+\/Library\/Keychains\/login\.keychain-db /);
+      assert.match(out, /\(asks: macOS, for your Touch ID or password, to change \*your\* certificate trust settings\. This is not an administrator prompt\)/);
+    }
+    // the only sudo steps remove what System-wide installed
+    for (const line of out.split('\n').filter((l) => /^\d+\. \[sudo\]/.test(l))) assert.match(line, /Remove|Stop sending/, line);
+  });
+  await check('No prompts: plain HTTP on the default names; the resolver, dnsmasq and the system-wide trust are gone', async () => {
+    const out = must('setup', '--yes', '--trust', 'none');
+    assert.match(out, /Moving from System-wide to No prompts/);
+    const app = darwin ? 'http://review.localhost/' : 'http://review.localhost:4480/';
+    const r = await until('the app over plain HTTP', async () => {
+      const x = curl(app);
+      return status(x) === 200 ? x : null;
+    }, 15000);
+    assert.match(r.out, new RegExp(`"host":"127\\.0\\.0\\.1:${review.port}"`));
+    assert.equal(systemTrusted(), false, 'no longer trusted system-wide');
+    assert.ok(!fs.existsSync(darwin ? '/etc/resolver/myname.internal' : '/etc/systemd/resolved.conf.d/hallway.conf'), 'the resolver is gone');
+    if (darwin) {
+      assert.ok(!fs.existsSync(agent('hallway.forward.https')) && fs.existsSync(agent('hallway.forward.http')), 'only port 80 is held');
+      assert.notEqual(status(curl('https://hallway.localhost/')), 200, 'nothing on 443');
+    } else assert.notEqual(sh('sudo', ['nft', 'list', 'table', 'inet', 'hallway']).code, 0, 'the nft table is gone');
+    assert.deepEqual(doctorFails(['caddy', 'caddy-service', 'caddy-config', 'low-ports', 'redirect']), []);
+    const s = await until('the daemon on plain HTTP', async () => {
+      const x = await (await fetch('http://localhost:4255/api/state')).json();
+      return x.apps.find((a) => a.slug === 'review').url.startsWith('http://review.localhost') ? x : null;
+    }, 10000);
+    assert.equal(s.fronting.trust, 'none');
+  });
+  if (!darwin)
+    await check('No admin on Linux, for real: https on :4443, the root in the NSS database only, no sudo', async () => {
+      const out = must('setup', '--yes', '--trust', 'user');
+      assert.doesNotMatch(out, /\$ sudo /);
+      const r = curl('https://review.localhost:4443/', ['--cacert', ca]);
+      assert.equal(status(r), 200, r.out);
+      assert.match(sh('certutil', ['-L', '-d', `sql:${os.homedir()}/.pki/nssdb`]).out, /Hallway Local CA/);
+      assert.equal(systemTrusted(), false);
+      assert.deepEqual(doctorFails(['redirect', 'ca']), []);
+    });
+
   step('criterion 11: teardown leaves nothing behind; the dashboard keeps working directly');
   must('teardown', '--yes');
   await check('no files, jobs, redirect or trusted root left', async () => {
@@ -276,6 +366,7 @@ try {
     } else {
       assert.notEqual(sh('sudo', ['nft', 'list', 'table', 'inet', 'hallway']).code, 0, 'the nft table is gone');
       assert.doesNotMatch(fs.readFileSync('/etc/ssl/certs/ca-certificates.crt', 'utf8'), new RegExp(fs.readFileSync(ca, 'utf8').split('\n')[1].slice(0, 40)));
+      assert.doesNotMatch(sh('certutil', ['-L', '-d', `sql:${os.homedir()}/.pki/nssdb`]).out, /Hallway Local CA/, 'not in the NSS database either');
     }
     assert.notEqual(status(curl('https://hallway.localhost/')), 200);
   });

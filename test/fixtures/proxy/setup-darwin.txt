@@ -3,46 +3,15 @@
      /home/me/.hallway/generated/fallback.html
 2. [Hallway] Run Caddy as you, on 127.0.0.1:4443 and :4480, as a LaunchAgent (hallway.caddy), with its admin API on a private socket
      /home/me/.hallway/state/caddy/admin.sock
-3. [sudo] Trust Hallway's local certificate authority in the System keychain, so browsers accept its certificates
-     $ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
-4. [sudo] Redirect loopback ports 443 and 80 to Caddy on 4443 and 4480 (a pf anchor, loaded at boot by the hallway.pf LaunchDaemon)
-     writes /home/me/.hallway/generated/setup/pf.anchor, installed as /etc/pf.anchors/hallway:
-       | # Written by `hallway setup`; removed by `hallway teardown`.
-       | # Loaded into the com.apple/hallway anchor by the hallway.pf LaunchDaemon. Connections to loopback ports 443 and
-       | # 80 go to Hallway's Caddy, which runs as you on 4443 and 4480. Only loopback traffic is touched.
-       | rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> 127.0.0.1 port 4443
-       | rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 4480
-       | rdr pass on lo0 inet6 proto tcp from any to ::1 port 443 -> ::1 port 4443
-       | rdr pass on lo0 inet6 proto tcp from any to ::1 port 80 -> ::1 port 4480
-     writes /home/me/.hallway/generated/setup/hallway.pf.plist, installed as /Library/LaunchDaemons/hallway.pf.plist:
-       | <?xml version="1.0" encoding="UTF-8"?>
-       | <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-       | <!-- Written by `hallway setup`; removed by `hallway teardown`. It loads one fixed pf anchor at boot and exits; it reads nothing a user can write. -->
-       | <plist version="1.0">
-       | <dict>
-       |   <key>Label</key>
-       |   <string>hallway.pf</string>
-       |   <key>ProgramArguments</key>
-       |   <array>
-       |     <string>/sbin/pfctl</string>
-       |     <string>-E</string>
-       |     <string>-a</string>
-       |     <string>com.apple/hallway</string>
-       |     <string>-f</string>
-       |     <string>/etc/pf.anchors/hallway</string>
-       |   </array>
-       |   <key>RunAtLoad</key>
-       |   <true/>
-       | </dict>
-       | </plist>
-     $ sudo install -m 0644 -o root -g wheel /home/me/.hallway/generated/setup/pf.anchor /etc/pf.anchors/hallway
-     $ sudo install -m 0644 -o root -g wheel /home/me/.hallway/generated/setup/hallway.pf.plist /Library/LaunchDaemons/hallway.pf.plist
-     $ sudo launchctl bootout system/hallway.pf   (may fail harmlessly)
-     $ sudo launchctl bootstrap system /Library/LaunchDaemons/hallway.pf.plist
-5. [sudo] If pf has been told to skip loopback (lo0), which makes it ignore the redirect: load macOS's own /etc/pf.conf again (that clears the skip), then the redirect. Checked just before it runs; done only if that can't take anyone else's rules with it
-     $ sudo pfctl -f /etc/pf.conf
-     $ sudo launchctl kickstart -k system/hallway.pf
-6. [Hallway] Switch config.yaml to fronted mode: links become https://<app>.localhost
-7. [Hallway] Check https://hallway.localhost answers through the redirect, with Hallway's certificate
+3. [Hallway] Have launchd hold loopback ports 443 and 80 (to Caddy's 4443 and 4480) for you, on 127.0.0.1 and ::1: a LaunchAgent for each, which launchd starts on the first connection to pass it on. No sudo: launchd binds them
+     hallway.forward.https  127.0.0.1:443 → 127.0.0.1:4443
+     hallway.forward.https6  [::1]:443 → 127.0.0.1:4443
+     hallway.forward.http  127.0.0.1:80 → 127.0.0.1:4480
+     hallway.forward.http6  [::1]:80 → 127.0.0.1:4480
+4. [you] Trust Hallway's local certificate authority for your account only (your login keychain): no administrator needed, macOS asks for your own Touch ID or password
+     $ security add-trusted-cert -r trustRoot -k /home/me/Library/Keychains/login.keychain-db /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
+     (asks: macOS, for your Touch ID or password, to change *your* certificate trust settings. This is not an administrator prompt)
+5. [Hallway] Switch config.yaml to fronted mode, No admin: links become https://<app>.localhost
+6. [Hallway] Check https://hallway.localhost answers through launchd's socket, with Hallway's certificate
 
-Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.
+Nothing was run. `hallway setup` runs these.

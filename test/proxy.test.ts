@@ -14,8 +14,9 @@ import { fallbackHtml } from '../server/proxy/fallback.ts';
 import { networkChecks } from '../server/proxy/doctor.ts';
 import { restartCommands, startProxy } from '../server/proxy/index.ts';
 import { darwin } from '../server/platform/darwin.ts';
+import { linux } from '../server/platform/linux.ts';
 import { win32 } from '../server/platform/win32.ts';
-import { appHosts, dialAddress, httpsUrl, tldOf } from '../server/proxy/names.ts';
+import { appHosts, dialAddress, httpsUrl, publicUrl, tldOf } from '../server/proxy/names.ts';
 import { defaultConfig, validateApp } from '../server/store/schema.ts';
 import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
@@ -54,6 +55,13 @@ describe('names', () => {
     assert.equal(httpsUrl('a.localhost', 4443), 'https://a.localhost:4443');
     assert.equal(tldOf('myname.internal'), 'internal');
   });
+  test("links by the tier's scheme and port (D65): the default port of each scheme is left out", () => {
+    assert.equal(publicUrl('a.localhost', { scheme: 'https', publicPort: 443 }), 'https://a.localhost');
+    assert.equal(publicUrl('a.localhost', { scheme: 'https', publicPort: 4443 }), 'https://a.localhost:4443');
+    assert.equal(publicUrl('a.localhost', { scheme: 'http', publicPort: 443 }), 'http://a.localhost', 'the default 443 means 80 for plain HTTP');
+    assert.equal(publicUrl('a.localhost', { scheme: 'http', publicPort: 80 }), 'http://a.localhost');
+    assert.equal(publicUrl('a.localhost', { scheme: 'http', publicPort: 4480 }), 'http://a.localhost:4480');
+  });
 });
 
 describe('the Caddy config', () => {
@@ -68,6 +76,26 @@ describe('the Caddy config', () => {
   test('golden: a custom domain, no IPv6, links on the high port', POSIX_PATHS, () => {
     const out = caddyConfig({ home, config: fronted({ domain: { base: 'myname.internal', dashboard: 'myname.internal' }, proxy: { publicPort: 4443 } }), apps: APPS.slice(0, 1), daemonPort: 4255, ipv6: false });
     golden('caddy-custom.json', caddyText(out.json));
+  });
+
+  test('plain HTTP (No prompts, D65): the same routes on httpPort, no HTTPS server, no certificates, no redirect', () => {
+    const { json } = caddyConfig({ home, config: fronted({ proxy: { scheme: 'http', trust: 'none' } }), apps: APPS, daemonPort: 4255 });
+    const servers = (json as any).apps.http.servers;
+    assert.deepEqual(Object.keys(servers), ['hallway-http']);
+    assert.deepEqual(servers['hallway-http'].listen, ['127.0.0.1:4480', '[::1]:4480']);
+    assert.deepEqual(servers['hallway-http'].automatic_https, { disable: true });
+    assert.equal(servers['hallway-http'].routes.length, 1 + 4, 'the dashboard and every app name');
+    assert.ok(servers['hallway-http'].errors, 'the fallback page');
+    assert.equal((json as any).apps.tls, undefined);
+    assert.ok(!JSON.stringify(json).includes('static_response'), 'nothing redirects');
+  });
+
+  test('Caddy never binds 443 or 80 itself, in any tier (launchd or the redirect hands them over)', () => {
+    for (const proxy of [{}, { scheme: 'http' }, { publicPort: 4443 }]) {
+      const text = JSON.stringify(caddyConfig({ home, config: fronted({ proxy }), apps: APPS, daemonPort: 4255 }).json);
+      assert.ok(!/:443"|:80"/.test(text), text);
+      assert.match(text, /"http_port":4480,"https_port":4443/);
+    }
   });
 
   test('Host is rewritten to the upstream by default (D9); preserveHost keeps it; the dashboard keeps it', () => {
@@ -138,15 +166,17 @@ describe('the Caddy config', () => {
       return null;
     }
   })();
-  test('caddy validate accepts it', { skip: caddy ? false : 'no caddy on PATH' }, () => {
+  test('caddy validate accepts it, HTTPS and plain HTTP', { skip: caddy ? false : 'no caddy on PATH' }, () => {
     const dir = tmpDir('hw-test-caddy-');
     try {
-      const { json } = caddyConfig({ home: dir, config: fronted(), apps: APPS, daemonPort: 4255 });
-      const file = path.join(dir, 'caddy.json');
-      fs.writeFileSync(file, caddyText(json));
-      const env = { PATH: process.env.PATH ?? '', HOME: dir, XDG_CONFIG_HOME: path.join(dir, 'c'), XDG_DATA_HOME: path.join(dir, 'd') };
-      const out = execFileSync(caddy!, ['validate', '--config', file], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-      assert.match(out, /Valid configuration/);
+      for (const proxy of [{}, { scheme: 'http' }]) {
+        const { json } = caddyConfig({ home: dir, config: fronted({ proxy }), apps: APPS, daemonPort: 4255 });
+        const file = path.join(dir, 'caddy.json');
+        fs.writeFileSync(file, caddyText(json));
+        const env = { PATH: process.env.PATH ?? '', HOME: dir, XDG_CONFIG_HOME: path.join(dir, 'c'), XDG_DATA_HOME: path.join(dir, 'd') };
+        const out = execFileSync(caddy!, ['validate', '--config', file], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+        assert.match(out, /Valid configuration/);
+      }
     } finally {
       rmTmp(dir);
     }
@@ -292,6 +322,62 @@ describe("doctor's networking checks in direct mode (D63)", () => {
       assert.equal(win!.status, 'info');
       assert.match(win!.message, /Windows/);
       assert.equal(win!.fix, undefined, 'no command to suggest where setup refuses');
+    } finally {
+      s.cleanup();
+    }
+  });
+});
+
+describe("doctor's networking checks per tier (D65)", () => {
+  // a platform whose listener scan sees nothing, and ports nothing else here uses
+  const quiet = { ...linux, listListeners: async () => [], processInfo: async () => new Map() };
+  const freePort = () => new Promise<number>((r) => {
+    const s = http.createServer().listen(0, '127.0.0.1', () => {
+      const p = (s.address() as { port: number }).port;
+      s.close(() => r(p));
+    });
+  });
+
+  test('No prompts: plain HTTP answers or not, the Safari note, and no certificate checks', async () => {
+    const s = await tmpStore();
+    const [httpsPort, httpPort] = [await freePort(), await freePort()];
+    try {
+      await s.store.patchConfig({ mode: 'fronted', proxy: { trust: 'none', scheme: 'http', publicPort: httpPort, httpsPort, httpPort } });
+      const deps = { store: s.store, platform: quiet, services: null, query: async () => ({ code: 1, stdout: '', stderr: '' }), env: { PATH: '' }, userHome: '/home/me' };
+      const before = await networkChecks(deps);
+      const line = (cs: typeof before, id: string) => cs.find((c) => c.id === id);
+      assert.equal(line(before, 'redirect')!.status, 'fail');
+      assert.match(line(before, 'redirect')!.message, new RegExp(`^nothing answers at http://hallway\\.localhost:${httpPort}$`));
+      assert.equal(line(before, 'plain-http')!.status, 'info');
+      assert.match(line(before, 'plain-http')!.message, /Safari won't keep Secure cookies over plain HTTP/);
+      assert.match(line(before, 'plain-http')!.fix!, /hallway setup --trust user/);
+      assert.equal(line(before, 'ca'), undefined, 'no certificate in this tier');
+      assert.equal(line(before, 'redirect-http'), undefined, 'no redirect to HTTPS either');
+      // something (Caddy, here a stand-in) answering on the HTTP port
+      const srv = http.createServer((_q, r) => r.end('{}')).listen(httpPort, '127.0.0.1');
+      await new Promise((r) => srv.once('listening', r));
+      try {
+        const now = await networkChecks(deps);
+        assert.equal(line(now, 'redirect')!.status, 'pass');
+        assert.equal(line(now, 'redirect')!.message, `http://hallway.localhost:${httpPort} answers (plain HTTP)`);
+      } finally {
+        srv.close();
+      }
+    } finally {
+      s.cleanup();
+    }
+  });
+
+  test('No admin on Linux: links on the HTTPS port; the certificate is checked for the account, not the system', async () => {
+    const s = await tmpStore();
+    const [httpsPort, httpPort] = [await freePort(), await freePort()];
+    try {
+      await s.store.patchConfig({ mode: 'fronted', proxy: { trust: 'user', publicPort: httpsPort, httpsPort, httpPort } });
+      const cs = await networkChecks({ store: s.store, platform: quiet, services: null, query: async () => ({ code: 1, stdout: '', stderr: '' }), env: { PATH: '' }, userHome: '/home/me' });
+      assert.match(cs.find((c) => c.id === 'redirect')!.message, new RegExp(`^nothing answers on 127\\.0\\.0\\.1:${httpsPort}$`));
+      assert.match(cs.find((c) => c.id === 'redirect-http')!.message, new RegExp(`^http://hallway\\.localhost:${httpPort} doesn't answer`));
+      assert.ok(!cs.some((c) => c.id === 'ports-80-443' || c.id === 'low-ports'), 'nothing on 443/80 to check in this tier');
+      assert.match(cs.find((c) => c.id === 'ca')!.message, /doesn't exist yet/);
     } finally {
       s.cleanup();
     }

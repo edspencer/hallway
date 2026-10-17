@@ -1,0 +1,23 @@
+! Moving from System-wide to No admin: what the old tier added is removed (that needs sudo, this once).
+
+1. [Hallway] Write Caddy's configuration, routing *.localhost to your apps and https://hallway.localhost:4443 to the dashboard, and check it with `caddy validate`
+     /home/me/.hallway/generated/caddy.json
+     /home/me/.hallway/generated/fallback.html
+2. [Hallway] Run Caddy as you, on 127.0.0.1:4443 and :4480, as a systemd user unit (hallway.caddy), with its admin API on a private socket
+     /home/me/.hallway/state/caddy/admin.sock
+3. [you] Trust Hallway's local certificate authority in your own NSS database (~/.pki/nssdb), which Chrome and Chromium read: as you, no sudo
+     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -D -n 'Hallway Local CA'   (may fail harmlessly)
+     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -A -t C,, -n 'Hallway Local CA' -i /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
+4. [sudo] Remove the redirect: hallway-redirect.service and its nftables table (No admin doesn't use it)
+     $ sudo systemctl disable --now hallway-redirect.service   (may fail harmlessly)
+     $ sudo nft delete table inet hallway   (may fail harmlessly)
+     $ sudo rm -f /etc/systemd/system/hallway-redirect.service /etc/hallway/redirect.nft
+     $ sudo rmdir /etc/hallway   (may fail harmlessly)
+     $ sudo systemctl daemon-reload
+5. [sudo] Remove Hallway's local certificate authority from the system's trust store (No admin doesn't trust it system-wide)
+     $ sudo rm -f /usr/local/share/ca-certificates/hallway-local-ca.crt
+     $ sudo update-ca-certificates
+6. [Hallway] Switch config.yaml to fronted mode, No admin: links become https://<app>.localhost:4443
+7. [Hallway] Check https://hallway.localhost:4443 answers, with Hallway's certificate
+
+Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

@@ -15,9 +15,10 @@ On macOS and Linux: the dashboard, the YAML files, health checks with uptime his
 this guide, `hallway run` for managed servers, an MCP server (below) and an optional hook that stops agents starting
 dev servers directly. In **direct mode** (the default) every app's address is `http://localhost:<port>`. In
 **fronted mode**, which the user turns on with `hallway setup`, each app also gets `https://<slug>.localhost` (or
-`<slug>.<base>` on their own domain). The live facts above (when this guide comes from a running daemon) say which
-mode is on, and each app's `url` in `/api/state` is the address to give the user. Don't run `hallway setup` or `hallway teardown` yourself: they need sudo, so they're the
-user's to run. Both show their plan and ask `Continue? [y/N]` in the terminal before they change anything; never pass
+`<slug>.<base>` on their own domain; `http://…`, or a port, in some of setup's tiers). The live facts above (when this
+guide comes from a running daemon) say which mode is on, and each app's `url` in `/api/state` is the address to give
+the user. Don't run `hallway setup` or `hallway teardown` yourself: they install jobs, change certificate trust and
+may need sudo or a password dialog, so they're the user's to run. Both show their plan and ask `Continue? [y/N]` in the terminal before they change anything; never pass
 `--yes` for the user (it exists for scripts and CI).
 
 On Windows (best effort) all of that works except fronted mode: `hallway run` makes a per-user scheduled task.
@@ -286,11 +287,13 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `domain.dashboard` | text | `hallway.localhost` when `base` is `localhost`, else `<base>` | Where the dashboard is in fronted mode. (a host name) |
 | `domain.tls` | true/false | `true` | Fronted mode is always HTTPS. |
 | `domain.dnsPort` | number 1–65535 | `4253` | Custom domains only: the loopback port Hallway's own dnsmasq answers on (the resolver configuration points at it). |
-| `proxy` | mapping |  | Fronted mode's Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` redirects 443 and 80 to them. |
+| `proxy` | mapping |  | Fronted mode's Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` hands 443 and 80 to them (macOS: launchd's sockets; Linux: an nftables redirect, System-wide tier only). |
 | `proxy.caddy` | text | `caddy` on your PATH, else Homebrew's | The Caddy binary. |
 | `proxy.httpsPort` | number 1–65535 | `4443` | The loopback port Caddy serves HTTPS on. |
-| `proxy.httpPort` | number 1–65535 | `4480` | The loopback port Caddy serves HTTP (a redirect to HTTPS) on. |
-| `proxy.publicPort` | number 1–65535 | `443` | The HTTPS port in links: 443 once `hallway setup` has redirected it to `httpsPort`. Set it to `httpsPort` to use fronted mode with no setup (links then carry the port). |
+| `proxy.httpPort` | number 1–65535 | `4480` | The loopback port Caddy serves HTTP on: a redirect to HTTPS, or the apps themselves with `scheme: http`. |
+| `proxy.publicPort` | number 1–65535 | `443` | The port in links: 443 (or 80 with `scheme: http`), which `hallway setup` hands to Caddy's ports. Set it to `httpsPort` to use fronted mode with nothing on 443 (links then carry the port); setup does that itself on Linux for the `user` and `none` tiers. |
+| `proxy.trust` | `user` \| `system` \| `none` | none chosen (a setup from before the tiers counts as `system`) | The tier `hallway setup` set up (D65), written by setup: `user` trusts Hallway's certificate for your account only (no admin), `system` for every account (admin; custom domains need it), `none` serves plain HTTP (no certificate, no prompt). |
+| `proxy.scheme` | `https` \| `http` | `https` | The scheme in links. `http` is the `none` tier: Caddy serves plain HTTP and redirects nothing. |
 | `probe` | mapping |  | Health checks. |
 | `probe.intervalSeconds` | number ≥ 5 | `60` | Seconds between checks. |
 | `probe.liveIntervalSeconds` | number ≥ 1 | `15` | Seconds between checks while a dashboard is open. |

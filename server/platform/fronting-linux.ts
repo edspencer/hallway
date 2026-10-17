@@ -1,14 +1,17 @@
-// Linux: the privileged parts of fronted mode (fronting.ts, D47).
-//   redirect   an nftables table, `inet hallway`, with a nat output chain, applied at boot by a oneshot system unit.
+// Linux: the OS-specific parts of fronted mode (fronting.ts, D47, D65).
+//   redirect   System-wide tier only (an unprivileged process can't have loopback 443 on Linux, and nothing binds it on
+//              the user's behalf): an nftables table, `inet hallway`, with a nat output chain, applied at boot by a oneshot system unit.
 //              Its own table: nothing else's rules are touched, and teardown deletes the table whole.
 //   trust      the system CA store (Debian/Ubuntu: /usr/local/share/ca-certificates; Fedora/RHEL/Arch:
 //              /etc/pki/ca-trust/source/anchors), plus the user's NSS database, which Chrome and Chromium read on
-//              Linux (no sudo; only when `certutil` and ~/.pki/nssdb exist).
+//              Linux (no sudo; only when `certutil` and ~/.pki/nssdb exist). No admin: that NSS database alone,
+//              created if Chrome hasn't yet, with no prompt at all.
 //   resolver   a systemd-resolved drop-in routing `~<base>` to Hallway's dnsmasq.
 // POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
 import { posix as path } from 'node:path';
 import fs from 'node:fs';
 import { type Cmd, type Fronting, type FrontingEnv, FrontingUnsupported, MARK, type Recipe, findTool } from './fronting.js';
+import type { Runner } from './services.js';
 
 export const NFT_FILE = '/etc/hallway/redirect.nft';
 export const REDIRECT_UNIT = 'hallway-redirect.service';
@@ -68,16 +71,24 @@ Domains=~${base}
 }
 
 const root = { sudo: true } as const;
-const nssDb = (home: string) => `sql:${path.join(home, '.pki', 'nssdb')}`;
+const nssDir = (home: string) => path.join(home, '.pki', 'nssdb');
+const nssDb = (home: string) => `sql:${nssDir(home)}`;
+/** Where to get `certutil`, for a refusal. */
+export const CERTUTIL_ADVICE = "install `certutil` (Debian and Ubuntu: `sudo apt install libnss3-tools`; Fedora: `sudo dnf install nss-tools`; Arch: `sudo pacman -S nss`), then run `hallway setup` again";
+
+/** A PEM's base64 body, for comparing two copies of a certificate. */
+const pemBody = (pem: string) => pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
 
 const SBIN = ['/usr/local/sbin', '/usr/sbin', '/sbin', '/usr/local/bin', '/usr/bin'];
 const exists = (p: string) => fs.existsSync(p);
 
 export const linuxFronting: Fronting = {
   userServiceNoun: 'systemd user unit',
+  lowPorts: 'redirect',
   detect: (env) => ({
     nft: findTool('nft', env.PATH, SBIN),
-    certutil: exists(`${env.HOME ?? ''}/.pki/nssdb`) ? findTool('certutil', env.PATH, SBIN) : null,
+    certutil: findTool('certutil', env.PATH, SBIN),
+    nssdb: exists(`${env.HOME ?? ''}/.pki/nssdb`),
     systemctl: exists('/run/systemd/system') ? findTool('systemctl', env.PATH, SBIN) : null,
     // resolved is in charge when it's running and /etc/resolv.conf points at its stub (or at its own file)
     resolved: exists('/run/systemd/resolve/stub-resolv.conf') && /127\.0\.0\.53|systemd-resolved|stub-resolv/.test(safeRead('/etc/resolv.conf') + safeLink('/etc/resolv.conf')),
@@ -127,7 +138,7 @@ export const linuxFronting: Fronting = {
     const store = env.tools.caStore;
     if (!store) throw new FrontingUnsupported("can't find this system's CA store (neither /usr/local/share/ca-certificates with update-ca-certificates nor /etc/pki/ca-trust with update-ca-trust)");
     const { file, update } = CA_FILES[store];
-    const nss: Cmd[] = env.tools.certutil
+    const nss: Cmd[] = env.tools.certutil && env.tools.nssdb
       ? [
           // Chrome and Chromium on Linux read the user's NSS database, not the system store; as the user, no sudo
           { sudo: false, argv: [env.tools.certutil, '-d', nssDb(env.userHome), '-D', '-n', NSS_NICKNAME], mayFail: true },
@@ -144,8 +155,37 @@ export const linuxFronting: Fronting = {
   untrust(env): Recipe {
     const store = env.tools.caStore ? CA_FILES[env.tools.caStore] : null;
     const cmds: Cmd[] = store ? [{ ...root, argv: ['rm', '-f', store.file] }, { ...root, argv: [...store.update] }] : [];
-    if (env.tools.certutil) cmds.push({ sudo: false, argv: [env.tools.certutil, '-d', nssDb(env.userHome), '-D', '-n', NSS_NICKNAME], mayFail: true });
     return { why: "Remove Hallway's local certificate authority from the system's trust store", files: [], cmds };
+  },
+
+  userTrust(env): Recipe {
+    if (!env.tools.certutil) throw new FrontingUnsupported(`trusting Hallway's certificate for your account means adding it to your NSS database (~/.pki/nssdb, which Chrome and Chromium read), and that needs certutil: ${CERTUTIL_ADVICE}`);
+    const certutil = env.tools.certutil;
+    return {
+      why: `Trust Hallway's local certificate authority in your own NSS database (${nssDir(env.userHome).replace(env.userHome, '~')}), which Chrome and Chromium read: as you, no sudo`,
+      files: [],
+      cmds: [
+        // Chrome makes the database on its first run; if it hasn't run yet, make an empty one (no password) as it would
+        ...(env.tools.nssdb ? [] : [{ sudo: false, argv: ['mkdir', '-p', '-m', '0700', nssDir(env.userHome)] }, { sudo: false, argv: [certutil, '-N', '-d', nssDb(env.userHome), '--empty-password'] }]),
+        { sudo: false, argv: [certutil, '-d', nssDb(env.userHome), '-D', '-n', NSS_NICKNAME], mayFail: true, quiet: true },
+        { sudo: false, argv: [certutil, '-d', nssDb(env.userHome), '-A', '-t', 'C,,', '-n', NSS_NICKNAME, '-i', env.rootCert] },
+      ],
+    };
+  },
+
+  userUntrust(env): Recipe {
+    return {
+      why: "Remove Hallway's local certificate authority from your NSS database, as you, no sudo",
+      files: [],
+      cmds: env.tools.certutil ? [{ sudo: false, argv: [env.tools.certutil, '-d', nssDb(env.userHome), '-D', '-n', NSS_NICKNAME], mayFail: true }] : [],
+    };
+  },
+
+  async userTrusted(env, run: Runner) {
+    if (!env.tools.certutil || !env.tools.nssdb) return false;
+    const r = await run(env.tools.certutil, ['-L', '-d', nssDb(env.userHome), '-n', NSS_NICKNAME, '-a']);
+    const pem = safeRead(env.rootCert);
+    return r.code === 0 && !!pem && pemBody(r.stdout) === pemBody(pem);
   },
 
   resolver(env): Recipe {

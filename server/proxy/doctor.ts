@@ -13,10 +13,12 @@ import type { Services } from '../services/index.js';
 import type { Store } from '../store/index.js';
 import { CaddyUnreachable, runningConfig, sameConfig } from './admin.js';
 import { CA_NAME, caddyPaths } from './caddy.js';
-import { httpsUrl } from './names.js';
+import { publicPort, publicUrl } from './names.js';
 import { frontingInfo } from './status.js';
 import { httpProbe, isLoopback, readRoot, resolve, tlsProbe } from './probe.js';
-import { MIN_CADDY, isTrusted, portConflicts, versionAtLeast } from './setup.js';
+import { MIN_CADDY, isTrusted, lowPortsFor, portConflicts, versionAtLeast } from './setup.js';
+import { currentTier } from './tiers.js';
+import { forwards } from '../services/spec.js';
 import { delegatedTlds, tldVerdict } from './tld.js';
 
 /** A check (shared/api.ts): `info` is a fact worth knowing, neither a pass nor a problem. */
@@ -59,7 +61,6 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   const base = cfg.domain.base;
   const dashboard = cfg.domain.dashboard;
   const custom = base !== 'localhost';
-  const noRedirect = cfg.proxy.publicPort === cfg.proxy.httpsPort;
   const show = (p: string) => tildify(p);
 
   // ---------------- Caddy ----------------
@@ -102,33 +103,16 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   ]);
   for (const c of held) add({ id: 'caddy-ports', status: 'fail', message: c, fix: 'stop it, or pick other ports in config.yaml (proxy.httpsPort, proxy.httpPort), then ' + SETUP });
 
-  const root = readRoot(paths.rootCert);
-  const [https, http] = noRedirect ? [cfg.proxy.httpsPort, cfg.proxy.httpPort] : [443, 80];
-  if (!noRedirect) {
-    const { conflicts } = await portConflicts(platform, [
-      { port: 443, what: 'HTTPS' },
-      { port: 80, what: 'HTTP' },
-    ]);
-    for (const c of conflicts)
-      add({ id: 'ports-80-443', status: 'fail', message: c, fix: "stop it: Hallway's redirect takes loopback 80 and 443 before it can see them. A container tool (Docker Desktop, Rancher Desktop, Colima, Lima) forwarding 80/443 is the usual culprit: turn that port forward off" });
-  }
-  const t = await tlsProbe(https, dashboard, root?.pem ?? null);
-  const url = httpsUrl(dashboard, https);
-  if (!t && (await isListening(https, '127.0.0.1', 1000)))
-    add({ id: 'redirect', status: 'fail', message: `something answers on 127.0.0.1:${https}, but not with TLS: it isn't Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
-  else if (!t) add(await nothingOn443(deps, https, cfg.proxy.httpsPort, noRedirect));
-  else if (!t.issuer?.startsWith(CA_NAME)) add({ id: 'redirect', status: 'fail', message: `127.0.0.1:${https} answers with a certificate from ${t.issuer ?? 'someone else'}, not Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
-  else if (!t.ours) add({ id: 'redirect', status: 'fail', message: `${url} answers with Hallway's CA, but its certificate doesn't verify (${t.error})`, fix: 'restart Caddy: `hallway setup`' });
-  else add({ id: 'redirect', status: 'pass', message: `${url} reaches Hallway's Caddy${noRedirect ? '' : ' through the redirect from 443'}` });
-  const h = await httpProbe(http, dashboard);
-  if (h?.status === 308) add({ id: 'redirect-http', status: 'pass', message: `http://${dashboard}${http === 80 ? '' : `:${http}`} redirects to HTTPS` });
-  else add({ id: 'redirect-http', status: 'warn', message: `http://${dashboard}${http === 80 ? '' : `:${http}`} ${h ? `answers HTTP ${h.status}, not a redirect to HTTPS` : "doesn't answer"}`, fix: SETUP });
-
-  // ---------------- certificates ----------------
+  const tier = currentTier(cfg);
+  const https = cfg.proxy.scheme === 'https';
+  const low = lowPortsFor(platform, tier, cfg);
+  const pub = publicPort(cfg.proxy);
+  const httpPort = low === 'none' ? cfg.proxy.httpPort : 80;
+  const url = publicUrl(dashboard, cfg.proxy);
   const fenv: FrontingEnv = {
     setupDir: path.join(dataPaths(store.home).generated, 'setup'),
     rootCert: paths.rootCert,
-    rootSha1: root?.sha1 ?? null,
+    rootSha1: readRoot(paths.rootCert)?.sha1 ?? null,
     httpsPort: cfg.proxy.httpsPort,
     httpPort: cfg.proxy.httpPort,
     dnsPort: cfg.domain.dnsPort,
@@ -136,11 +120,72 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
     userHome: deps.userHome,
     tools: f.detect(deps.env),
   };
-  if (!root) add({ id: 'ca', status: 'fail', message: `Hallway's certificate authority doesn't exist yet (${show(paths.rootCert)})`, fix: 'Caddy makes it when it starts: ' + SETUP });
-  else if (await isTrusted({ platform, query: deps.query }, fenv)) add({ id: 'ca', status: 'pass', message: `Hallway's certificate authority (${root.subject}) is trusted by the system` });
-  else add({ id: 'ca', status: 'fail', message: `Hallway's certificate authority (${root.subject}) isn't trusted by the system: browsers will warn`, fix: SETUP });
-  if (root && firefoxInstalled(platform, deps.env))
-    add({ id: 'firefox', status: 'warn', message: 'Firefox keeps its own certificate store', fix: 'in about:config, set security.enterprise_roots.enabled to true (or import the root from ' + show(paths.rootCert) + ')' });
+  // macOS: the pf redirect an install from before the tiers has. With no forwarders yet it's still what serves 443
+  const pf = f.lowPorts === 'sockets' && f.installed(fenv).redirect.some((p) => fs.existsSync(p));
+  const forwarders = deps.services ? safeList(() => deps.services!.forwardersInstalled()) : null;
+  if (pf)
+    add({
+      id: 'leftover-redirect',
+      status: 'warn',
+      message: forwarders?.length ? "the pf redirect an older Hallway installed (the hallway.pf LaunchDaemon and its anchor) is still there, and no longer used" : 'set up by an older Hallway, with a pf redirect run by root (the hallway.pf LaunchDaemon); launchd can hold 443 and 80 for Hallway now, with no root and nothing for another tool to switch off',
+      fix: `\`hallway setup --trust ${tier}\` ${forwarders?.length ? 'removes it' : 'moves to launchd\'s sockets and removes it'} (it needs admin, this once)`,
+    });
+  if (low === 'sockets' && !(pf && !forwarders?.length) && deps.services && forwarders) {
+    const want = forwards(cfg.proxy, cfg.proxy.scheme);
+    const missing = want.filter((w) => !forwarders.includes(w.label));
+    const statuses = await Promise.all(want.filter((w) => !missing.includes(w)).map(async (w) => ({ w, st: await helperStatus(deps.services!, w.label) })));
+    const unloaded = statuses.filter((x) => x.st && !x.st.loaded).map((x) => x.w.label);
+    const ports = https ? '443 and 80' : '80';
+    if (missing.length) add({ id: 'low-ports', status: 'fail', message: `launchd isn't holding loopback ${ports} for Hallway: ${missing.map((m) => m.label).join(', ')} ${missing.length === 1 ? "isn't" : "aren't"} installed`, fix: SETUP });
+    else if (unloaded.length) add({ id: 'low-ports', status: 'fail', message: `${unloaded.join(', ')} ${unloaded.length === 1 ? "isn't" : "aren't"} loaded, so launchd isn't holding ${ports} for Hallway`, fix: SETUP });
+    else add({ id: 'low-ports', status: 'pass', message: `${ports} on loopback: launchd, for hallway.caddy (${want.length} ${f.userServiceNoun}s)` });
+  }
+  if (low === 'redirect') {
+    const { conflicts } = await portConflicts(platform, [
+      { port: 443, what: 'HTTPS' },
+      { port: 80, what: 'HTTP' },
+    ]);
+    for (const c of conflicts)
+      add({ id: 'ports-80-443', status: 'fail', message: c, fix: "stop it: Hallway's redirect takes loopback 80 and 443 before it can see them. A container tool (Docker Desktop, Rancher Desktop, Colima, Lima) forwarding 80/443 is the usual culprit: turn that port forward off" });
+  }
+  const via = low === 'sockets' && !(pf && !forwarders?.length) ? " through launchd's socket" : low !== 'none' ? ' through the redirect from 443' : '';
+  const root = readRoot(paths.rootCert);
+  if (https) {
+    const t = await tlsProbe(pub, dashboard, root?.pem ?? null);
+    const lsof = `\`sudo lsof -nP -iTCP:${pub} -sTCP:LISTEN\` names what holds it`;
+    if (!t && (await isListening(pub, '127.0.0.1', 1000))) add({ id: 'redirect', status: 'fail', message: `something answers on 127.0.0.1:${pub}, but not with TLS: it isn't Hallway's Caddy`, fix: lsof });
+    else if (!t) add({ id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${pub}${low === 'redirect' ? `: the redirect from 443 to ${cfg.proxy.httpsPort} isn't in place` : low === 'sockets' ? `: launchd isn't passing it on to Caddy (\`launchctl print gui/$(id -u)/hallway.forward.https\` says why)` : ''}`, fix: SETUP });
+    else if (!t.issuer?.startsWith(CA_NAME)) add({ id: 'redirect', status: 'fail', message: `something else answers on 127.0.0.1:${pub}, with a certificate from ${t.issuer ?? 'someone else'}, not Hallway's Caddy`, fix: `${lsof}. A container tool (Docker Desktop and the like) forwarding ${pub} is the usual culprit: turn that port forward off` });
+    else if (!t.ours) add({ id: 'redirect', status: 'fail', message: `${url} answers with Hallway's CA, but its certificate doesn't verify (${t.error})`, fix: 'restart Caddy: `hallway setup`' });
+    else add({ id: 'redirect', status: 'pass', message: `${url} reaches Hallway's Caddy${via}` });
+    const h = await httpProbe(httpPort, dashboard);
+    const plain = `http://${dashboard}${httpPort === 80 ? '' : `:${httpPort}`}`;
+    if (h?.status === 308) add({ id: 'redirect-http', status: 'pass', message: `${plain} redirects to HTTPS` });
+    else add({ id: 'redirect-http', status: 'warn', message: `${plain} ${h ? `answers HTTP ${h.status}, not a redirect to HTTPS` : "doesn't answer"}`, fix: SETUP });
+  } else {
+    const h = await httpProbe(pub, dashboard, 2000, '127.0.0.1', '/api/health');
+    if (h) add({ id: 'redirect', status: 'pass', message: `${url} answers (plain HTTP${via})` });
+    else add({ id: 'redirect', status: 'fail', message: `nothing answers at ${url}${low === 'sockets' ? `: launchd isn't passing port 80 on to Caddy (\`launchctl print gui/$(id -u)/hallway.forward.http\` says why)` : ''}`, fix: SETUP });
+    add({ id: 'plain-http', status: 'info', message: "Safari won't keep Secure cookies over plain HTTP: an app that signs in with them won't stay signed in there", fix: platform.id === 'darwin' ? '`hallway setup --trust user` adds HTTPS, asking once for your own password or Touch ID' : `\`hallway setup --trust user\` adds HTTPS with no prompt (Chrome and Chromium trust it; links carry :${cfg.proxy.httpsPort})` });
+  }
+
+  // ---------------- certificates ----------------
+  const systemTrusted = root ? await isTrusted({ platform, query: deps.query }, fenv) : false;
+  const userTrusted = root && f.userTrusted ? await f.userTrusted(fenv, deps.query) : false;
+  if (https) {
+    if (!root) add({ id: 'ca', status: 'fail', message: `Hallway's certificate authority doesn't exist yet (${show(paths.rootCert)})`, fix: 'Caddy makes it when it starts: ' + SETUP });
+    else if (tier === 'user') {
+      if (userTrusted) add({ id: 'ca', status: 'pass', message: `Hallway's root is trusted for your account (${platform.id === 'darwin' ? 'your login keychain' : 'your NSS database, ~/.pki/nssdb'})` });
+      else add({ id: 'ca', status: 'fail', message: `Hallway's certificate authority (${root.subject}) isn't trusted for your account: browsers will warn`, fix: '`hallway setup --trust user`' });
+      if (platform.id === 'darwin')
+        add({ id: 'ca-scope', status: 'info', message: "Not trusted system-wide: other accounts, and tools that bring their own CA list, won't trust it", fix: `Node: \`NODE_OPTIONS=--use-system-ca\`, or \`NODE_EXTRA_CA_CERTS=${show(paths.rootCert)}\`` });
+      else add({ id: 'ca-scope', status: 'info', message: `Only Chrome and Chromium trust it; curl, Node and Firefox need ${show(paths.rootCert)}`, fix: `curl: \`--cacert ${show(paths.rootCert)}\`; Node: \`NODE_EXTRA_CA_CERTS=${show(paths.rootCert)}\`` });
+    } else if (systemTrusted) add({ id: 'ca', status: 'pass', message: `Hallway's certificate authority (${root.subject}) is trusted by the system` });
+    else add({ id: 'ca', status: 'fail', message: `Hallway's certificate authority (${root.subject}) isn't trusted by the system: browsers will warn`, fix: SETUP });
+    if (root && firefoxInstalled(platform, deps.env))
+      add({ id: 'firefox', status: 'warn', message: 'Firefox keeps its own certificate store', fix: 'in about:config, set security.enterprise_roots.enabled to true (or import the root from ' + show(paths.rootCert) + ')' });
+  }
+  if (systemTrusted && tier !== 'system') add({ id: 'leftover-trust', status: 'warn', message: `Hallway's root is still trusted system-wide, which ${tier === 'none' ? 'plain HTTP' : 'the No admin tier'} doesn't use`, fix: `\`hallway setup --trust ${tier}\` removes it (it needs admin, this once)` });
 
   // ---------------- names ----------------
   if (!custom) {
@@ -170,21 +215,17 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   return out;
 }
 
-/** Nothing answers where the redirect should be. On macOS the usual reason, with the redirect installed, is pf told
- *  by another tool to skip loopback (D64): ask it (read-only, `sudo -n`), and say so. */
-export async function nothingOn443(deps: Pick<NetDeps, 'platform' | 'query'>, https: number, httpsPort: number, noRedirect: boolean): Promise<NetCheck> {
-  const generic: NetCheck = { id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${https}${noRedirect ? '' : `: the redirect from 443 to ${httpsPort} isn't in place`}`, fix: SETUP };
-  const f = deps.platform.fronting;
-  if (noRedirect || !f.loopbackSkip) return generic;
-  const skip = await f.loopbackSkip(deps.query);
-  if (skip.skipped) return { id: 'redirect', status: 'fail', message: skip.message, fix: skip.fix };
-  if (skip.skipped === null) return { ...generic, fix: `${SETUP}; if it is installed, pf may be set to skip loopback (lo0), which Hallway couldn't check without a password prompt: ${skip.fix}` };
-  return generic;
-}
-
 async function helperStatus(services: Services, label: string) {
   try {
     return await services.status(label);
+  } catch {
+    return null;
+  }
+}
+
+function safeList(f: () => string[]): string[] | null {
+  try {
+    return f();
   } catch {
     return null;
   }

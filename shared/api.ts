@@ -120,6 +120,12 @@ export interface IgnoreConfig {
 
 export type DashboardSection = 'apps' | 'observed' | 'bookmarks';
 
+/**
+ * Fronted mode's tiers (D65): `user` trusts Hallway's certificate for your account only (no admin rights), `system` for
+ * every account (needs an administrator; custom domains need it too), `none` is plain HTTP (nothing to trust).
+ */
+export type Trust = 'user' | 'system' | 'none';
+
 /** `config.yaml`, with defaults applied. */
 export interface HallwayConfig {
   version: 1;
@@ -127,7 +133,7 @@ export interface HallwayConfig {
   mode: Mode;
   domain: { base: string; dashboard: string; tls: boolean; dnsPort: number };
   /** Fronted mode's Caddy (D47). */
-  proxy: { caddy: string | null; httpsPort: number; httpPort: number; publicPort: number };
+  proxy: { caddy: string | null; httpsPort: number; httpPort: number; publicPort: number; trust: Trust | null; scheme: 'https' | 'http' };
   probe: { intervalSeconds: number; liveIntervalSeconds: number; timeoutMs: number; concurrency: number; failuresBeforeUnhealthy: number };
   ports: { assignRange: [number, number] };
   services: { startGraceSeconds: number; logMaxBytes: number; logGenerations: number };
@@ -452,6 +458,8 @@ export interface FrontingInfo {
   /** Null where fronted mode can work; else why it can't (Windows, D58), and the dashboard says nothing about it. */
   unsupported: string | null;
   mode: Mode;
+  /** Fronted mode's tier (D65); null in direct mode. A setup from before the tiers is `system`. */
+  trust: Trust | null;
   /** The dashboard's address in fronted mode (`https://hallway.localhost`); in direct mode, what setup would give. */
   dashboardUrl: string;
   /** What an app's address looks like: `https://<app>.localhost`. */

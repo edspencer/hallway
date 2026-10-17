@@ -1,7 +1,7 @@
 // What the API returns: the store's files merged with the providers' live data (shared/api.ts). Kept apart from the
 // routes so the CLI (`hallway status`, later) can build the same views without HTTP.
 import os from 'node:os';
-import { httpsUrl } from './proxy/names.js';
+import { publicUrl } from './proxy/names.js';
 import type {
   AppHealth,
   AppView,
@@ -28,9 +28,10 @@ export const UNKNOWN_HEALTH: AppHealth = Object.freeze({
   latencyP50: null,
 }) as AppHealth;
 
-/** Where to open an app: `http://localhost:<port>` (direct), or `https://<slug>.<base>` (fronted). */
+/** Where to open an app: `http://localhost:<port>` (direct), or `https://<slug>.<base>` (fronted; `http://…` in the No
+ *  prompts tier, and with a port where nothing holds 443/80: D65). */
 export function appUrl(slug: string, port: number, host: string, cfg: HallwayConfig): string {
-  if (cfg.mode === 'fronted') return httpsUrl(`${slug}.${cfg.domain.base}`, cfg.proxy.publicPort);
+  if (cfg.mode === 'fronted') return publicUrl(`${slug}.${cfg.domain.base}`, cfg.proxy);
   const h = host.toLowerCase();
   const shown = ['127.0.0.1', 'localhost', '0.0.0.0', '::', '*'].includes(h) ? 'localhost' : h === '::1' || h.includes(':') ? `[${h.replace(/^\[|\]$/g, '')}]` : h;
   return `http://${shown}:${port}`;

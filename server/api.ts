@@ -26,6 +26,7 @@ import { ServiceError, Services } from './services/index.js';
 import { appLogs } from './services/logs.js';
 import { ResolveError } from './services/resolve.js';
 import { ConflictError, NotFoundError, SLUG, ValidationError, type Entry, type Store, type WriteOptions } from './store/index.js';
+import { publicUrl } from './proxy/names.js';
 import { appView, appViews, configView, declaredView, groupView, groupViews, stateView } from './views.js';
 
 export interface ApiOptions {
@@ -431,6 +432,7 @@ export function agentRoutes({ store, providers }: Pick<ApiOptions, 'store' | 'pr
         home: store.home,
         mode: cfg.mode,
         base: cfg.domain.base,
+        appsAt: publicUrl(`<slug>.${cfg.domain.base}`, cfg.proxy),
         apps: appViews(ctx, false).map((a) => ({
           slug: a.slug,
           name: a.name,

@@ -10,7 +10,8 @@ complete **specification** and the implementation: the package, build, CI and re
 guide and `llms.txt`, the security middleware, the platform abstraction), the scanner, prober and uptime history with
 hourly rollups (plugged into the core as a provider, `server/live.ts`, D35, D57), the CLI commands and managed
 services (`hallway run`, launchd / systemd user units, log rotation, `doctor`), the dashboard, v1's fronted mode
-(`server/proxy/`: Caddy as a user-level job, `hallway setup` / `teardown`, doctor's networking checks; D47, D48) and
+(`server/proxy/`: Caddy as a user-level job, `hallway setup` / `teardown` in three tiers, doctor's networking checks;
+D47, D48, D65; on macOS launchd holds 443/80 for `hallway forward`, `server/forward.ts`) and
 "Lost at last reboot" (`server/lost/`, D54), and v2's MCP server (`server/mcp/`, D50–D53), the dev-server hook
 (`server/hook.ts`, D51) and thumbnails: favicons, generated cards and opt-in screenshots (`server/thumbs/`, D55–D57).
 
@@ -84,6 +85,7 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
   live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events (D35, D38)
   daemonfile.ts    state/daemon.json: where the running daemon listens, the CLI's second place to look (D46)
+  forward.ts       `hallway forward <port>` (internal): the byte pipe launchd's sockets hand connections to (D65)
   hook.ts          `hallway hook check-command`: the optional PreToolUse hook that blocks bare dev-server starts (D51)
   platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) / Windows (win32.ts, D58) behind one interface; the
                    listener/process parsers are pure functions tested against test/fixtures/platform/; launchd.ts and
@@ -104,8 +106,10 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   proxy/           fronted mode (D47): caddy.ts (apps + config → Caddy JSON), fallback.ts (generated/fallback.html),
                    status.ts (local domains for the dashboard and the banner: `fronting`, `/api/fronting`, D63),
                    index.ts (the daemon pushes on every change), admin.ts (the admin socket), setup.ts (setup and
-                   teardown: facts → plan → run), doctor.ts (networking checks), tld.ts, probe.ts, names.ts
-  platform/fronting-*.ts  the privileged recipes per OS: the 443/80 redirect (pf / nftables), trust, the resolver
+                   teardown: facts → plan → run), tiers.ts (D65: user / system / none, the recommendation, the
+                   question), doctor.ts (networking checks), tld.ts, probe.ts, names.ts (publicUrl: every link)
+  platform/fronting-*.ts  the OS-specific recipes: Linux's 443/80 redirect (nftables), trust system-wide or for the
+                   user only, the resolver, removing an older macOS install's pf redirect
 shared/            types used by both server/ and src/ (no imports, no Node or DOM APIs): api.ts is the API contract
 assets/fonts/      the generated card's fonts (static OFL instances; scripts/card-fonts.py makes them)
 AGENT-GUIDE.md     the guide for coding agents (shipped; its file reference is generated: npm run sync:guide)

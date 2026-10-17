@@ -7,6 +7,18 @@ export function httpsUrl(host: string, publicPort = 443): string {
   return publicPort === 443 ? `https://${host}` : `https://${host}:${publicPort}`;
 }
 
+/** A link in fronted mode, by config.yaml's `proxy.scheme` and `proxy.publicPort`: `https://review.localhost`,
+ *  `https://review.localhost:4443`, `http://review.localhost`, `http://review.localhost:4480` (D65's tiers). */
+export function publicUrl(host: string, proxy: { scheme: 'https' | 'http'; publicPort: number }): string {
+  const port = publicPort(proxy);
+  return `${proxy.scheme}://${host}${port === (proxy.scheme === 'https' ? 443 : 80) ? '' : `:${port}`}`;
+}
+
+/** The port in links: `publicPort`, except that the default 443 means 80 for plain HTTP. */
+export function publicPort(proxy: { scheme: 'https' | 'http'; publicPort: number }): number {
+  return proxy.scheme === 'http' && proxy.publicPort === 443 ? 80 : proxy.publicPort;
+}
+
 /** Every hostname an app answers on: `<slug>.<base>` first, then its aliases, lower-case, without duplicates. */
 export function appHosts(slug: string, aliases: readonly string[], base: string): string[] {
   return [...new Set([slug, ...aliases].map((l) => `${l}.${base}`.toLowerCase()))];

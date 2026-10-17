@@ -260,15 +260,18 @@ const refuseFronting = (): never => {
 
 export const win32Fronting: Fronting = {
   unsupported: WINDOWS_FRONTING_UNSUPPORTED,
+  lowPorts: 'redirect',
   redirect: refuseFronting,
   unredirect: refuseFronting,
   trust: refuseFronting,
   untrust: refuseFronting,
+  userTrust: refuseFronting,
+  userUntrust: refuseFronting,
   resolver: refuseFronting,
   unresolver: refuseFronting,
   installed: () => ({ redirect: [], trust: [], resolver: [] }),
   userServiceNoun: 'scheduled task',
-  detect: () => ({ nft: null, certutil: null, systemctl: null, resolved: false, caStore: null }),
+  detect: () => ({ nft: null, certutil: null, nssdb: false, systemctl: null, resolved: false, caStore: null }),
   helperDirs: [],
   installHelper: () => ({ advice: WINDOWS_FRONTING_UNSUPPORTED }),
 };

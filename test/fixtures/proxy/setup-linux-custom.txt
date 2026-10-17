@@ -6,12 +6,7 @@
 3. [Hallway] Write dnsmasq's configuration: myname.internal and every name under it → loopback
      /home/me/.hallway/generated/dnsmasq.conf
 4. [Hallway] Run dnsmasq as you, on 127.0.0.1:4253, as a systemd user unit (hallway.dnsmasq)
-5. [sudo] Trust Hallway's local certificate authority system-wide, and in your NSS database (Chrome's on Linux)
-     $ sudo install -D -m 0644 /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt /usr/local/share/ca-certificates/hallway-local-ca.crt
-     $ sudo update-ca-certificates
-     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -D -n 'Hallway Local CA'   (may fail harmlessly)
-     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -A -t C,, -n 'Hallway Local CA' -i /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
-6. [sudo] Redirect loopback ports 443 and 80 to Caddy on 4443 and 4480 (an nftables table, applied at boot by hallway-redirect.service)
+5. [sudo] Redirect loopback ports 443 and 80 to Caddy on 4443 and 4480 (an nftables table, applied at boot by hallway-redirect.service)
      writes /home/me/.hallway/generated/setup/redirect.nft, installed as /etc/hallway/redirect.nft:
        | # Written by `hallway setup`; removed by `hallway teardown`.
        | # Applied at boot by hallway-redirect.service. Connections from this machine to loopback ports 443 and 80 go to Hallway's
@@ -49,6 +44,11 @@
      $ sudo systemctl daemon-reload
      $ sudo systemctl enable hallway-redirect.service
      $ sudo systemctl restart hallway-redirect.service
+6. [sudo] Trust Hallway's local certificate authority system-wide, and in your NSS database (Chrome's on Linux)
+     $ sudo install -D -m 0644 /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt /usr/local/share/ca-certificates/hallway-local-ca.crt
+     $ sudo update-ca-certificates
+     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -D -n 'Hallway Local CA'   (may fail harmlessly)
+     $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -A -t C,, -n 'Hallway Local CA' -i /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
 7. [sudo] Send myname.internal and every name under it to Hallway's dnsmasq on 127.0.0.1:4253 (a systemd-resolved drop-in)
      writes /home/me/.hallway/generated/setup/resolved.conf, installed as /etc/systemd/resolved.conf.d/hallway.conf:
        | # Written by `hallway setup`; removed by `hallway teardown`.
@@ -58,7 +58,7 @@
        | Domains=~myname.internal
      $ sudo install -D -m 0644 /home/me/.hallway/generated/setup/resolved.conf /etc/systemd/resolved.conf.d/hallway.conf
      $ sudo systemctl restart systemd-resolved.service
-8. [Hallway] Switch config.yaml to fronted mode on myname.internal: links become https://<app>.myname.internal
+8. [Hallway] Switch config.yaml to fronted mode, System-wide on myname.internal: links become https://<app>.myname.internal
 9. [Hallway] Check https://myname.internal answers through the redirect, with Hallway's certificate
 
 Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

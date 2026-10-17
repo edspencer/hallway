@@ -26,6 +26,12 @@ export interface ServiceSpec {
   stderr: string;
   /** The Node the job's PATH starts with (docs/04, "The PATH trap"), recorded so doctor can tell when it's gone. */
   node: { path: string; version: string } | null;
+  /**
+   * launchd only (macOS, D65): a socket launchd binds for the job, as root, so a LaunchAgent can have a privileged
+   * loopback port. The job runs inetd-style with `Wait = true`: started on the first connection, with the listening
+   * socket as its stdin. Such a job is never started by hand, only loaded.
+   */
+  socket?: { address: '127.0.0.1' | '::1'; port: number };
 }
 
 /** What the service manager says about a job. */

@@ -20,7 +20,7 @@
    │                     │  service manager ──▶ launchctl (generated LaunchAgents)     (v1)                       │
    │                     └─────────────────────────────────────────────────────────────────────────────────────────┘
    │
-   └── fronted mode ──▶ 127.0.0.1:443/80 ─(redirect)─▶ Caddy, as you, on :4443/:4480 ──▶ <slug>.<base> → 127.0.0.1:<app port>
+   └── fronted mode ──▶ 127.0.0.1:443/80 ─(launchd + forwarder, or redirect)─▶ Caddy, as you, on :4443/:4480 ──▶ <slug>.<base> → 127.0.0.1:<app port>
                                                                                  └─▶ dashboard host → 127.0.0.1:<daemon port>
 
  CLI `hallway …` ── reads/writes the same files via the same write module; asks the daemon (HTTP) for live state.
@@ -137,9 +137,11 @@ domain:
 
 proxy:                          # fronted mode's Caddy, which runs as you (D47)
   caddy: null                   # the binary; default: `caddy` on PATH, else Homebrew's
-  httpsPort: 4443               # Caddy's loopback ports; `hallway setup` redirects 443 and 80 to them
+  httpsPort: 4443               # Caddy's loopback ports; `hallway setup` hands 443 and 80 to them (D65)
   httpPort: 4480
-  publicPort: 443               # the HTTPS port in links; set it to httpsPort to go without the redirect
+  publicPort: 443               # the port in links; setup sets it to httpsPort/httpPort on Linux for user/none
+  # trust: user                 # the tier setup set up (D65): user, system or none
+  # scheme: https               # http for the none tier
 
 probe:
   intervalSeconds: 60

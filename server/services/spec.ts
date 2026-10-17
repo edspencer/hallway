@@ -119,3 +119,53 @@ export function helperSpec(kind: 'caddy' | 'dnsmasq', program: string, home: str
     node: null,
   };
 }
+
+/** The forwarders' labels: `hallway.forward.https`, `…https6`, `…http`, `…http6` (D65). */
+export const FORWARD_PREFIX = 'hallway.forward.';
+export const isForwardLabel = (label: string) => label.startsWith(FORWARD_PREFIX);
+
+/** One loopback socket launchd holds for Caddy, and the port of Caddy's it goes to. */
+export interface Forward {
+  label: string;
+  address: '127.0.0.1' | '::1';
+  port: 443 | 80;
+  to: number;
+}
+
+/**
+ * The forwarders fronted mode wants on macOS (D65): loopback 443 and 80, on both families, to Caddy's ports; only 80
+ * when it serves plain HTTP (the No prompts tier). Each is a socket launchd binds as root for a LaunchAgent: the only
+ * way a user's job gets a privileged loopback port on macOS, with no sudo.
+ */
+export function forwards(proxy: { httpsPort: number; httpPort: number }, scheme: 'https' | 'http'): Forward[] {
+  const out: Forward[] = [];
+  for (const [name, port, to] of [['https', 443, proxy.httpsPort], ['http', 80, proxy.httpPort]] as const) {
+    if (scheme === 'http' && port === 443) continue;
+    out.push({ label: `${FORWARD_PREFIX}${name}`, address: '127.0.0.1', port, to });
+    out.push({ label: `${FORWARD_PREFIX}${name}6`, address: '::1', port, to });
+  }
+  return out;
+}
+
+/**
+ * A forwarder's job: `node <cli.js> forward <to>` (server/forward.ts), given the listening socket by launchd. Like the
+ * daemon's job it runs Hallway's own CLI, so it must be an installed one, never npx's cache (D61). Loaded at login;
+ * launchd starts it on the first connection and again on the next one if it ever exits.
+ */
+export function forwardSpec(f: Forward, home: string, cliScript: string, ctx: SpecContext): ServiceSpec {
+  const node = ctx.node ?? { path: fs.realpathSync.native(process.execPath), version: process.version };
+  const logs = logFiles(home, f.label.slice('hallway.'.length).replace(/\./g, '-'));
+  return {
+    label: f.label,
+    description: `Hallway: loopback ${f.address === '::1' ? '[::1]' : f.address}:${f.port} to Caddy on ${f.to}`,
+    program: [node.path, fs.realpathSync.native(cliScript), 'forward', String(f.to)],
+    cwd: home,
+    env: { PATH: servicePath(path.dirname(node.path), ctx.env.PATH) },
+    runAtLoad: false,
+    keepAlive: false,
+    stdout: logs.out,
+    stderr: logs.err,
+    node,
+    socket: { address: f.address, port: f.port },
+  };
+}

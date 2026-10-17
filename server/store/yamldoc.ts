@@ -49,9 +49,15 @@ function createNode(doc: Document, value: unknown): Node {
  * Make `node` hold `value`, changing as little as possible: a scalar keeps its comments; a mapping keeps its other
  * keys (unless `prune` says to drop them); a list keeps its style. Returns the node to put in place (maybe new).
  */
+/** A merge-patch's object with its null (deleting) members dropped, at every depth. */
+function withoutNulls(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => [k, isPlainObject(v) ? withoutNulls(v as Record<string, unknown>) : v]));
+}
+
 function setNode(doc: Document, node: unknown, value: unknown, prune: (key: string) => boolean, schema: Field | undefined): Node {
   if (isPlainObject(value)) {
-    if (!isMap(node)) return createNode(doc, value);
+    // a mapping that isn't there yet: null means "leave it out" here too (a merge-patch deletes it), not `key: null`
+    if (!isMap(node)) return createNode(doc, withoutNulls(value));
     const fields = schema?.t === 'object' ? schema.fields : undefined;
     for (const [k, v] of Object.entries(value)) {
       if (v === null || v === undefined) {
@@ -59,8 +65,16 @@ function setNode(doc: Document, node: unknown, value: unknown, prune: (key: stri
         continue;
       }
       const pair = node.items.find((it) => (isScalar(it.key) ? it.key.value : it.key) === k);
-      if (pair) pair.value = setNode(doc, pair.value, v, prune, fields?.[k]);
-      else node.items.push(new Pair(doc.createNode(k), createNode(doc, v)));
+      if (pair) {
+        pair.value = setNode(doc, pair.value, v, prune, fields?.[k]);
+        // a patch that deleted everything in a mapping takes the mapping too, rather than leave `key: {}`
+        if (isPlainObject(v) && isMap(pair.value) && pair.value.items.length === 0 && !pair.value.commentBefore && !pair.value.comment) node.delete(k);
+      }
+      else {
+        // a new mapping: its nulls mean "leave it out", as they do in one that exists
+        const fresh = isPlainObject(v) ? withoutNulls(v) : v;
+        if (!isPlainObject(fresh) || Object.keys(fresh).length) node.items.push(new Pair(doc.createNode(k), createNode(doc, fresh)));
+      }
     }
     // PUT: keys the schema knows and the body left out go; keys the schema doesn't know stay (they're the user's)
     if (fields) {

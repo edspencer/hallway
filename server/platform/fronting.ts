@@ -1,8 +1,11 @@
-// The privileged half of fronted mode (D47), per platform: the only things `hallway setup` runs as root, and
-// `hallway teardown` undoes. Each is a fixed job that takes no configuration from anything a user-level process can
-// write later:
-//   redirect   loopback 443 → proxy.httpsPort and 80 → proxy.httpPort (pf on macOS, nftables on Linux)
-//   trust      Hallway's local CA root in the system trust store
+// The OS-specific half of fronted mode (D47, D65), per platform: what `hallway setup` runs outside Hallway's own files
+// and jobs, and `hallway teardown` undoes. The root parts are fixed jobs that take no configuration from anything a
+// user-level process can write later:
+//   redirect   Linux, System-wide tier only: loopback 443 → proxy.httpsPort and 80 → proxy.httpPort (nftables). macOS
+//              needs none in any tier: launchd binds loopback 443 and 80 for a LaunchAgent (`lowPorts: 'sockets'`,
+//              D65). Its old pf redirect is only ever removed (`unredirect`), from an install made before the tiers.
+//   trust      Hallway's local CA root in the system trust store (System-wide), or for this user only (No admin: the
+//              login keychain on macOS, which asks for the user's own password; the user's NSS database on Linux)
 //   resolver   custom domains only: `<base>` and everything under it → Hallway's dnsmasq on 127.0.0.1:<dnsPort>
 // Pure: each recipe is the files Hallway writes (into generated/setup/, as the user) and the commands that install
 // them, so `hallway setup --print` shows exactly what would run and the tests pin it on every OS.
@@ -19,18 +22,6 @@ export interface Cmd {
   /** Its error output is expected noise (a mayFail command's complaint), so it isn't shown. sudo prompts on the
    *  terminal, not on stderr, so a password prompt still is. */
   quiet?: boolean;
-}
-
-/** Whether the firewall ignores loopback altogether, which leaves the redirect installed but dead (macOS: pf's
- *  `set skip on lo0`, D64). The words are the platform's. */
-export interface LoopbackSkip {
-  /** true: loopback is skipped; false: it isn't; null: couldn't check (it needs root, and `sudo -n` can't prompt). */
-  skipped: boolean | null;
-  /** For people: what's wrong, or why it couldn't be checked. */
-  message: string;
-  fix: string;
-  /** `hallway setup` may clear it by itself: only when that can't take anyone else's rules with it. */
-  repairable: boolean;
 }
 
 /** A file Hallway writes, as the user, into generated/setup/, for a command to install as root at `dest`. */
@@ -64,8 +55,8 @@ export interface FrontingEnv {
   base: string;
   /** The user's home directory (Linux: the NSS database Chrome reads). */
   userHome: string;
-  /** Tools found on this machine (Linux; macOS's are always there). */
-  tools: { nft: string | null; certutil: string | null; systemctl: string | null; resolved: boolean; caStore: 'debian' | 'fedora' | null };
+  /** Tools found on this machine (Linux; macOS's are always there). `nssdb`: ~/.pki/nssdb exists (Chrome has run). */
+  tools: { nft: string | null; certutil: string | null; nssdb: boolean; systemctl: string | null; resolved: boolean; caStore: 'debian' | 'fedora' | null };
 }
 
 export class FrontingUnsupported extends Error {}
@@ -73,12 +64,22 @@ export class FrontingUnsupported extends Error {}
 export interface Fronting {
   /** Set where fronted mode can't work at all (Windows, D58): why, for `hallway setup` to refuse with up front. */
   unsupported?: string;
-  /** The redirect from 443/80 to Caddy's ports. Throws FrontingUnsupported with what to install when it can't. */
-  redirect(env: FrontingEnv): Recipe;
+  /** How loopback 443 and 80 reach Caddy's ports: `sockets`, launchd's, for user-level jobs, in every tier (macOS,
+   *  D65); `redirect`, a root redirect, in the System-wide tier only (Linux). */
+  lowPorts: 'sockets' | 'redirect';
+  /** The redirect from 443/80 to Caddy's ports (`lowPorts: 'redirect'`). Throws FrontingUnsupported with what to
+   *  install when it can't. */
+  redirect?(env: FrontingEnv): Recipe;
+  /** Remove the redirect; on macOS, the pf redirect an install from before the tiers has. */
   unredirect(env: FrontingEnv): Recipe;
-  /** Trust Hallway's root, and remove it again. */
+  /** Trust Hallway's root system-wide (the System-wide tier), and remove it again. */
   trust(env: FrontingEnv): Recipe;
   untrust(env: FrontingEnv): Recipe;
+  /** Trust it for this user only (the No admin tier), with no admin rights, and remove it again. */
+  userTrust?(env: FrontingEnv): Recipe;
+  userUntrust?(env: FrontingEnv): Recipe;
+  /** Is it trusted for this user (the user-only kind, not the system-wide one)? */
+  userTrusted?(env: FrontingEnv, run: Runner): Promise<boolean>;
   /** Send the custom base domain to Hallway's dnsmasq, and stop. */
   resolver(env: FrontingEnv): Recipe;
   unresolver(env: FrontingEnv): Recipe;
@@ -86,13 +87,11 @@ export interface Fronting {
   installed(env: FrontingEnv): { redirect: string[]; trust: string[]; resolver: string[] };
   /** A read-only command whose output contains `rootSha1` iff the root is in the system store; null: compare files. */
   trustedQuery?(env: FrontingEnv): Cmd;
-  /** Where the firewall can be told to ignore loopback (macOS): is it? Read-only commands only, through `sudo -n`. */
-  loopbackSkip?(run: Runner): Promise<LoopbackSkip>;
-  /** Clear that skip, then load the redirect again; `when` is its `why` for a plan that couldn't check yet. */
-  unskip?(): Recipe & { when: string };
   /** Where trusting (or untrusting) a certificate raises the OS's own dialog even under sudo (macOS): what it is, for
    *  the warning setup gives before it asks to continue (D67). */
   trustDialog?: string;
+  /** The same for trusting it for this user only: the user's own password, never an administrator's (D65). */
+  userTrustDialog?: string;
   /** Hallway's own service manager words for people (`LaunchAgent` / `systemd user unit`). */
   userServiceNoun: string;
   /** Find the tools the recipes need. */

@@ -284,7 +284,7 @@ describe('lost at last reboot', () => {
 });
 
 describe('local domains (D63)', () => {
-  const f = (o: Partial<FrontingInfo> = {}): FrontingInfo => ({ unsupported: null, mode: 'direct', dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null, ...o });
+  const f = (o: Partial<FrontingInfo> = {}): FrontingInfo => ({ unsupported: null, mode: 'direct', trust: null, dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null, ...o });
   const st = (fronting: FrontingInfo | null | undefined, localDomains?: boolean) =>
     ({ fronting, config: { config: { dashboard: localDomains === undefined ? {} : { hints: { localDomains } } } } }) as Parameters<typeof domainsView>[0];
 

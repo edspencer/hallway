@@ -51,7 +51,7 @@ export type { Listener, ProcessInfo, RawListener, Supervisor } from './listeners
 export { bindScope, connectAddress, mergeListeners } from './listeners.js';
 export type { Runner, RunResult, ServiceManager, ServiceSpec, ServiceStatus } from './services.js';
 export { ServiceManagerError, defaultRunner } from './services.js';
-export type { Cmd, Fronting, FrontingEnv, LoopbackSkip, Recipe, StagedFile } from './fronting.js';
+export type { Cmd, Fronting, FrontingEnv, Recipe, StagedFile } from './fronting.js';
 export { FrontingUnsupported, MARK, dnsmasqConf } from './fronting.js';
 
 export class UnsupportedPlatformError extends Error {

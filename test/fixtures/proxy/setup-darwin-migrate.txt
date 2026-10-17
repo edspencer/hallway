@@ -1,0 +1,25 @@
+! Moving from System-wide to No admin: what the old tier added is removed (that needs sudo, this once).
+
+1. [Hallway] Write Caddy's configuration, routing *.localhost to your apps and https://hallway.localhost to the dashboard, and check it with `caddy validate`
+     /home/me/.hallway/generated/caddy.json
+     /home/me/.hallway/generated/fallback.html
+2. [Hallway] Run Caddy as you, on 127.0.0.1:4443 and :4480, as a LaunchAgent (hallway.caddy), with its admin API on a private socket
+     /home/me/.hallway/state/caddy/admin.sock
+3. [Hallway] Have launchd hold loopback ports 443 and 80 (to Caddy's 4443 and 4480) for you, on 127.0.0.1 and ::1: a LaunchAgent for each, which launchd starts on the first connection to pass it on. No sudo: launchd binds them
+     hallway.forward.https  127.0.0.1:443 → 127.0.0.1:4443
+     hallway.forward.https6  [::1]:443 → 127.0.0.1:4443
+     hallway.forward.http  127.0.0.1:80 → 127.0.0.1:4480
+     hallway.forward.http6  [::1]:80 → 127.0.0.1:4480
+4. [you] Trust Hallway's local certificate authority for your account only (your login keychain): no administrator needed, macOS asks for your own Touch ID or password
+     $ security add-trusted-cert -r trustRoot -k /home/me/Library/Keychains/login.keychain-db /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
+     (asks: macOS, for your Touch ID or password, to change *your* certificate trust settings. This is not an administrator prompt)
+5. [sudo] Remove the pf redirect an older Hallway installed (the hallway.pf LaunchDaemon and the com.apple/hallway pf anchor): launchd's sockets do its job now, with no root
+     $ sudo launchctl bootout system/hallway.pf   (may fail harmlessly)
+     $ sudo pfctl -a com.apple/hallway -F all   (may fail harmlessly)
+     $ sudo rm -f /Library/LaunchDaemons/hallway.pf.plist /etc/pf.anchors/hallway
+6. [sudo] Remove Hallway's local certificate authority from the System keychain (No admin doesn't trust it system-wide)
+     $ sudo security delete-certificate -c 'Hallway Local CA' /Library/Keychains/System.keychain   (may fail harmlessly)
+7. [Hallway] Switch config.yaml to fronted mode, No admin: links become https://<app>.localhost
+8. [Hallway] Check https://hallway.localhost answers through launchd's socket, with Hallway's certificate
+
+Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

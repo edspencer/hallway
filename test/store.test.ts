@@ -451,3 +451,25 @@ describe('backups', () => {
     assert.ok(fs.existsSync(path.join(b, 'removed', 'x')), 'removed/ is never pruned');
   });
 });
+
+describe('config.yaml merge-patches write no nulls and leave no empty mappings', () => {
+  test('a null in a mapping that is not there yet is left out; emptying a mapping removes it', async () => {
+    const t = await tmpStore();
+    try {
+      const file = path.join(t.home, 'config.yaml');
+      fs.writeFileSync(file, 'port: 5251\n');
+      t.store.loadAll();
+      await t.store.patchConfig({ mode: 'fronted', domain: { base: null, dashboard: null }, proxy: { trust: 'user', scheme: null } });
+      let text = fs.readFileSync(file, 'utf8');
+      assert.ok(!/null/.test(text), text);
+      assert.ok(!/domain/.test(text), text);
+      assert.match(text, /proxy:\n {2}trust: user\n/);
+      await t.store.patchConfig({ mode: 'direct', proxy: { trust: null } });
+      text = fs.readFileSync(file, 'utf8');
+      assert.ok(!/proxy/.test(text), text);
+      assert.equal(t.store.currentConfig().proxy.trust, null);
+    } finally {
+      t.cleanup();
+    }
+  });
+});
