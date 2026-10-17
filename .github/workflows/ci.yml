@@ -190,7 +190,7 @@ jobs:
         timeout-minutes: 3
         run: |
           for f in "$(ls -d ${TMPDIR:-/tmp}/hw-fr-* 2>/dev/null | head -1)"/data/logs/*.log; do [ -f "$f" ] && { echo "== $f"; tail -50 "$f"; }; done; true
-          if [ "$RUNNER_OS" = macOS ]; then sudo -n pfctl -a com.apple/hallway -s nat 2>&1; for l in https https6 http http6; do launchctl print "gui/$(id -u)/hallway.forward.$l" 2>&1 | grep -E '^\s*(state|pid|runs|last exit code) ' ; done; fi; true
+          if [ "$RUNNER_OS" = macOS ]; then sudo -n pfctl -a com.apple/hallway -s nat 2>&1; for l in https https6 http http6; do launchctl print "gui/$(id -u)/hallway.forward.$l" 2>&1 | grep -E '^\s*(state|pid|runs|last exit code) ' || true; done; fi; true
 
   # ---------------------------------------------------------------------------------------------------------------
   # Docs site (website/). The site is its own npm project, with its own package.json and lockfile; the root
