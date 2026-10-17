@@ -15,6 +15,11 @@ With a custom base, the dashboard lives at the bare apex (`https://myname.intern
 (`https://slides.myname.internal`). Everything in [fronted mode](/networking/fronted-mode/) applies; a custom domain
 only adds a way to resolve the names.
 
+A custom domain needs the **System-wide** tier (`--trust system`): pointing the system resolver at it takes an
+administrator, and plain HTTP on a name other than `localhost` isn't a secure context. `--domain` implies
+`--trust system`, and `--domain` with `--trust user` or `--trust none` is refused. Moving a custom-domain setup to
+another tier goes back to `*.localhost` and removes the domain's resolver entry and dnsmasq.
+
 ## Choosing a domain
 
 **Use a name under `.internal`.** ICANN reserved `.internal` for private use in 2024, so it will never be delegated
@@ -39,7 +44,8 @@ a public certificate authority.
 
 They work. Nothing stops you resolving names under an undelegated TLD on your own machine, and if that TLD is
 delegated later, your setup keeps working: your machine's resolver configuration wins, and since fronted mode is
-always HTTPS with a locally trusted CA, the `.dev`-style HSTS failure doesn't apply. You only lose the ability to
+always HTTPS with a locally trusted CA (custom domains are System-wide only), the `.dev`-style HSTS failure doesn't
+apply. You only lose the ability to
 reach the real public names.
 
 But ICANN's 2026 round of new top-level domains is under way, so `hallway setup` and `hallway doctor` check your TLD

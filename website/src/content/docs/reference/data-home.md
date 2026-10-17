@@ -70,7 +70,7 @@ same reasons.)
   before anything destructive.
 
 Deleting `state/` loses history (uptime, what was observed, the lost-at-reboot notice) but nothing you wrote. In
-fronted mode, though, `state/caddy/` holds the certificate authority your system trusts: delete it and you need
+fronted mode, though, `state/caddy/` holds the certificate authority your machine (or your account) trusts: delete it and you need
 `hallway setup` again.
 
 ## Keeping it in git
@@ -88,9 +88,10 @@ Hallway writes nowhere else, except:
   the scheduled task `\hallway.daemon` and its files in `%LOCALAPPDATA%\hallway\tasks\` on Windows;
 - <span class="ms ms--shipped">v1</span> one per managed service: `~/Library/LaunchAgents/hallway.app.<slug>.plist`
   on macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on Linux, `\hallway.app.<slug>` on Windows;
-- <span class="ms ms--shipped">v1</span> during `hallway setup` only (macOS and Linux): the user-level Caddy (and dnsmasq) jobs, and the
-  privileged pieces it prints and runs through `sudo`: the 443/80 redirect, the trusted root certificate and, for a
-  custom domain, the resolver entry. The full list is in
+- <span class="ms ms--shipped">v1</span> during `hallway setup` only (macOS and Linux): the user-level Caddy (and dnsmasq) jobs, on
+  macOS the launchd forwarders for ports 443 and 80, the root certificate trusted for your account (No admin) and,
+  in the System-wide tier, the privileged pieces it prints and runs through `sudo`: the system trust, on
+  Linux the 443/80 redirect and, for a custom domain, the resolver entry. The full list is in
   [Setup](/networking/setup-and-doctor/#what-it-changes-outside-the-data-home); `hallway teardown` removes them.
 - <span class="ms ms--shipped">v2</span> npm's own download cache (usually `~/.npm`), which the `npm install` behind
   `hallway thumbs enable` passes through. The browser itself goes into `cache/browser/`.

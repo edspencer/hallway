@@ -71,7 +71,8 @@ Done when:
 user units on Linux); Caddy through its admin API; fronted mode on `*.localhost` with HTTPS; Host rewriting; the
 fallback page; `hallway setup` and `teardown`; networking checks in `hallway doctor`; custom domains (dnsmasq, and
 `/etc/resolver` on macOS or a `systemd-resolved` drop-in on Linux); the "exposed" indicator; "lost at last reboot";
-log rotation.
+log rotation. Since then, `hallway setup` has [three tiers](/networking/fronted-mode/#three-tiers), two of which need
+no administrator (No admin and No prompts), and on macOS launchd holds ports 443 and 80 instead of a pf redirect.
 
 **How it was checked:** criteria 1–4 and 7–11 run for real on Linux and on CI's macOS runners (setup with real
 `sudo`, a squatter on 443, a custom domain, teardown leaving nothing behind), with `curl` and the system trust store
@@ -129,7 +130,7 @@ third. Hallway runs natively there (not through WSL) and never asks for administ
 - **What works:** the daemon, the dashboard, health checks and uptime, bookmarks, the
   [port scanner](/concepts/apps/#observed-listeners-the-scanner) (0.4.0), MCP, the agent guide, the CLI, and
   [managed services](/concepts/services/#windows) as per-user scheduled tasks that start at logon (0.5.0).
-- **What doesn't:** [fronted mode](/networking/fronted-mode/). Its parts (the 443/80 redirect, trusting a root
+- **What doesn't:** [fronted mode](/networking/fronted-mode/). Its parts (ports 443 and 80, trusting a root
   certificate, a custom domain's resolver) have no user-level equivalent on Windows, so `hallway setup` refuses and
   apps keep their `http://localhost:<port>` addresses. Services don't run while you're logged off: Linux's lingering
   has no Windows equivalent without a stored password or administrator rights.
@@ -140,10 +141,10 @@ third. Hallway runs natively there (not through WSL) and never asks for administ
 
 ## What is left
 
-- **A run on a real Mac** (v2 criterion 5). Still unverified there: Safari, Chrome and Firefox accepting Hallway's
-  certificate, and Safari resolving `*.localhost`; services and the daemon coming back after a logout or a reboot
-  (`RunAtLoad`), and "Lost at last reboot" after a real one; the pf redirect surviving another tool reloading
-  `/etc/pf.conf`, and a macOS update. On Linux, a real reboot (with lingering on) hasn't been run either.
+- **A run on a real Mac** (v2 criterion 5). Safari, Chrome and Apple's `curl` have accepted a root trusted for the
+  user only (the No admin tier's way); still unverified there: Firefox, and Safari resolving `*.localhost`; services,
+  the daemon and launchd's sockets on 443 and 80 coming back after a logout or a reboot (`RunAtLoad`), and "Lost at
+  last reboot" after a real one. On Linux, a real reboot (with lingering on) hasn't been run either.
 - **A run on a real Windows desktop**, for the [Windows](#windows) items above.
 - **Service controls in the dashboard.** The detail drawer doesn't yet have start, stop and restart buttons or a live
   log tail; the CLI and the [HTTP API](/reference/http-api/) do.

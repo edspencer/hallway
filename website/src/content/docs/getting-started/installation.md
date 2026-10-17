@@ -28,7 +28,7 @@ too. If the service is already running, `npx hallway` just tells you where and e
 
 The banner also says whether **local domains** are on. They're off until you run
 [`hallway setup`](/networking/setup-and-doctor/), so `https://hallway.localhost` isn't there yet (a browser says the
-connection was refused): use `http://localhost:4255`, or turn them on. The dashboard explains them in a panel you can
+connection was refused): use `http://localhost:4255`, or turn them on (with no admin rights, if you like). The dashboard explains them in a panel you can
 dismiss.
 
 `hallway service install` registers the daemon with your OS's own service manager and starts it, so the dashboard is
@@ -71,9 +71,9 @@ hallway open         # open the dashboard in your browser
 | --- | --- |
 | **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort (per-user scheduled tasks): everything but fronted mode works; see [the roadmap](/roadmap/#windows) for what hasn't been checked on a real Windows desktop. |
 | **Node** | 22.13 or later (for the built-in `node:sqlite` that holds uptime history). |
-| **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`. |
-| **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional, and macOS and Linux only. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and one guided sudo step. On Linux also systemd, `nft` and a system CA store. See [Setup](/networking/setup-and-doctor/). |
-| **For custom domains** <span class="ms ms--shipped">v1</span> | Optional. dnsmasq (Homebrew's on macOS, which setup installs; on Linux the `dnsmasq-base` package or similar) and, on Linux, `systemd-resolved`. |
+| **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`, and only for fronted mode's System-wide tier (or to leave it). |
+| **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional, and macOS and Linux only. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and Hallway installed with `npm i -g` (on macOS setup won't run from npx). Then it depends on the [tier](/networking/fronted-mode/#three-tiers): No admin needs your own password or Touch ID once on macOS, and `certutil` on Linux; System-wide needs one guided sudo step, and on Linux systemd, `nft` and a system CA store; No prompts needs nothing more. See [Setup](/networking/setup-and-doctor/). |
+| **For custom domains** <span class="ms ms--shipped">v1</span> | Optional, System-wide tier only. dnsmasq (Homebrew's on macOS, which setup installs; on Linux the `dnsmasq-base` package or similar) and, on Linux, `systemd-resolved`. |
 | **For screenshots** <span class="ms ms--shipped">v2</span> | Optional. About 300 MB of disk: `hallway thumbs enable` downloads a headless browser into the data home. See [Thumbnails](/concepts/thumbnails/). |
 
 ## Why port 4255?
@@ -87,5 +87,5 @@ macOS's AirPlay Receiver on 5000 and 7000, and of the range Hallway assigns to n
 
 Everything Hallway knows lives in one directory, the **data home**: `~/.hallway`, or wherever `$HALLWAY_HOME` points.
 See [The data home](/reference/data-home/). Nothing is written outside it except the service definitions (launchd plists,
-systemd user units, or on Windows scheduled tasks and their files in `%LOCALAPPDATA%\hallway\tasks\`) for the daemon and any services you ask for, and, only during `hallway setup`, the files listed in
+systemd user units, or on Windows scheduled tasks and their files in `%LOCALAPPDATA%\hallway\tasks\`) for the daemon and any services you ask for, and, only during `hallway setup`, the jobs, trust and files listed in
 [Setup, teardown and doctor](/networking/setup-and-doctor/#what-it-changes-outside-the-data-home).

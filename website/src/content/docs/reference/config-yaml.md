@@ -18,14 +18,16 @@ domain:
   dashboard: hallway.localhost  # where the dashboard lives in fronted mode.
                                 # Default: "hallway.localhost" when base is "localhost";
                                 # the bare apex "<base>" for any custom domain.
-  tls: true                     # fronted mode is always HTTPS; kept explicit for clarity
+  tls: true                     # kept for clarity; plain HTTP is proxy.scheme: http
   dnsPort: 4253                 # custom domains only: where Hallway's own dnsmasq answers
 
 proxy:
   caddy: null                   # the Caddy binary; default: `caddy` on your PATH, else Homebrew's
   httpsPort: 4443               # the loopback port Caddy serves HTTPS on (as you)
   httpPort: 4480                # the loopback port Caddy serves HTTP on (a redirect to HTTPS)
-  publicPort: 443               # the HTTPS port in links; set it to httpsPort for no redirect and no sudo
+  publicPort: 443               # the port in links (setup sets 4443/4480 on Linux for the user/none tiers)
+  trust: null                   # user | system | none: the tier `hallway setup` set up (written by setup)
+  scheme: https                 # https | http (the none tier)
 
 probe:
   intervalSeconds: 60
@@ -65,15 +67,17 @@ dashboard:
 | --- | --- | --- |
 | `port` | `4255` | The daemon's port. `--port` and `$PORT` override it. Never 5000 or 7000 (macOS's AirPlay Receiver). |
 | `version` | `1` | The data home's format. Always `1` for now; a file written by a newer Hallway is reported, not misread. |
-| `mode` | `direct` | `direct` links to `http://localhost:<port>`; `fronted` serves apps through Caddy at `https://<slug>.<base>`. Set by `hallway setup` and `hallway teardown`, rather than by hand. See [modes](/concepts/modes/). <span class="ms ms--shipped">v1</span> |
+| `mode` | `direct` | `direct` links to `http://localhost:<port>`; `fronted` serves apps through Caddy at `https://<slug>.<base>` (or as the tier says: `proxy.scheme`, `proxy.publicPort`). Set by `hallway setup` and `hallway teardown`, rather than by hand. See [modes](/concepts/modes/). <span class="ms ms--shipped">v1</span> |
 | `domain.base` | `localhost` | Base domain for fronted mode. See [Custom domains](/networking/custom-domains/). <span class="ms ms--shipped">v1</span> |
 | `domain.dashboard` | `hallway.localhost`, or `<base>` | The dashboard's hostname in fronted mode. Its first label is then a reserved slug. <span class="ms ms--shipped">v1</span> |
-| `domain.tls` | `true` | Fronted mode is always HTTPS. <span class="ms ms--shipped">v1</span> |
+| `domain.tls` | `true` | Kept for clarity; whether links are HTTPS is `proxy.scheme`. <span class="ms ms--shipped">v1</span> |
 | `domain.dnsPort` | `4253` | Custom domains only: the loopback port Hallway's own dnsmasq answers on; the resolver entry points at it. <span class="ms ms--shipped">v1</span> |
 | `proxy.caddy` | `caddy` on your `PATH`, else Homebrew's | The Caddy binary (2.7 or later). <span class="ms ms--shipped">v1</span> |
 | `proxy.httpsPort` | `4443` | The loopback port Caddy, running as you, serves HTTPS on. <span class="ms ms--shipped">v1</span> |
-| `proxy.httpPort` | `4480` | The loopback port Caddy serves HTTP on (a redirect to HTTPS). <span class="ms ms--shipped">v1</span> |
-| `proxy.publicPort` | `443` | The HTTPS port in links: 443 once `hallway setup` has redirected it to `httpsPort`. Set it to the same value as `httpsPort` for fronted mode with no redirect (links then carry `:4443`). See [Fronted mode](/networking/fronted-mode/#fronted-mode-without-the-redirect). <span class="ms ms--shipped">v1</span> |
+| `proxy.httpPort` | `4480` | The loopback port Caddy serves HTTP on: a redirect to HTTPS, or the apps themselves with `scheme: http`. <span class="ms ms--shipped">v1</span> |
+| `proxy.publicPort` | `443` | The port in links: 443 (or 80 with `scheme: http`), which `hallway setup` hands to Caddy's ports. On Linux, setup sets it to `httpsPort` (No admin) or `httpPort` (No prompts), since nothing holds 443 or 80 there, and links then carry the port. See [Fronted mode](/networking/fronted-mode/#three-tiers). <span class="ms ms--shipped">v1</span> |
+| `proxy.trust` | none | The [tier](/networking/fronted-mode/#three-tiers) `hallway setup` set up, written by setup: `user` trusts Hallway's certificate for your account only (no admin), `system` for every account (admin; custom domains need it), `none` serves plain HTTP. A setup from before the tiers counts as `system`. Change it by running `hallway setup --trust …`, not by hand. <span class="ms ms--shipped">v1</span> |
+| `proxy.scheme` | `https` | The scheme in links. `http` is the `none` tier: Caddy serves plain HTTP and redirects nothing. Written by setup. <span class="ms ms--shipped">v1</span> |
 | `probe.intervalSeconds` | `60` | Seconds between health probes (±10% jitter). |
 | `probe.liveIntervalSeconds` | `15` | The interval while a dashboard is connected. |
 | `probe.timeoutMs` | `5000` | An HTTP probe slower than this counts as unhealthy. |

@@ -25,7 +25,7 @@ What it covers:
 4. How to add bookmarks.
 5. How to check status: `hallway status --json` or `GET /api/state`, including what was lost at the last reboot.
 6. The HTTP API, the MCP server and the optional hook, and that `hallway setup` and `teardown` are the user's to run
-   (they need sudo).
+   (they install jobs, change certificate trust and may need sudo or a password dialog).
 7. The file formats, generated from the same schema the validator uses, so the guide can't drift from the code.
 8. [Etiquette](/agents/overview/#etiquette-for-agents): never change a port, never delete outside `apps/` and
    `bookmarks/`, prefer `adhoc` for throwaway servers, leave machine-written directories alone.
