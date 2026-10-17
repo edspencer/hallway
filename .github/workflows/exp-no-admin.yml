@@ -1,0 +1,27 @@
+# Scratch experiments for a no-admin fronted mode. Lives only on the exp/no-admin-fronting branch; never merged.
+name: exp-no-admin
+on:
+  push:
+    branches: [exp/no-admin-fronting]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exp:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: macOS experiments
+        if: runner.os == 'macOS'
+        run: bash experiments/no-admin/macos.sh
+      - name: Linux experiments
+        if: runner.os == 'Linux'
+        run: bash experiments/no-admin/linux.sh
