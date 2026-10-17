@@ -113,7 +113,7 @@ try {
   await until('the squatter on 443', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0, 10000);
   await sleep(1500);
   await check('setup refuses, before doing anything', async () => {
-    const r = hw('setup');
+    const r = hw('setup', '--yes');
     assert.notEqual(r.code, 0);
     assert.match(r.out, /port 443|443 answers/);
     assert.match(r.out, /Setup stopped before doing anything/);
@@ -132,8 +132,16 @@ try {
     assert.deepEqual(leftovers(), []);
   });
 
+  step('D67: with no terminal and no --yes, setup refuses (it would ask first), and changes nothing');
+  await check('setup with no TTY', async () => {
+    const r = hw('setup');
+    assert.equal(r.code, 2, 'a usage error');
+    assert.match(r.out, /no terminal to ask on: run it in one, or pass --yes/);
+    assert.deepEqual(leftovers(), []);
+  });
+
   step('criteria 1–2: setup, for real');
-  must('setup');
+  must('setup', '--yes');
   const ca = path.join(data, 'state', 'caddy', 'data', 'pki', 'authorities', 'local', 'root.crt');
   await check('https://hallway.localhost serves the dashboard with a certificate the system trusts', async () => {
     const r = curl('https://hallway.localhost/api/health');
@@ -160,7 +168,7 @@ try {
 
   step('idempotent: setup again does only what is missing');
   await check('re-running setup', async () => {
-    const out = must('setup');
+    const out = must('setup', '--yes');
     assert.match(out, /already done/);
   });
 
@@ -171,6 +179,45 @@ try {
     const bad = checks.filter((c) => c.status === 'fail' && ['caddy', 'caddy-service', 'caddy-config', 'caddy-socket', 'caddy-ports', 'ports-80-443', 'redirect', 'ca'].includes(c.id));
     assert.deepEqual(bad, []);
   });
+
+  if (darwin) {
+    // the first real-Mac run (research notes, 2026-10-17): another tool had loaded a ruleset with `set skip on lo0`,
+    // so pf ignored loopback and with it the redirect. Here it's macOS's own pf.conf with the skip in front, as a
+    // VPN's or a firewall app's ruleset would have it; /etc/pf.conf itself is untouched.
+    step("D64: something sets `set skip on lo0` → doctor names it, setup clears it, and so does doctor's fix");
+    const RELOAD = 'sudo pfctl -f /etc/pf.conf && sudo launchctl kickstart -k system/hallway.pf';
+    const skipLoopback = () => {
+      const r = sh('sh', ['-c', "(echo 'set skip on lo0'; cat /etc/pf.conf) | sudo -n pfctl -f -"]);
+      assert.equal(r.code, 0, r.out);
+      assert.match(sh('sudo', ['-n', 'pfctl', '-s', 'Interfaces', '-v']).out, /^lo0 \(skip\)/m);
+    };
+    const health = () => status(curl('https://hallway.localhost/api/health'));
+    const redirectCheck = () => {
+      const r = hw('doctor', '--json');
+      return JSON.parse(r.out.slice(r.out.indexOf('{'))).checks.find((c) => c.id === 'redirect');
+    };
+    await check('with the skip, 443 stops answering and doctor says why, with the fix', async () => {
+      skipLoopback();
+      await until('443 to stop answering', async () => health() !== 200, 10000);
+      const c = redirectCheck();
+      assert.equal(c.status, 'fail');
+      assert.match(c.message, /^pf is set to skip loopback \(lo0\), so the redirect is ignored; something other than Hallway set this/);
+      assert.ok(c.fix.includes(RELOAD), c.fix);
+    });
+    await check('setup clears it (the main ruleset is stock, so it may), and 443 answers again', async () => {
+      assert.match(must('setup', '--yes'), /\$ sudo pfctl -f \/etc\/pf\.conf/);
+      await until('443 through the redirect', async () => health() === 200, 15000);
+      assert.doesNotMatch(sh('sudo', ['-n', 'pfctl', '-s', 'Interfaces', '-v']).out, /lo0 \(skip\)/);
+      assert.equal(redirectCheck().status, 'pass');
+    });
+    await check("doctor's fix, run as it's printed, does the same", async () => {
+      skipLoopback();
+      await until('443 to stop answering', async () => health() !== 200, 10000);
+      const r = sh('sh', ['-c', RELOAD.replace(/sudo /g, 'sudo -n ')]);
+      assert.equal(r.code, 0, r.out);
+      await until('443 through the redirect', async () => health() === 200, 15000);
+    });
+  }
 
   step('criterion 7: with the daemon stopped, the dashboard host serves the fallback page');
   must('service', 'uninstall');
@@ -187,7 +234,7 @@ try {
   await until('the daemon again', async () => (await fetch('http://localhost:4255/api/health').catch(() => null))?.ok);
 
   step('criterion 9: a custom domain');
-  must('setup', '--domain', 'myname.internal');
+  must('setup', '--yes', '--domain', 'myname.internal');
   await check('https://myname.internal is the dashboard', async () => {
     const r = await until('myname.internal', async () => {
       const x = curl('https://myname.internal/api/health');
@@ -214,13 +261,13 @@ try {
 
   step('criterion 10: .local is refused');
   await check('setup --domain foo.local', async () => {
-    const r = hw('setup', '--domain', 'foo.local');
+    const r = hw('setup', '--yes', '--domain', 'foo.local');
     assert.notEqual(r.code, 0);
     assert.match(r.out, /mDNS/);
   });
 
   step('criterion 11: teardown leaves nothing behind; the dashboard keeps working directly');
-  must('teardown');
+  must('teardown', '--yes');
   await check('no files, jobs, redirect or trusted root left', async () => {
     assert.deepEqual(leftovers(), []);
     if (darwin) {
@@ -240,10 +287,10 @@ try {
     }, 10000);
     assert.match(s.apps.find((a) => a.slug === 'review').url, /^http:\/\/localhost:/);
   });
-  await check('teardown again: nothing to undo', async () => assert.match(must('teardown'), /Nothing to undo/));
+  await check('teardown again: nothing to undo', async () => assert.match(must('teardown', '--yes'), /Nothing to undo/));
 } finally {
   step('clean up');
-  hw('teardown');
+  hw('teardown', '--yes');
   hw('service', 'uninstall');
   review.child.kill();
   other.child.kill();

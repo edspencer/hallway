@@ -2,7 +2,8 @@
 // sections follow `dashboard.sections` in config.yaml: apps as doors, the observed tray ("Found running — not yet
 // named"), and bookmarks by the front door. The tab title and favicon carry the status (D22).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AppView, DashboardSection, ObservedListener, StateResponse } from '../shared/api';
+import type { AppView, DashboardSection, FrontingResponse, ObservedListener, StateResponse } from '../shared/api';
+import { getFronting, setHints } from './api';
 import { useAmbientStatus } from './ambient';
 import { Bookmarks, NewGroup } from './components/Bookmarks';
 import { Door } from './components/Door';
@@ -10,11 +11,13 @@ import { Drawer } from './components/Drawer';
 import { FirstRun, Unreachable } from './components/Empty';
 import { Header } from './components/Header';
 import { Help } from './components/Help';
+import { LocalDomainsDialog, LocalDomainsPanel } from './components/LocalDomains';
 import { LostBanner } from './components/Lost';
 import { ObservedTray, listenerName } from './components/Observed';
 import { ProblemBanner } from './components/Problems';
 import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
+import { checksSummary, domainsView, hostOfUrl } from './lib/domains';
 import { matchScore } from './lib/filter';
 import { displayUrl, homeDir, hostOf } from './lib/format';
 import { countStates, isScanning, subtitle } from './lib/status';
@@ -80,6 +83,8 @@ export function App() {
   const [filter, setFilter] = useState('');
   const [drawer, setDrawer] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const [domainsOpen, setDomainsOpen] = useState(false);
+  const [checks, setChecks] = useState<FrontingResponse | null>(null);
   const toasts = useToasts();
   const filterRef = useRef<HTMLInputElement>(null);
 
@@ -93,6 +98,29 @@ export function App() {
   }, [state]);
   const counts = useMemo(() => (state && state.daemon.providers.health ? countStates(state.apps) : null), [state]);
   useAmbientStatus(counts, 'Hallway');
+
+  // local domains (D63): in fronted mode, doctor's checks for the header, once on load and again when the setup changes
+  const domains = state ? domainsView(state) : null;
+  const frontedKey = domains?.header === 'on' ? `${domains.fronting?.dashboardUrl} ${domains.fronting?.appUrl}` : null;
+  const loadChecks = useCallback(async (fresh = false) => {
+    setChecks(null);
+    try {
+      setChecks(await getFronting(fresh));
+    } catch {
+      /* an older daemon, or it went away: the header keeps saying "checking" rather than guess */
+    }
+  }, []);
+  useEffect(() => {
+    if (frontedKey) void loadChecks();
+  }, [frontedKey, loadChecks]);
+  const setPanel = useCallback(
+    async (show: boolean) => {
+      const r = await setHints({ localDomains: show });
+      if (!r.ok) toasts.push(`Couldn’t ${show ? 'show' : 'dismiss'} it: ${r.error}`, 'error');
+      else if (!show) toasts.push('Hidden. The Local domains button at the top brings it back.', 'ok');
+    },
+    [toasts],
+  );
 
   const home = state ? homeDir(state.daemon.dataHome, state.daemon.dataHomeDisplay) : null;
   const q = filter.trim();
@@ -111,6 +139,7 @@ export function App() {
       focusFilter: () => filterRef.current?.focus(),
       escape: () => {
         if (help) return setHelp(false), true;
+        if (domainsOpen) return setDomainsOpen(false), true;
         if (drawer) return setDrawer(null), true;
         if (filter) return setFilter(''), filterRef.current?.blur(), true;
         return false;
@@ -118,9 +147,9 @@ export function App() {
       toggleHelp: () => setHelp((h) => !h),
       copy: (url) => void copy(url),
       details: (slug) => setDrawer(slug),
-      modal: () => help || !!drawer,
+      modal: () => help || domainsOpen || !!drawer,
     }),
-    [help, drawer, filter, copy],
+    [help, domainsOpen, drawer, filter, copy],
   );
   useKeyboard(actions);
 
@@ -169,6 +198,9 @@ export function App() {
   const takenSlugs = new Set(state.apps.map((a) => a.slug));
   const openApp = drawer ? state.apps.find((a) => a.slug === drawer) : undefined;
   const matches = found ? found.hits.filter((h) => h.url).length : null;
+  const sum = checksSummary(checks?.checks ?? null, domains?.fronting?.pushError ?? null);
+  const headerDomains =
+    domains?.header === 'off' ? ({ state: 'off' } as const) : domains?.header === 'on' && domains.fronting ? ({ state: 'on', host: hostOfUrl(domains.fronting.dashboardUrl), tone: sum.tone, text: sum.text } as const) : null;
 
   // with no apps yet, the tray leads: that's where the first doors come from
   let order: DashboardSection[] = cfg.dashboard.sections;
@@ -213,9 +245,12 @@ export function App() {
         onFilterKey={onFilterKey}
         matches={matches}
         onHelp={() => setHelp(true)}
+        domains={headerDomains}
+        onDomains={() => setDomainsOpen(true)}
       />
       <main className="hw-main">
         <ProblemBanner problems={banner} />
+        {domains?.panel && domains.fronting && !found ? <LocalDomainsPanel fronting={domains.fronting} onCopy={(t, w) => void copy(t, w)} onDismiss={() => setPanel(false)} /> : null}
         {state.lost?.items.length ? <LostBanner lost={state.lost} home={home} notify={toasts.push} /> : null}
         {nothing && !found ? <FirstRun state={state} /> : null}
         {order.map((s) => sections[s]?.())}
@@ -242,6 +277,20 @@ export function App() {
       </footer>
       {openApp && <Drawer app={openApp} state={state} home={home} onClose={() => setDrawer(null)} onCopy={(t, w) => void copy(t, w)} onSaved={live.putApp} />}
       {help && <Help onClose={() => setHelp(false)} />}
+      {domainsOpen && domains?.fronting && domains.header !== 'hidden' && (
+        <LocalDomainsDialog
+          fronting={domains.fronting}
+          dismissed={domains.header === 'off' && !domains.panel}
+          result={checks}
+          onRecheck={() => void loadChecks(true)}
+          onCopy={(t, w) => void copy(t, w)}
+          onShowPanel={() => {
+            setDomainsOpen(false);
+            void setPanel(true);
+          }}
+          onClose={() => setDomainsOpen(false)}
+        />
+      )}
       <Toasts items={toasts.items} />
     </div>
   );

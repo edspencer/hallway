@@ -4,10 +4,12 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppHealth } from '../shared/api.ts';
+import type { AppHealth, FrontingInfo } from '../shared/api.ts';
+import { BRAND_REGISTRY, explicitBrandSlug, matchBrand } from '../src/lib/brands.ts';
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, shorten, slugify, tildify } from '../src/lib/format.ts';
+import { checksSummary, domainsView, hostOfUrl } from '../src/lib/domains.ts';
 import { bootLabel, lostCommand, lostCount, lostWhere } from '../src/lib/lost.ts';
 import { countStates, doorState, faviconMark, isScanning, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
@@ -152,6 +154,68 @@ describe('door paint', () => {
   });
 });
 
+describe('brand icons (D66)', () => {
+  const ollama = () => BRAND_REGISTRY.find((b) => b.slug === 'ollama')!;
+
+  test('every entry has a title, a 6-digit hex and at least one SVG path', () => {
+    assert.ok(BRAND_REGISTRY.length > 20);
+    for (const b of BRAND_REGISTRY) {
+      assert.match(b.hex, /^#[0-9a-f]{6}$/, b.slug);
+      assert.ok(b.title.length > 0, b.slug);
+      assert.ok(b.path.length > 0, b.slug);
+      assert.ok(b.keywords.length > 0, b.slug);
+    }
+  });
+
+  test('no two entries share a well-known port (an ambiguous hint is worse than none)', () => {
+    const seen = new Map<number, string>();
+    for (const b of BRAND_REGISTRY) for (const p of b.ports) assert.ok(!seen.has(p) && seen.set(p, b.slug), `port ${p}: ${b.slug} vs ${seen.get(p)}`);
+  });
+
+  test('matches Ollama by its process name, its command, its supervisor label, or its port alone', () => {
+    assert.equal(matchBrand({ process: 'ollama' })?.slug, 'ollama');
+    assert.equal(matchBrand({ command: '/opt/homebrew/bin/ollama serve' })?.slug, 'ollama');
+    assert.equal(matchBrand({ supervisorLabel: 'homebrew.mxcl.ollama' })?.slug, 'ollama');
+    assert.equal(matchBrand({ port: 11434 })?.slug, 'ollama');
+    assert.equal(matchBrand({ name: 'Ollama' })?.slug, 'ollama');
+  });
+
+  test('never matches a bare runtime, language or generic server module', () => {
+    for (const hints of [{ process: 'node' }, { process: 'python3' }, { command: 'python3 -m http.server' }, { command: 'node dist/index.js' }, { process: 'bun' }, { name: 'My App' }, { port: 3000 }])
+      assert.equal(matchBrand(hints), null, JSON.stringify(hints));
+  });
+
+  test('a port only matches when nothing else does; a real signal wins even if a contradicting port is given', () => {
+    assert.equal(matchBrand({ process: 'postgres', port: 11434 })?.slug, 'postgresql', 'the process name is a real signal, the port a weak and contradicting one');
+    assert.equal(matchBrand({ process: 'node', port: 5432 })?.slug, 'postgresql', 'with no other signal, the port alone is still a hint');
+  });
+
+  test('matching only runs for icon: auto (or unset); a configured custom icon is left to the monogram', () => {
+    assert.equal(matchBrand({ process: 'ollama', icon: 'auto' })?.slug, 'ollama');
+    assert.equal(matchBrand({ process: 'ollama', icon: null })?.slug, 'ollama');
+    assert.equal(matchBrand({ process: 'ollama' })?.slug, 'ollama');
+    assert.equal(matchBrand({ process: 'ollama', icon: '🦙' }), null);
+    assert.equal(matchBrand({ process: 'ollama', icon: 'https://example.com/icon.png' }), null);
+    assert.equal(matchBrand({ process: 'ollama', icon: '/images/custom.png' }), null);
+  });
+
+  test('icon: si:<slug> is explicit and wins over every hint, even a contradicting one', () => {
+    assert.equal(matchBrand({ icon: 'si:postgresql', process: 'ollama', port: 11434 })?.slug, 'postgresql');
+    assert.equal(explicitBrandSlug('si:ollama'), 'ollama');
+    assert.equal(explicitBrandSlug('auto'), null);
+    assert.equal(explicitBrandSlug(null), null);
+  });
+
+  test('an unknown si: slug is a miss, not a fall-through to auto-matching', () => {
+    assert.equal(matchBrand({ icon: 'si:not-a-real-brand', process: 'ollama' }), null);
+  });
+
+  test('a custom registry (tests) is used verbatim: Ollama is only in the real one', () => {
+    assert.equal(matchBrand({ process: 'ollama' }, []), null);
+    assert.equal(matchBrand({ process: 'ollama' }, [ollama()])?.slug, 'ollama');
+  });
+});
+
 describe('theme contrast', () => {
   const css = fs.readFileSync(path.join(ROOT, 'src/theme/tokens.css'), 'utf8');
   const split = css.indexOf(":root[data-theme='light']");
@@ -216,5 +280,46 @@ describe('lost at last reboot', () => {
     assert.equal(lostCommand(i, '/home/me'), 'node ~/Code/viz/dev.js');
     assert.equal(lostWhere(item(false), '/home/me'), null);
     assert.equal(lostCommand(item(false), null), null);
+  });
+});
+
+describe('local domains (D63)', () => {
+  const f = (o: Partial<FrontingInfo> = {}): FrontingInfo => ({ unsupported: null, mode: 'direct', dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null, ...o });
+  const st = (fronting: FrontingInfo | null | undefined, localDomains?: boolean) =>
+    ({ fronting, config: { config: { dashboard: localDomains === undefined ? {} : { hints: { localDomains } } } } }) as Parameters<typeof domainsView>[0];
+
+  test('direct mode on a platform that can: the panel, and the header control says off', () => {
+    assert.deepEqual(domainsView(st(f(), true)), { header: 'off', panel: true, fronting: f() });
+    assert.equal(domainsView(st(f())).panel, true, 'a config view without hints (an older daemon) reads as show');
+  });
+  test('dismissed: no panel, but the header control stays to bring it back', () => {
+    assert.deepEqual(domainsView(st(f(), false)), { header: 'off', panel: false, fronting: f() });
+  });
+  test('fronted mode: no panel, the header shows it on', () => {
+    const v = domainsView(st(f({ mode: 'fronted' }), true));
+    assert.equal(v.header, 'on');
+    assert.equal(v.panel, false);
+  });
+  test('Windows (setup refuses) and daemons without the field: nothing at all', () => {
+    for (const x of [f({ unsupported: 'Local domains aren’t available on Windows.' }), null, undefined]) assert.deepEqual(domainsView(st(x, true)), { header: 'hidden', panel: false, fronting: x ?? null });
+  });
+  test("checks: checking until they arrive; the worst status wins; problems first, fails before warnings", () => {
+    assert.equal(checksSummary(null).tone, 'checking');
+    assert.equal(checksSummary(null, 'connect ENOENT').tone, 'fail', 'a failed push needs no checks to be a problem');
+    assert.deepEqual(checksSummary([{ id: 'a', status: 'pass', message: 'ok' }, { id: 'b', status: 'skip', message: '-' }]), { tone: 'ok', problems: [], text: 'Working' });
+    const s = checksSummary([
+      { id: 'w', status: 'warn', message: 'w' },
+      { id: 'f', status: 'fail', message: 'f' },
+      { id: 'p', status: 'pass', message: 'p' },
+    ]);
+    assert.equal(s.tone, 'fail');
+    assert.equal(s.text, '1 problem');
+    assert.deepEqual(s.problems.map((c) => c.id), ['f', 'w']);
+    assert.equal(checksSummary([{ id: 'w', status: 'warn', message: 'w' }, { id: 'v', status: 'warn', message: 'v' }]).text, '2 warnings');
+    assert.equal(checksSummary([{ id: 'p', status: 'pass', message: 'p' }], 'boom').tone, 'fail');
+  });
+  test('the header shows the host', () => {
+    assert.equal(hostOfUrl('https://hallway.localhost'), 'hallway.localhost');
+    assert.equal(hostOfUrl('https://myname.internal:4443/'), 'myname.internal:4443');
   });
 });

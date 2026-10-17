@@ -14,7 +14,7 @@ Each command is marked with the milestone it belongs to. Everything on this page
 
 | Command | Description | |
 | --- | --- | --- |
-| `hallway` / `hallway serve [--port N] [--quiet]` | Run the daemon in the foreground (the default command): the dashboard and API on `http://localhost:<port>`, 127.0.0.1 only. The port is `--port`, else `$PORT`, else `port:` in `config.yaml`, else 4255. `--quiet` (`-q`) prints just the "Hallway on <url>" line. | <span class="ms ms--v0">v0</span> |
+| `hallway` / `hallway serve [--port N] [--quiet]` | Run the daemon in the foreground (the default command): the dashboard and API on `http://localhost:<port>`, 127.0.0.1 only. The port is `--port`, else `$PORT`, else `port:` in `config.yaml`, else 4255. On a terminal it starts with a banner, and says whether local domains are on (and how to turn them on) and, from `npx`, how to keep it running; `--quiet` (`-q`) prints just the "Hallway on <url>" line. If Hallway is already running on the port, it says where and exits 0. | <span class="ms ms--v0">v0</span> |
 | `hallway open` | Open the dashboard in your browser (`https://hallway.localhost`, or your domain's, in fronted mode). | <span class="ms ms--v0">v0</span> |
 | `hallway service install` | Generate and load the daemon's service, so it runs at every login: `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux, the scheduled task `\hallway.daemon` on Windows (best effort; starts at logon). Idempotent. | <span class="ms ms--v0">v0</span> |
 | `hallway service uninstall` | Unload and remove it. | <span class="ms ms--v0">v0</span> |
@@ -62,8 +62,8 @@ Each command is marked with the milestone it belongs to. Everything on this page
 
 | Command | Description | |
 | --- | --- | --- |
-| `hallway setup [--domain BASE] [--print]` | Run Caddy for your apps, redirect ports 443 and 80 to it and trust its certificates, so apps are at `https://<app>.localhost` (or under `BASE`). Prints each step first; the privileged ones run through `sudo`. `--print` shows the plan and runs nothing. macOS and Linux only: on Windows it refuses and changes nothing. See [Setup](/networking/setup-and-doctor/). | <span class="ms ms--shipped">v1</span> |
-| `hallway teardown [--uninstall-packages] [--print]` | Undo setup and go back to `http://localhost:<port>` links. `--uninstall-packages` also uninstalls Homebrew's Caddy and dnsmasq. | <span class="ms ms--shipped">v1</span> |
+| `hallway setup [--domain BASE] [--print] [--yes]` | Run Caddy for your apps, redirect ports 443 and 80 to it and trust its certificates, so apps are at `https://<app>.localhost` (or under `BASE`). Shows the plan and asks `Continue? [y/N]` before it runs anything; the privileged steps run through `sudo`. `--print` shows the plan and runs nothing; `--yes` doesn't ask (needed with no terminal). macOS and Linux only: on Windows it refuses and changes nothing. See [Setup](/networking/setup-and-doctor/). | <span class="ms ms--shipped">v1</span> |
+| `hallway teardown [--uninstall-packages] [--print] [--yes]` | Undo setup and go back to `http://localhost:<port>` links. Asks first, like setup. `--uninstall-packages` also uninstalls Homebrew's Caddy and dnsmasq. | <span class="ms ms--shipped">v1</span> |
 
 ## Coding agents
 

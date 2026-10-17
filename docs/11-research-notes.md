@@ -397,6 +397,46 @@ Mac:*
   squatter refused, idempotent re-run, doctor, the fallback, the custom domain, `.local` refused, and teardown leaving
   nothing behind (no anchor, LaunchDaemon, resolver file, keychain certificate or LaunchAgent).
 
+### Fronted mode on a real Mac: pf skipping loopback (D64), 2026-10-17
+
+The first run of fronted mode on a desktop Mac (the author's laptop, Hallway 0.5.2; macOS's version wasn't
+recorded). `hallway setup` succeeded at every step but its final check: "✗ https://hallway.localhost: nothing
+answered"; doctor: "✗ nothing answers on 127.0.0.1:443: the redirect from 443 to 4443 isn't in place". *Verified on
+that Mac:*
+
+- pf was enabled; the main ruleset was stock (`rdr-anchor "com.apple/*"` present); `sudo pfctl -a com.apple/hallway
+  -s nat` listed all four rdr rules; the `hallway.pf` LaunchDaemon had exited 0.
+- Caddy was fine: `curl --resolve hallway.localhost:4443:127.0.0.1 https://hallway.localhost:4443/` → 200, while
+  `nc 127.0.0.1 443` was refused.
+- **`sudo pfctl -s Interfaces -v` showed `lo0 (skip)`.** With the skip flag set, pf doesn't evaluate any rule on that
+  interface, so every lo0 rule (all of Hallway's) is dead. Stock macOS doesn't set it. `sudo pfctl -s References`
+  held a token from a process named `pfd`, its pid long gone, enabled about 67 days earlier, at boot: some
+  third-party tool had loaded a ruleset with `set skip on lo0` then. (`set skip on lo0` is in OpenBSD's example
+  pf.conf and in many VPN kill-switch and firewall-app rulesets.)
+- **Fix:** `sudo pfctl -f /etc/pf.conf` (loading a main ruleset resets the skip flags; the main ruleset was stock, so
+  nothing else changed), then `sudo launchctl kickstart -k system/hallway.pf`; 443 answered.
+- **Unverified:** whether the skip comes back after a reboot (if the tool behind `pfd` runs at every boot, it will,
+  and doctor then says so); whether the `kickstart` is needed at all after the reload (the anchor's rules may survive a
+  reload of `com.apple`; it's cheap, so setup and doctor's fix keep it); which tool `pfd` was.
+- **Output formats used by the parsers** (`server/platform/fronting-darwin.ts`, fixtures in `test/fixtures/platform/`):
+  `pfctl -s Interfaces -v` prints one interface per line, `lo0 (skip)` for a skipped one (pf's OpenBSD heritage);
+  `pfctl -s References` (macOS only) prints `TOKENS:`, then a `PID  Process Name  TOKEN  TIMESTAMP` table; the stock
+  main ruleset is `nat-anchor`/`rdr-anchor "com.apple/*" all` in `-s nat` and `scrub-anchor "com.apple/*" all
+  fragment reassemble`, `anchor "com.apple/*" all` in `-s rules`. The interface and References fixtures are
+  reconstructed from that run and from published examples, not captured byte for byte: CI's macOS job checks the
+  parsers against the real pfctl (below).
+- **CI** (`scripts/fronted-real.mjs`, macOS only): after setup passes, it loads macOS's own pf.conf with
+  `set skip on lo0` in front (`(echo 'set skip on lo0'; cat /etc/pf.conf) | sudo pfctl -f -`), checks that 443 stops
+  answering and doctor's `redirect` line names the skip with the fix, runs `hallway setup` (which must clear it), then
+  sets the skip again and runs doctor's fix as printed. **Run 39037620811 (macos-latest) passed all three:** the real
+  `pfctl -s Interfaces -v` output parsed (`lo0 (skip)`), the main ruleset was judged stock, setup's step cleared the
+  skip and 443 answered, and so did the printed fix. No enabler was named there (only pfctl references on a runner),
+  so the References parser is still checked only against the reconstructed fixture.
+- **From the same run, smaller:** Homebrew's auto-update and hints buried setup's steps (setup now runs `brew install`
+  with `HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1`), and the first
+  `launchctl bootout system/hallway.pf` printed "Boot-out failed: 3: No such process" (expected: nothing was loaded
+  yet; now quiet).
+
 ### Fronted mode without admin rights (D65, proposed), 2026-10-17
 
 The question: can fronted mode work on a Mac where the user isn't an admin (an MDM-managed work Mac that grants
@@ -512,6 +552,35 @@ CA/Browser Forum Baseline Requirements (4.9.1.1) oblige the CA to revoke a certi
 compromised or "publicly distributed in a software package", within 24 hours to 5 days. The workable form of that idea
 is plex.direct's: a service that issues each installation its own certificate under its own subdomain, which is a
 hosted service Hallway would have to run (out of scope).
+
+#### The same, verified on a real Mac (2026-10-17)
+
+Run by the author on his own Mac (current macOS, not MDM-managed, his user an admin, but nothing run with sudo).
+*Verified on a real Mac:*
+
+- **User-domain trust works, with Touch ID only.** A throwaway CA (openssl: RSA 2048, `CA:TRUE`, `keyCertSign`) and a
+  leaf for `trust-test.localhost` (SAN, `serverAuth`) it signed, served by Caddy on `127.0.0.1:8443` with
+  `auto_https off`. `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db ca.crt`, no
+  sudo, asked only for **Touch ID**, the user's own (no administrator name and password; to a person it reads as
+  "changing system settings"). Then Apple's `/usr/bin/curl` reached the page with exit 0, and **Safari and Chrome
+  both loaded it with no warning**. Firefox wasn't installed, so `enterprise_roots` with a user-domain root is still
+  unverified. Resolves Q-USER-TRUST for Safari, Chrome and Apple's curl.
+- **launchd's `Sockets` on a privileged loopback port, for a user LaunchAgent.** A LaunchAgent in
+  `~/Library/LaunchAgents` with `Sockets` → `127.0.0.1:444` and `inetdCompatibility` `Wait` false running
+  `/usr/bin/printf`, loaded with `launchctl bootstrap gui/$(id -u)`, no sudo and no prompt:
+  `curl http://127.0.0.1:444/` → "launchd works"; the same port on the Mac's en0 address → refused (curl exit 7).
+  `lsof` without sudo listed nothing (the socket is root's, launchd's). Port 444 because the pf redirect from today's
+  setup intercepts 443 on loopback; the reserved-port rule is the same for every port below 1024. No "Background Items
+  Added" notification was mentioned (whether one appeared is unknown).
+- Not covered: persistence across logout/login and reboot, 443 and 80 themselves, `[::1]`, Docker or similar already
+  holding `127.0.0.1:443`, an MDM-managed Mac.
+- **Caddy binds :80 unless told not to.** Caddy given its own certificate (a manual `tls`) still starts the HTTP→HTTPS
+  redirect on port 80 and, as the user, fails with EACCES unless `auto_https off` (or an `http_port`) is set. Hallway's
+  generated config sets `http_port` and does its own redirect (D47), so it isn't affected; anything hand-written for
+  the no-admin design must do the same.
+- **zsh's paste handling.** With oh-my-zsh's `url-quote-magic`, pasting multi-line commands escaped `;`, `>` and `(`
+  that followed URLs, breaking them. Commands Hallway prints for copying should avoid shell metacharacters right after
+  a URL, or say to run them in bash (D65).
 
 ## Windows (D58), GitHub's hosted runners, 2026-10-16
 

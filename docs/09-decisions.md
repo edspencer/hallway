@@ -1093,17 +1093,110 @@ being `/opt/homebrew`), and showed **exposed** with no explanation.
 - **Observation ids** hash the project root or else the cwd, so a listener that used to be identified by a prefix's
   repository gets a new id (and a new row in `observed.json`) once; nothing else changes for it.
 
+### D63 — Local domains are discoverable: the startup banner, a dismissible dashboard panel, a header control, doctor (2026-10-17)
+
+Run on a real Mac as a service, 0.5.2 gave `ERR_CONNECTION_REFUSED` at `https://hallway.localhost`: fronted mode is
+opt-in (D15, D47) and nothing in the CLI or the dashboard said it existed, that it was off, or how to turn it on.
+
+- **The startup banner** (`server/banner.ts`), modelled on Local Review's: a HALLWAY wordmark in half blocks (6 rows,
+  fits 80 columns), copper to lamplight amber, and the version, only on a terminal (or with `FORCE_COLOR`), colour by
+  Node's own detection (`NO_COLOR`, `TERM=dumb`…), a one-line title on a narrow terminal. Then always
+  `Hallway on <url>` and `Data home: …` together (scripts wait for them), `Dashboard: <https url>` in fronted mode, a
+  three-line hint in direct mode where fronted mode can work, and, from npx's cache (D61), how to keep it running.
+  `--quiet` (every service job) prints only the first line, so service logs carry no art and no hints.
+- **Already running:** `hallway serve` on a port where a Hallway daemon answers `/api/health` says
+  `Hallway is already running at <url>` and exits 0 (the `npx hallway` with the service installed case). Something
+  else on the port is still exit 1, now saying it isn't Hallway.
+- **The dashboard** reads `fronting` in `/api/state` (`FrontingInfo`: unsupported, mode, the dashboard's and an app's
+  address, the last push error) from a provider (`server/proxy/status.ts`, registered by `serve`): with no provider
+  (an older daemon) it shows nothing. In direct mode, a **Local domains are off** panel above the apps says what they
+  give, how setup works, the two commands with copy buttons, and links to the website. In the header, a
+  **Local domains** control: off, it opens the same content as a dialog (the way back to a dismissed panel, with
+  "Show this on the page again"); on, it shows the dashboard's host with a tone from doctor's networking checks, and
+  the dialog lists them with their fixes. `GET /api/fronting` runs those checks on request only (they probe Caddy, the
+  redirect, the resolver), cached for 15 s, keyed on `domain` and `proxy` so a config edit invalidates them;
+  `?fresh=1` reruns them. On Windows (`fronting.unsupported`, D58) the dashboard shows neither.
+- **The daemon stays unprivileged and only reports.** The dashboard shows status and commands to copy; it never runs
+  setup. The panel's actions are one component (`SetupActions`), so a future "set it up from here" (Ed's open question:
+  a native admin prompt on macOS) slots in beside them without reshaping the panel.
+- **Dismissal is persisted in `config.yaml`** (`dashboard.hints.localDomains`, default true), through the store, by
+  a narrow `PATCH /api/hints` that accepts only known hint names with boolean values (not a general config PATCH, so
+  the page can't switch modes or ports). It survives across browsers and machines' worth of profiles, and is
+  hand-editable like everything else (D7).
+- **Doctor:** in direct mode the networking line is a new status, `info` (mark `i`, not counted as a pass, warning or
+  problem): local domains are off, so nothing answers at the dashboard's https address (a browser says refused), and
+  `hallway setup` turns them on. On Windows it says why they aren't available, with no command to run.
+- **Rejected:**
+  - `localStorage` for the dismissal: cheaper, but per browser and per profile, and invisible to the files; the
+    store costs one route.
+  - a general `PATCH /api/config`: more than the dashboard needs, and a page that can rewrite `mode` or `port` is a
+    bigger target than one that can hide a hint.
+  - running doctor's checks on every `/api/state` (the page must paint in milliseconds, D39), or on a timer in the
+    daemon (probes nobody looks at).
+  - a warning (not `info`) in doctor for direct mode: it's the default and a fine way to run; a warning would make
+    every fresh install look unhealthy.
+
+### D64 — pf told to skip loopback: diagnosed by doctor, cleared by setup when that's safe, never at boot (2026-10-17)
+
+On the author's Mac (0.5.2, the first real-Mac run of fronted mode; research notes), `hallway setup` did everything
+but the final check: nothing answered on 443. The anchor's four rdr rules were loaded, the `hallway.pf` LaunchDaemon
+had exited 0, Caddy answered on 4443, and `pfctl -s Interfaces -v` showed **`lo0 (skip)`**. Something other than
+Hallway (pf's enable references named a `pfd`, long gone, from boot) had loaded a ruleset with `set skip on lo0`,
+which makes pf ignore loopback entirely, Hallway's rdr rules with it. `set skip on lo0` is in OpenBSD's example pf.conf
+and in most VPN kill-switch and firewall-app rulesets, so others will hit this. Loading `/etc/pf.conf` again cleared it
+(a main-ruleset load resets the skip flags) and `launchctl kickstart -k system/hallway.pf` loaded the anchor again.
+
+- **Detection lives in the platform layer** (`Fronting.loopbackSkip`, macOS only): `pfctl -s Interfaces -v` for the
+  skip, then, only if it's set, `pfctl -s References` (who holds pf enabled, Hallway's own `pfctl` left out),
+  `pfctl -s nat` and `pfctl -s rules` (is the main ruleset macOS's stock one: nothing but the `com.apple/*` hooks,
+  `rdr-anchor` among them) and `/etc/pf.conf` (does it `set skip on` lo0 itself). pfctl needs root, so each query runs
+  as `sudo -n pfctl …`: read-only, and `-n` never prompts; without a cached password it fails and the answer is
+  "couldn't check", with how to let it look (`sudo -v`, then doctor again). The parsers are pure, against fixtures.
+- **doctor** asks only when nothing answers on 443 with the redirect expected, and then the `redirect` line itself
+  says why: "pf is set to skip loopback (lo0), so the redirect is ignored; something other than Hallway set this
+  (pf was turned on by …)", with the fix `sudo pfctl -f /etc/pf.conf && sudo launchctl kickstart -k system/hallway.pf`
+  and a note that the skip comes back if that tool sets it again. If `/etc/pf.conf` sets it itself, the fix says
+  reloading won't help; if the main ruleset has rules of its own, it says reloading would drop them.
+- **setup** asks while gathering facts (usually "couldn't check": sudo hasn't been used yet) and plans a `[sudo]` step
+  right after the redirect, which reloads `/etc/pf.conf` and kickstarts `hallway.pf`. The step is checked again just
+  before it runs (sudo has a cached password by then) and runs only if the skip is set, `/etc/pf.conf` doesn't set it,
+  and the main ruleset is stock; otherwise it prints why and does nothing (and a skip already known to be unsafe to
+  clear is a warning, not a step). The final check reports the skip as the cause instead of "nothing answered".
+- **The boot LaunchDaemon does not clear the skip.** It stays one fixed `pfctl -E -a com.apple/hallway -f …`. Whatever
+  set the skip runs at boot too, in an order launchd doesn't promise: if it runs after `hallway.pf`, a reload at boot
+  is undone anyway; if before, reloading `/etc/pf.conf` at boot replaces that tool's main ruleset, which may be a VPN
+  kill switch's block rules, a silent security regression on every boot that no one was shown. setup's reload is
+  different: it's printed, run once, when someone is watching, and only when the ruleset it replaces is stock.
+- **Rejected:**
+  - clearing the skip at boot (above), or a watcher that clears it whenever it reappears: it fights the other tool,
+    forever, as root;
+  - editing `/etc/pf.conf` to remove a `set skip on lo0` it contains: OS updates rewrite it, someone put the line
+    there on purpose, and Hallway never edits pf.conf (D47);
+  - `set skip` with an interface list that leaves lo0 out, loaded by Hallway: it's a main-ruleset option, so the same
+    reload under another name;
+  - a root TCP forwarder on 127.0.0.1:443 (a LaunchDaemon with launchd `Sockets`) instead of pf: immune to pf's skip,
+    but a privileged process handling every byte of every request, and a binary Hallway would have to ship or vet.
+    Worth revisiting only if the skip turns out to come back at every boot on many machines;
+  - running pfctl through an interactive `sudo` in doctor: doctor is read-only and must never prompt.
+- **Smaller fixes from the same run:** setup's `brew install` runs as
+  `/usr/bin/env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1 brew install …`, so
+  Homebrew's auto-update and hints don't bury setup's steps; and the redirect's first `launchctl bootout` (expected to
+  fail: nothing is loaded yet) is `quiet`, its stderr dropped, so "Boot-out failed: 3: No such process" no longer
+  looks like an error. sudo prompts on the terminal, not stderr, so a password prompt still shows.
+
 ### D65 — **Proposed** (awaiting the author): fronted mode without admin rights, in three tiers (2026-10-17)
 
 **Status: a proposal, not built.** The author asked whether fronted mode can work on a Mac where admin is granted only
-briefly (MDM). The experiments are in `11-research-notes.md`, "Fronted mode without admin rights"; the parts still
-*unverified on a real Mac* are listed at the end. Nothing here changes D47 or D48 until it's approved.
+briefly (MDM). The experiments are in `11-research-notes.md`, "Fronted mode without admin rights" (CI runners) and
+"… verified on a real Mac" (the author's Mac, 2026-10-17); what is still unverified is listed at the end. Nothing here changes D47 or D48 until it's approved.
 
 **What the experiments changed.** D47 assumed loopback 443 needs root on macOS, hence the pf redirect. It doesn't
 have to: **launchd binds `127.0.0.1:443`, `[::1]:443` and `127.0.0.1:80` for an ordinary LaunchAgent** (its
 `Sockets` key; the sockets are created by launchd, as root, and handed to the job), with no sudo and no prompt, and
-Caddy served `https://hallway.localhost/` on them. And trusting a root **for the user only** needs the user's own
-password (`com.apple.trust-settings.user` is `authenticate-session-owner`), never an admin's. Linux has neither: no
+Caddy served `https://hallway.localhost/` on them (the mechanism also verified on a real Mac, on loopback 444). And
+trusting a root **for the user only** needs the user's own password or Touch ID (`com.apple.trust-settings.user` is
+`authenticate-session-owner`), never an admin's; on a real Mac it asked only for Touch ID, and Safari, Chrome and
+Apple's curl then trusted the certificate. Linux has neither: no
 unprivileged 443 (`ip_unprivileged_port_start` 1024; user socket units get EACCES), but the user's NSS database (what
 Chrome reads) is writable without any prompt.
 
@@ -1115,7 +1208,7 @@ Chrome reads) is writable without any prompt.
 | macOS asks for | nothing | the user's **own** password or Touch ID, once (trusting the root for this account) | an admin password (the root in the System keychain; for custom domains the resolver file) |
 | Linux URLs | `http://review.localhost:4480` | `https://review.localhost:4443` | `https://review.localhost` (and custom domains) |
 | Linux asks for | nothing | nothing (the root goes into `~/.pki/nssdb`) | sudo (nftables redirect, the system CA store, the resolver) |
-| Trusted by | n/a (no certificate) | *reported, unverified:* Safari, Chrome and Apple's tools that use the keychain; Firefox with `enterprise_roots`. Linux: Chrome/Chromium only | everything that reads the system store, for every account |
+| Trusted by | n/a (no certificate) | Safari, Chrome, Apple's curl (verified on a real Mac); Firefox with `enterprise_roots` (*unverified*). Linux: Chrome/Chromium only | everything that reads the system store, for every account |
 | Breaks | `Secure` cookies in Safari (and `__Host-`/`__Secure-`); apps that insist on `https:`; no custom domains | tools with their own CA bundle (Node without `--use-system-ca`, Python's certifi, Homebrew's curl, containers), as today; no custom domains | nothing new |
 
 - **One mechanism for 443/80 on macOS, in every tier: launchd's sockets.** The `hallway.caddy` LaunchAgent gains a
@@ -1133,6 +1226,10 @@ Chrome reads) is writable without any prompt.
      direct). Only Node, which every Hallway user already runs, but three more processes and a hop.
   (`/usr/bin/nc` per connection also works, 27 ms, but spawns a process per connection and its handling of
   long-lived WebSockets is unverified: rejected as the main path.)
+- **Caddy must not try to bind :80 itself.** With its own certificates, Caddy still starts an HTTP→HTTPS redirect
+  server on `http_port` (80 by default), which fails with EACCES as the user (seen on the author's Mac). Hallway's
+  config already sets `http_port` and its own redirect (D47); with launchd's fds, the redirect server listens on the
+  :80 fd and automatic redirects stay off, so nothing in the config names a bare privileged port.
 - **Trust per tier.** No admin: `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db
   <root>` (no `-d`, no sudo); teardown `security remove-trusted-cert <root>` (may prompt the user again) and
   `security delete-certificate -Z <sha1>`. Only from a command the user runs in a GUI session: headless it waits on
@@ -1161,9 +1258,10 @@ Which? [1]
 ```
 
 Flags for scripts and the dashboard: `--trust user` (1), `--trust system` (2), `--trust none` (3); `--domain`
-implies `--trust system` and says so. `--print` gains a fourth tag beside `[Hallway]`, `[you]` and `[sudo]`:
-**`[your password]`** for the user-domain trust step, with the line "macOS will ask for your password or Touch ID to
-change *your* certificate trust settings. This is not an administrator prompt." Setup records the choice in
+implies `--trust system` and says so. The choice comes first; then D67's plan, its "what will prompt" line and
+`Continue? [y/N]` as today. For No admin the plan has no `[sudo]` step at all, and the user-domain trust step is marked
+`dialog` (D67) with the words "macOS will ask for your Touch ID or password to change *your* certificate trust
+settings. This is not an administrator prompt." No prompts has neither, so its line says nothing will prompt. Setup records the choice in
 `config.yaml` as `proxy.trust: user | system | none` (doctor reads it) and, on Linux, sets `proxy.publicPort` to
 `httpsPort` (or `httpPort` for none) when it installs no redirect; `none` also sets `proxy.scheme: http`. Switching
 tier is re-running setup with another `--trust`; it removes what the old tier added.
@@ -1197,8 +1295,112 @@ stop inbound packets on another interface); Linux user socket units (EACCES, ver
 a Hallway-owned public domain with its certificate's key in the package (the CA must revoke it, BR 4.9.1.1); making
 plain HTTP the default (Safari's `Secure` cookies, and HTTPS keeps the question closed, D6).
 
-**To verify on a real Mac before building:** user-domain trust honoured by Safari, Chrome, Apple's curl and Firefox's
-`enterprise_roots`; the dialog when setup runs from a LaunchAgent; Touch ID; launchd's sockets after logout/login and a
-reboot; `[::1]:80`; what happens when Docker Desktop (or similar) already holds `127.0.0.1:443`; Vite HMR's WebSocket
+**Printed commands avoid zsh's paste traps.** On the author's Mac, zsh's `url-quote-magic` (oh-my-zsh) backslash-escaped
+`;`, `>` and `(` after URLs in a pasted multi-line command. Anything Hallway prints for copying (doctor's fixes, the
+dashboard's copy buttons, the docs) should be one command per line with no shell metacharacters right after a URL,
+or say to run it in bash.
+
+**Verified on a real Mac (2026-10-17, the author's, not managed):** user-domain trust with Touch ID only, honoured by
+Safari, Chrome and Apple's curl (Q-USER-TRUST); a user LaunchAgent's `Sockets` on a privileged loopback port, with
+no sudo and no prompt, not reachable on en0.
+
+**Still to verify before building:** Firefox's `enterprise_roots` with a user-domain root; the trust dialog when
+setup runs from a LaunchAgent (the dashboard's Turn on); launchd's sockets after logout/login and a reboot, and on 443
+and 80 specifically (the author's pf redirect held 443, so 444 was used); `[::1]`; what happens when Docker Desktop (or similar) already holds `127.0.0.1:443`; Vite HMR's WebSocket
 through Caddy on launchd's fds; on a managed Mac, the "Background Items Added" notification and whether MDM blocks
 user LaunchAgents with `Sockets`.
+
+### D66 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
+
+The author, on a real Mac: Ollama (port 11434) shows a plain "O" monogram, because its server answers "Ollama is
+running" with no `<link rel="icon">` at all — tier 1's only fallback is the hashed monogram. "I feel like this could
+look a lot slicker if these applications had much clearer brand identity… like the Okta dashboard: a bunch of logos
+that are easy to see at a glance." Separately, the floating port-number plate in the middle of each door (D23's
+"door-number plate" idea, built in v0) kept getting clicked by mistake: it sits over the door's live area but isn't
+itself a click target, and the port already appears in the address line underneath.
+
+- **The port plate is removed from the door face.** The port still reads in the address line (`localhost:5622`) and,
+  in fronted mode, in the secondary `:5622` link back round the proxy (`hw-door-direct`, unchanged) — both already
+  existed, so no information is lost, only a non-clickable decoration that duplicated it and ate clicks meant for the
+  card. `docs/05-ui.md`'s "Visual direction" table and "Ideas to explore" are updated; the door itself (`.hw-door-link`,
+  `position: absolute; inset: 0`) was always the one click target and is unaffected.
+- **A brand registry stands in for the monogram when there's no favicon and `icon: auto`.** Priority, highest first:
+  an explicit `icon: si:<slug>` (new; never falls through, even for an unknown slug — a typo is a miss, not a silent
+  substitute) → the existing favicon tier → an automatic registry match → the monogram. A custom `icon:` (a URL, a
+  path, an emoji) that failed to resolve is left alone, never silently overridden: auto-matching only runs for `auto`
+  or unset.
+- **Matching is pure and entirely client-side** (`src/lib/brands.ts`, tested under `node:test`). Every hint it needs —
+  process name, full command, the supervisor's label (`homebrew.mxcl.ollama`, D62), the app's name/slug, and its
+  declared port — is already on `AppView` (`identity`, `config`), sent to the dashboard for other reasons, so no
+  daemon change was needed to resolve a match. Tokens are matched whole (split on anything but a letter, digit or
+  `-`, so a dotted supervisor label splits into its parts), never as a substring, against a curated keyword list per
+  brand; a well-known default port (`11434` → Ollama, `5432` → Postgres, …) is tried only when nothing else matches,
+  and only for ports no other common tool shares (an ambiguous port hint is worse than none — the generator throws if
+  two curated entries claim the same one). Deliberately excluded: frontend framework icons (Next.js, Vite, …) — their
+  dev servers typically ship their own favicon already, so a registry entry would be redundant at best and a second,
+  competing source of truth at worst; and bare runtimes or generic words (`node`, `python`, `http`) are kept out of
+  every keyword list so they can never match (tested).
+- **The registry is a curated, generated subset, not the whole `simple-icons` package.** `simple-icons` (CC0; see its
+  `DISCLAIMER.md` for brands' own trademarks) is a **devDependency** only, ~16 MB unpacked for ~3500 brands, almost
+  none of which anyone runs on a dev machine. `scripts/brand-icons.mjs` extracts title, hex and SVG path for a
+  curated list (`CURATED`, ~45 self-hosted/infra tools: Ollama, Postgres, MySQL/MariaDB, MongoDB, Redis, SQLite,
+  Grafana, Prometheus, Jupyter, RabbitMQ, Elasticsearch/OpenSearch, Kibana, InfluxDB, nginx, n8n, Supabase, MinIO,
+  Portainer, Gitea, Jenkins, WordPress, Ghost, Consul, Traefik, Caddy, CouchDB, Neo4j, Kafka, Keycloak, Nextcloud,
+  Home Assistant, Plex, Jellyfin, Airflow, Metabase, Superset, Airbyte, Meilisearch, Uptime Kuma, Qdrant, Temporal,
+  Logstash, Vault, Milvus) into `src/lib/brands.data.ts`, committed, with **no `simple-icons` import left at run
+  time** (`smoke:pack` and the bundle size prove it: the generated file is ~65 kB of source, not 16 MB). `icon:
+  si:<slug>` only reaches this curated set; a brand not in it needs an entry added (`CURATED` + re-run the script),
+  or a direct favicon/image/path `icon:`.
+- **The door's paint comes from the brand's own hex when one matches** (`paintFor`, unchanged: it already accepted
+  any colour, not only one read from a favicon's pixels), toned down the same way a favicon's colour is (D28); the
+  mark itself is drawn bigger than a favicon tile (`.hw-tile--brand`, 56 px vs. 44 px) so it reads as the hero, in the
+  monogram's own ink formula (the door's paint, darkened) rather than the brand's raw hex, which keeps it legible
+  regardless of how light or dark that hex is (Ollama's own simple-icons hex is pure black).
+- **Rejected:**
+  - keeping the port plate but making it `pointer-events: none`: it would still visually read as clickable (it sits
+    dead centre, where a user's eye and cursor land first) and still duplicate the address;
+  - bundling all of `simple-icons` as a runtime dependency: 16 MB for ~3500 brands nobody runs locally, against the
+    package's existing discipline of keeping anything the dashboard doesn't need at run time out of `dependencies`;
+  - fetching icons from Simple Icons' CDN at run time: a network dependency and a privacy leak (the daemon would tell
+    a third party which brands of software someone runs) for a feature the spec requires to work offline;
+  - scraping an app's bundle or binary for an embedded icon (e.g. a macOS app bundle's `.icns`): fragile across
+    frameworks and platforms, and no safe, generic way to extract one from an arbitrary process;
+  - matching on the HTTP `Server` response header or page `<title>`: neither is captured for a *declared* app today
+    (`ListenerIdentity` carries no title; `sniff.ts`'s title is scanner-only, for not-yet-claimed listeners) — adding
+    that capture is server-side scope this PR doesn't need, since process/command/supervisor/port already resolve
+    the motivating case. Left as a follow-up if a brand with no distinguishing executable name ever needs it;
+  - a server-side `thumbKind: 'brand'` rendered through the existing thumbnail pipeline (`GET /…/thumb`): every hint
+    the match needs is already client-visible, so a server round trip would add latency and an extra endpoint for no
+    benefit, and would have made "favicon beats registry" (tried first, replaces nothing if it fails) harder to keep
+    simple than "no thumbnail → try the registry" already is on the client;
+  - the macOS app-bundle icon for processes under `/Applications/*.app`: deferred as a follow-up (noted in the PR),
+    not attempted here — it would need `server/platform/darwin.ts` to read and decode an `.icns`/`Info.plist`, which
+    is new daemon-side scope beyond this PR's door/thumbs-only diff, and no app on the author's own machine (Paddock,
+    Ollama) is bundle-launched, so there was nothing to verify it against.
+
+### D67 — setup and teardown ask before they act: the plan, what will prompt, `Continue? [y/N]` (2026-10-17)
+
+Asked for by the author after the first real-Mac run: `hallway setup` started changing the machine the moment it was
+typed. Its steps were printed as they ran, but the first sudo prompt arrived before anyone had seen the whole plan,
+and the second prompt (macOS's own dialog for the trust step) came as a surprise.
+
+- **Before anything runs** (after the facts are gathered and nothing refuses), setup prints the plan, the same text
+  `--print` shows, and then one line saying what will ask for what: sudo's password in the terminal, and, on macOS
+  when the trust step is still to do, a separate system dialog (Touch ID or password) for changing certificate trust
+  settings, which macOS has required since Big Sur even for root. Then `Continue? [y/N]`.
+- **The default is no.** Only `y`/`yes` (any case) goes ahead; Enter, Ctrl-D or anything else prints "Nothing was
+  run." and exits 1 (it didn't do what was asked; scripts can tell).
+- **`--yes`** skips the question (and the up-front plan: each step is still printed as it runs, so a log shows
+  everything). It's for scripts and CI; the agent guide tells agents never to pass it for the user.
+- **No terminal and no `--yes` is a usage error** (exit 2, with the usage), before anything runs: a question nobody can
+  answer must not turn into a silent yes or a hang. "A terminal" is stdin and stdout both TTYs.
+- **teardown** asks the same way (its plan, what will prompt, the question). Its "Nothing to undo" and Windows'
+  "nothing to undo" exit before asking, and so does a setup that refuses.
+- The words for the OS dialog are the platform's (`Fronting.trustDialog`, macOS only); a plan step that may raise it is
+  marked `dialog` (setup's trust step). Teardown's untrust (`security delete-certificate`, D47's research notes) ran
+  headless on CI, so it isn't marked; unverified on a desktop Mac.
+- **Rejected:**
+  - asking before each sudo step instead of once: more questions, and still no view of the whole plan first;
+  - default yes (`[Y/n]`): the point is that typing the command alone changes nothing;
+  - treating no terminal as yes (as some installers do): a pipe or an agent's shell would then run sudo steps unasked;
+  - `-y` as well: one spelling, and a short flag is easy to add later, hard to take back.

@@ -8,6 +8,13 @@ description: How Hallway uses Caddy, running as you, to serve every app at https
 optional: turn it on with [`hallway setup`](/networking/setup-and-doctor/) and off with `hallway teardown`. For the
 overview, see [Direct and fronted mode](/concepts/modes/).
 
+Until you do, nothing answers at `https://hallway.localhost` or `https://<app>.localhost`, and a browser says the
+connection was refused. Hallway says so in three places: the startup banner of `hallway` / `npx hallway`, an info line
+in `hallway doctor`, and a **Local domains** panel on the dashboard with the commands to copy (dismissible; the
+**Local domains** button in the header brings it back). Once it's on, that button shows the dashboard's host and how
+`hallway doctor`'s networking checks went, with each failing check and its fix. The dashboard never runs setup
+itself: the privileged steps are only ever `hallway setup`'s, in your terminal.
+
 :::note[Not on Windows]
 Fronted mode is macOS and Linux only. On Windows (best effort) its parts have no user-level equivalent, so
 `hallway setup` refuses before it looks for or changes anything, `hallway teardown` has nothing to undo, and apps keep
@@ -142,6 +149,11 @@ their VM. `hallway setup` refuses to start while anything else holds 80, 443, or
 process (name, PID and command line) holds them; turning that tool's forwarding of 80 and 443 off is usually the fix.
 On macOS, where you can't see root's sockets, it also checks whether 443 answers with Hallway's certificate.
 `hallway doctor` reports the same.
+
+On macOS the redirect can also be installed but ignored: a VPN or firewall app that loads a pf ruleset with
+`set skip on lo0` makes pf skip loopback altogether. `hallway doctor` names that, and `hallway setup` clears it when it
+can do so without dropping anyone else's rules; see
+[pf is skipping loopback](/networking/setup-and-doctor/#pf-is-skipping-loopback-macos).
 
 ## When the daemon or an app is down
 

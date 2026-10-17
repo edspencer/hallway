@@ -18,14 +18,28 @@ their `http://localhost:<port>` addresses.
 
 ```sh
 hallway setup --print                    # show the full plan; run nothing
-hallway setup                            # fronted mode on *.localhost
+hallway setup                            # fronted mode on *.localhost (asks before it runs anything)
 hallway setup --domain myname.internal   # under your own domain instead
 ```
+
+Typing `hallway setup` changes nothing on its own. It prints the plan below, says what will ask you for what, and
+waits for an answer:
+
+```
+You'll be asked twice: for your password by sudo, here in the terminal, and then by a separate macOS dialog (Touch ID
+or your password) to change certificate trust settings, which macOS asks for itself, even under sudo (Big Sur and later).
+Continue? [y/N]
+```
+
+The default is no: anything but `y` or `yes` (Enter, Ctrl-D) runs nothing. On Linux there is no dialog, only sudo's
+password prompt. For a script or CI, `hallway setup --yes` doesn't ask; with no terminal to ask on and no `--yes`,
+setup refuses (exit 2) before it does anything.
 
 The plan is a numbered list, and each step is tagged with who does it:
 
 - **`[Hallway]`**: Hallway's own files and user-level jobs, as you.
-- **`[you]`**: on macOS, `brew install caddy` (and `dnsmasq` for a custom domain) if they're missing, as you.
+- **`[you]`**: on macOS, `brew install caddy` (and `dnsmasq` for a custom domain) if they're missing, as you, with
+  Homebrew's auto-update, cleanup and hints turned off for that one command so its output doesn't bury setup's.
 - **`[sudo]`**: a privileged change. The exact command is shown; a file to be installed as root is first written to
   `~/.hallway/generated/setup/` as you, shown in full, then copied into place with `sudo install`.
 
@@ -37,8 +51,12 @@ For fronted mode on `localhost`, it:
    on a private socket;
 4. **[sudo]** trusts Hallway's local certificate authority;
 5. **[sudo]** redirects loopback ports 443 and 80 to Caddy's 4443 and 4480;
-6. sets `mode: fronted` in `config.yaml`;
-7. checks that `https://hallway.localhost` answers through the redirect, with Hallway's certificate.
+6. on macOS, **[sudo]** if another tool has told pf to skip loopback, which makes it ignore the redirect, and it's
+   safe to undo, loads macOS's own `/etc/pf.conf` again and then the redirect (checked just before; see
+   [pf is skipping loopback](#pf-is-skipping-loopback-macos));
+7. sets `mode: fronted` in `config.yaml`;
+8. checks that `https://hallway.localhost` answers through the redirect, with Hallway's certificate, and if not, says
+   why when it can tell.
 
 With `--domain`, it also writes and starts Hallway's own dnsmasq (as you) and adds one more `[sudo]` step, the
 resolver entry for that domain. See [Custom domains](/networking/custom-domains/).
@@ -46,7 +64,7 @@ resolver entry for that domain. See [Custom domains](/networking/custom-domains/
 The rules it follows:
 
 - **Each privileged command is printed with a one-line reason, then run with `sudo`**, so you see exactly what
-  happens; `sudo` asks for your password as usual.
+  happens; `sudo` asks for your password as usual. The whole plan is shown, and you're asked to continue, first.
 - **It is idempotent.** Re-running it checks the real state (the root in the trust store, the installed files' exact
   contents, a TLS handshake on port 443) and only does what is missing; already-done steps say so. If a command fails,
   the run stops there, and running setup again carries on.
@@ -85,10 +103,11 @@ still escalate), a root Caddy with no admin API (sudo for every new app), Caddy 
 exposed to your network), and on Linux `setcap` on the Caddy binary (whoever reaches its API could bind any privileged
 port). See [No root in the daemon](/guarantees/no-root/).
 
-:::caution[Not yet verified on a real Mac]
-The pf redirect has run for real on CI's macOS runners, for locally originated connections. Whether it survives
-another tool reloading `/etc/pf.conf`, a macOS update and a reboot hasn't been checked yet. If it stops working,
-`hallway doctor` says so and `hallway setup` reinstalls it.
+:::caution[Partly verified on a real Mac]
+The pf redirect runs for real on CI's macOS runners. On the first desktop Mac it was tried on, it was installed
+correctly but ignored, because another tool had told pf to skip loopback; `hallway doctor` and `hallway setup` now
+recognise that ([below](#pf-is-skipping-loopback-macos)). Whether the redirect survives a macOS update and a reboot
+hasn't been checked yet. If it stops working, `hallway doctor` says so and `hallway setup` reinstalls it.
 :::
 
 ### Without any redirect
@@ -120,7 +139,8 @@ hallway teardown
 hallway teardown --uninstall-packages    # also uninstall Caddy and dnsmasq from Homebrew
 ```
 
-It removes only what it finds: the resolver entry, the dnsmasq job, the redirect, the trusted root and the Caddy job,
+Like setup, it shows what it will remove and asks `Continue? [y/N]` first (`--yes` skips the question). It removes
+only what it finds: the resolver entry, the dnsmasq job, the redirect, the trusted root and the Caddy job,
 with `sudo` for the privileged ones, then sets `mode: direct`. The dashboard keeps working at
 `http://localhost:4255`. Homebrew packages are left alone unless you ask; on Linux, `--uninstall-packages` only
 reminds you to use your package manager. The certificate authority stays in the data home, unused, so a later setup
@@ -146,13 +166,55 @@ Read-only diagnostics. Each check prints pass, warn or fail with a suggested fix
   entries that no longer exist, or whose Node version has been uninstalled (see
   [the PATH trap](/concepts/services/#the-path-trap)).
 
-**<span class="ms ms--shipped">v1</span> Fronted mode**, when it is on:
+When fronted mode is off, an info line says so (`i local domains are off (mode: direct), so nothing answers at
+https://hallway.localhost …`) with `hallway setup` as the way to turn them on; on Windows it says why they aren't
+available.
+
+**<span class="ms ms--shipped">v1</span> Fronted mode**, when it is on (the dashboard's **Local domains** button shows
+the same checks):
 
 - Caddy: its version, its job, its admin socket answering and private, and the configuration it is running matching
   `generated/caddy.json`;
 - who holds Caddy's ports and ports 80 and 443 (process, PID and command line), if it isn't Caddy;
-- a TLS handshake through the redirect that verifies against Hallway's root, and the HTTP-to-HTTPS redirect;
+- a TLS handshake through the redirect that verifies against Hallway's root, and the HTTP-to-HTTPS redirect; on
+  macOS, when nothing answers on 443, whether pf is skipping loopback (see below);
 - the root trusted, with a note for Firefox;
 - `*.localhost` resolving (a warning only: browsers resolve it themselves);
 - for a custom domain: its TLD (delegated or made up, checked against IANA's list), dnsmasq running and bound to
   loopback only, the resolver entry in place, and both `<base>` and a name under it resolving to your machine.
+
+## Troubleshooting
+
+### pf is skipping loopback (macOS)
+
+If `hallway setup` ends with `✗ https://hallway.localhost: nothing answered`, or `hallway doctor` says nothing answers
+on 443, while Caddy itself is fine, check whether pf has been told to ignore the loopback interface:
+
+```sh
+sudo pfctl -s Interfaces -v | grep lo0
+```
+
+`lo0 (skip)` means some other program loaded a pf ruleset containing `set skip on lo0`. That line is common in VPN
+kill switches and firewall apps, and stock macOS doesn't set it. pf then evaluates no rule on loopback at all, so
+Hallway's redirect is installed but ignored. Doctor reports it as:
+
+```
+✗ pf is set to skip loopback (lo0), so the redirect is ignored; something other than Hallway set this (pf was turned on by …)
+    fix: `sudo pfctl -f /etc/pf.conf && sudo launchctl kickstart -k system/hallway.pf` …
+```
+
+Loading macOS's own `/etc/pf.conf` again clears the skip, and the `kickstart` loads Hallway's anchor again.
+`hallway setup` does the same for you, as a printed `[sudo]` step, but only when it's safe:
+
+- **`/etc/pf.conf` itself says `set skip on lo0`**: reloading it would set the skip again, so setup leaves it alone.
+  Take `lo0` out of that line if nothing you use needs it, then run the fix.
+- **pf's main ruleset has rules of its own** (anything beyond macOS's `com.apple` anchors, as a VPN kill switch would
+  load): reloading `/etc/pf.conf` would drop them, so setup only says so. Turn the skip off in that tool if it lets
+  you, or run the fix yourself if you don't need its rules.
+
+Doctor checks by running `sudo -n pfctl …`, which never asks for a password; if sudo has no password cached it says it
+couldn't check, and `sudo -v` followed by `hallway doctor` lets it look.
+
+If the program that set the skip does so again (at the next boot, say), the redirect stops working again and doctor
+says so. Hallway's boot job deliberately doesn't reload `/etc/pf.conf` itself: at boot nobody is watching, and it
+could silently remove another tool's rules.

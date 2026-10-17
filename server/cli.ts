@@ -2,7 +2,7 @@
 // `hallway [command] …`: the command-line entry point (the package's bin; `npm run hallway -- …` from a checkout).
 // With no command it runs the daemon in the foreground (`serve`). The full command set is docs/07-cli.md; commands
 // arrive milestone by milestone (docs/08-roadmap.md).
-import { DEFAULT_PORT, HOME, VERSION, dataPaths, devOverrides, parsePort, tildify } from './config.js';
+import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify } from './config.js';
 import { UsageError, check, parseArgs } from './args.js';
 import { DEFAULT_URL, agentGuide, readGuide, snippet } from './guide.js';
 
@@ -10,9 +10,11 @@ const USAGE = `Usage: hallway [command] [options]
 
 Daemon
   serve [--port <n>] [--quiet]      (the default) Run the daemon in the foreground: the dashboard and API on
-                                    http://localhost:<port> (127.0.0.1 only).
+                                    http://localhost:<port> (127.0.0.1 only). If Hallway already answers on
+                                    the port, it says where and exits.
           --port <n>       the port (default ${DEFAULT_PORT}, or $PORT, or port: in config.yaml)
-          --quiet, -q      print just the "Hallway on <url>" line
+          --quiet, -q      print just the "Hallway on <url>" line: no banner, no hints (the banner
+                           is only shown on a terminal anyway)
   open                              Open the dashboard in your browser.
   service install                   Run the daemon as a service (a LaunchAgent / systemd user unit).
   service uninstall | status | restart
@@ -47,11 +49,13 @@ Bookmarks
   bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
 
 Fronted mode (https://<app>.localhost, or your own domain)
-  setup [--domain BASE] [--print]   Run Caddy for your apps, redirect ports 443 and 80 to it and trust its
-                                    certificates. Prints each step first; the privileged ones run through sudo.
-                                    --print shows the plan and runs nothing.
-  teardown [--uninstall-packages] [--print]
-                                    Undo setup and go back to http://localhost:<port> links.
+  setup [--domain BASE] [--print] [--yes]
+                                    Run Caddy for your apps, redirect ports 443 and 80 to it and trust its
+                                    certificates. Shows the plan and asks before it runs anything; the privileged
+                                    steps run through sudo. --print shows the plan and runs nothing; --yes doesn't
+                                    ask (needed without a terminal).
+  teardown [--uninstall-packages] [--print] [--yes]
+                                    Undo setup and go back to http://localhost:<port> links. Asks first, like setup.
 
 Coding agents
   mcp                               An MCP server on stdio, for agents that want one: a bridge to the running
@@ -73,17 +77,20 @@ Other
 
 Data: $HALLWAY_HOME (default ~/.hallway). Exit codes: 0 ok, 1 error, 2 usage error.`;
 
-async function serve(flags: Record<string, string>) {
+/** Resolves with an exit code when there's nothing to run (Hallway already answers on the port), else undefined. */
+async function serve(flags: Record<string, string>): Promise<number | undefined> {
   const given = flags.port ?? process.env.PORT;
   let port = given === undefined || given === '' ? undefined : parsePort(given);
   if (port === null) throw new UsageError(`${flags.port !== undefined ? '--port' : 'PORT'} must be a port number (0-65535), not '${given}'`);
   const dev = devOverrides();
   const hostname = dev.bind ?? '127.0.0.1';
-  const [{ startServer }, { Store }] = await Promise.all([import('./index.js'), import('./store/index.js')]);
+  const [{ startServer }, { Store }, { currentPlatform }] = await Promise.all([import('./index.js'), import('./store/index.js'), import('./platform/index.js')]);
   // the data home is created on first run, and read before binding: config.yaml may name the port
   const store = new Store(HOME).init();
   // `npm run dev`: the daemon sits next to Vite's dashboard port (see vite.config.ts)
   port ??= process.env.HALLWAY_DEV ? DEFAULT_PORT + 1 : store.currentConfig().port;
+  const platform = currentPlatform();
+  const { frontingInfo, frontingProvider } = await import('./proxy/status.js');
   let bound: number;
   try {
     ({ port: bound } = await startServer(port, {
@@ -96,7 +103,18 @@ async function serve(flags: Record<string, string>) {
     }));
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
-    if (code === 'EADDRINUSE') throw new Error(`port ${port} is already in use; pick another with --port <n> (is Hallway already running?)`);
+    if (code === 'EADDRINUSE') {
+      // `npx hallway` with the service already running: that's what was wanted, so say where it is (exit 0)
+      const { findDaemon } = await import('./client.js');
+      const running = await findDaemon(port);
+      if (running) {
+        const { alreadyRunning } = await import('./banner.js');
+        const f = frontingInfo(store.currentConfig(), platform);
+        process.stdout.write(alreadyRunning({ url: running.url, version: running.version, dashboardUrl: f.mode === 'fronted' ? f.dashboardUrl : null }));
+        return 0;
+      }
+      throw new Error(`port ${port} is already in use by something that isn't Hallway; pick another with --port <n>`);
+    }
     if (code === 'EACCES') throw new Error(`not allowed to listen on port ${port}; pick another with --port <n>`);
     throw e;
   }
@@ -104,19 +122,50 @@ async function serve(flags: Record<string, string>) {
   const [{ startLive }, { providers }] = await Promise.all([import('./live.js'), import('./providers.js')]);
   await startLive({ store, bus: store.bus, providers, selfPorts: process.env.HALLWAY_DEV ? [bound, DEFAULT_PORT] : [bound] });
   // fronted mode: Caddy's config and the fallback page, pushed now and on every change (server/proxy/)
-  const [{ startProxy, restartCommands }, { currentPlatform }] = await Promise.all([import('./proxy/index.js'), import('./platform/index.js')]);
-  await startProxy({ store, bus: store.bus, daemonPort: bound, restart: restartCommands(currentPlatform().serviceManager) });
-  let out = `Hallway on http://localhost:${bound}\n`;
-  if (!flags.quiet) {
-    out += `Data home: ${tildify(dataPaths(HOME).home)}\n`;
-    const problems = store.allProblems().filter((p) => p.severity === 'error');
-    if (problems.length) out += `${problems.length} file${problems.length === 1 ? ' has' : 's have'} errors (shown on the dashboard): ${problems.map((p) => p.file).join(', ')}\n`;
-  }
-  process.stdout.write(out);
+  const { startProxy, restartCommands } = await import('./proxy/index.js');
+  const proxy = await startProxy({ store, bus: store.bus, daemonPort: bound, restart: restartCommands(platform.serviceManager) });
+  // local domains for the dashboard: on or off, and in fronted mode doctor's checks, on request (D63)
+  providers.register(
+    frontingProvider({
+      store,
+      platform,
+      proxyStatus: proxy.status,
+      checks: async () => {
+        const [{ networkChecks }, { Services }, { defaultRunner }, os] = await Promise.all([import('./proxy/doctor.js'), import('./services/index.js'), import('./platform/index.js'), import('node:os')]);
+        let services: InstanceType<typeof Services> | null = null;
+        try {
+          services = new Services({ store, platform });
+        } catch {
+          /* no service manager: the checks that need one say so */
+        }
+        return networkChecks({ store, platform, services, query: defaultRunner, env: process.env, userHome: os.homedir() });
+      },
+    }),
+  );
+  const [{ startupMessage }, { transientInstall }] = await Promise.all([import('./banner.js'), import('./services/transient.js')]);
+  const f = frontingInfo(store.currentConfig(), platform);
+  const problems = store.allProblems().filter((p) => p.severity === 'error');
+  process.stdout.write(
+    startupMessage(
+      {
+        version: VERSION,
+        url: `http://localhost:${bound}`,
+        home: tildify(dataPaths(HOME).home),
+        dashboardUrl: f.mode === 'fronted' ? f.dashboardUrl : null,
+        localDomains: f.mode === 'direct' && !f.unsupported ? { dashboard: f.dashboardUrl, app: f.appUrl } : null,
+        transient: transientInstall(ROOT)?.where ?? null,
+        notes: problems.length ? [`${problems.length} file${problems.length === 1 ? ' has' : 's have'} errors (shown on the dashboard): ${problems.map((p) => p.file).join(', ')}`] : [],
+        quiet: !!flags.quiet,
+        dev: !!process.env.HALLWAY_DEV,
+      },
+      { isTTY: process.stdout.isTTY, columns: process.stdout.columns, env: process.env },
+    ),
+  );
   if (hostname !== '127.0.0.1' || dev.allowedHosts.length)
     process.stderr.write(
       `hallway: development overrides in effect: bound to ${hostname}${dev.allowedHosts.length ? `, also accepting Host ${dev.allowedHosts.join(', ')}` : ''}. Never use these outside development.\n`,
     );
+  return undefined;
 }
 
 /** Resolves with the exit code, or undefined while the daemon runs. */
@@ -137,8 +186,7 @@ async function main(argv: string[]): Promise<number | undefined> {
   switch (cmd) {
     case 'serve':
       check(cmd, flags, ['port', 'quiet'], args, 0, rest);
-      await serve(flags);
-      return undefined;
+      return serve(flags);
     case 'guide': {
       check(cmd, flags, ['snippet'], args, 0, rest);
       const guide = readGuide();

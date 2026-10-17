@@ -3,7 +3,7 @@
 // fail line with a fix.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { HallwayConfig } from '../../shared/api.js';
+import type { FrontingCheck, HallwayConfig } from '../../shared/api.js';
 import { dataPaths, tildify } from '../config.js';
 import { type FrontingEnv, type Platform, type Runner } from '../platform/index.js';
 import { findTool } from '../platform/fronting.js';
@@ -14,16 +14,13 @@ import type { Store } from '../store/index.js';
 import { CaddyUnreachable, runningConfig, sameConfig } from './admin.js';
 import { CA_NAME, caddyPaths } from './caddy.js';
 import { httpsUrl } from './names.js';
+import { frontingInfo } from './status.js';
 import { httpProbe, isLoopback, readRoot, resolve, tlsProbe } from './probe.js';
 import { MIN_CADDY, isTrusted, portConflicts, versionAtLeast } from './setup.js';
 import { delegatedTlds, tldVerdict } from './tld.js';
 
-export interface NetCheck {
-  id: string;
-  status: 'pass' | 'warn' | 'fail' | 'skip';
-  message: string;
-  fix?: string;
-}
+/** A check (shared/api.ts): `info` is a fact worth knowing, neither a pass nor a problem. */
+export type NetCheck = FrontingCheck;
 
 export interface NetDeps {
   store: Store;
@@ -44,7 +41,17 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   const out: NetCheck[] = [];
   const add = (c: NetCheck) => out.push(c);
   if (cfg.mode === 'direct') {
-    add({ id: 'networking', status: 'skip', message: 'fronted mode is off (mode: direct): apps are linked as http://localhost:<port>', fix: '`hallway setup` turns on https://<app>.localhost' });
+    // an info line, not a problem: direct mode is the default. It's here so that someone whose browser said "refused" at
+    // https://hallway.localhost learns why (D63)
+    const f = frontingInfo(cfg, platform);
+    if (f.unsupported) add({ id: 'networking', status: 'info', message: `local domains (fronted mode) are off: apps are linked as http://localhost:<port>. ${f.unsupported}` });
+    else
+      add({
+        id: 'networking',
+        status: 'info',
+        message: `local domains are off (mode: direct), so nothing answers at ${f.dashboardUrl} or ${f.appUrl} (a browser says the connection was refused); apps are linked as http://localhost:<port>`,
+        fix: '`hallway setup` turns them on (it prints each step first; `hallway setup --print` shows the plan and runs nothing)',
+      });
     return out;
   }
   const f = platform.fronting;
@@ -109,7 +116,7 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   const url = httpsUrl(dashboard, https);
   if (!t && (await isListening(https, '127.0.0.1', 1000)))
     add({ id: 'redirect', status: 'fail', message: `something answers on 127.0.0.1:${https}, but not with TLS: it isn't Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
-  else if (!t) add({ id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${https}${noRedirect ? '' : `: the redirect from 443 to ${cfg.proxy.httpsPort} isn't in place`}`, fix: SETUP });
+  else if (!t) add(await nothingOn443(deps, https, cfg.proxy.httpsPort, noRedirect));
   else if (!t.issuer?.startsWith(CA_NAME)) add({ id: 'redirect', status: 'fail', message: `127.0.0.1:${https} answers with a certificate from ${t.issuer ?? 'someone else'}, not Hallway's Caddy`, fix: `\`sudo lsof -nP -iTCP:${https} -sTCP:LISTEN\` names what holds it` });
   else if (!t.ours) add({ id: 'redirect', status: 'fail', message: `${url} answers with Hallway's CA, but its certificate doesn't verify (${t.error})`, fix: 'restart Caddy: `hallway setup`' });
   else add({ id: 'redirect', status: 'pass', message: `${url} reaches Hallway's Caddy${noRedirect ? '' : ' through the redirect from 443'}` });
@@ -161,6 +168,18 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
     }
   }
   return out;
+}
+
+/** Nothing answers where the redirect should be. On macOS the usual reason, with the redirect installed, is pf told
+ *  by another tool to skip loopback (D64): ask it (read-only, `sudo -n`), and say so. */
+export async function nothingOn443(deps: Pick<NetDeps, 'platform' | 'query'>, https: number, httpsPort: number, noRedirect: boolean): Promise<NetCheck> {
+  const generic: NetCheck = { id: 'redirect', status: 'fail', message: `nothing answers on 127.0.0.1:${https}${noRedirect ? '' : `: the redirect from 443 to ${httpsPort} isn't in place`}`, fix: SETUP };
+  const f = deps.platform.fronting;
+  if (noRedirect || !f.loopbackSkip) return generic;
+  const skip = await f.loopbackSkip(deps.query);
+  if (skip.skipped) return { id: 'redirect', status: 'fail', message: skip.message, fix: skip.fix };
+  if (skip.skipped === null) return { ...generic, fix: `${SETUP}; if it is installed, pf may be set to skip loopback (lo0), which Hallway couldn't check without a password prompt: ${skip.fix}` };
+  return generic;
 }
 
 async function helperStatus(services: Services, label: string) {

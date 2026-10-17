@@ -7,6 +7,7 @@ import type {
   BookmarksResponse,
   ClaimRequest,
   ErrorResponse,
+  FrontingResponse,
   HistoryWindow,
   IgnoreRequest,
   LostActionRequest,
@@ -154,6 +155,38 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
     const v = configView(store);
     withEtag(c, store.config);
     return c.json(v);
+  });
+
+  // ---------------- dashboard hints and local domains (D63) ----------------
+  // only `dashboard.hints` in config.yaml: the dashboard can dismiss a hint, not edit the rest of the file
+  api.patch('/hints', async (c) => {
+    try {
+      const body = await jsonBody(c);
+      const known = ['localDomains'];
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('the body must be an object such as { "localDomains": false }');
+      const issues = Object.entries(body).flatMap(([k, v]) =>
+        !known.includes(k) ? [{ key: k, message: `unknown hint (known: ${known.join(', ')})` }] : typeof v !== 'boolean' ? [{ key: k, message: 'must be true or false' }] : [],
+      );
+      if (issues.length) throw new ValidationError(issues.map((i) => `${i.key}: ${i.message}`).join('; '), issues);
+      const e = await store.patchConfig({ dashboard: { hints: body } }, writeOpts(c));
+      withEtag(c, e);
+      return c.json(configView(store));
+    } catch (e) {
+      return handle(c, e);
+    }
+  });
+
+  // local domains: what fronted mode gives, whether it's on, and (in fronted mode) doctor's checks. Read-only: setup is
+  // `hallway setup`, never the daemon (AGENTS.md)
+  api.get('/fronting', async (c) => {
+    const fronting = providers.first('fronting');
+    if (!fronting) return fail(c, 503, { error: 'local domains are not available in this daemon (no fronting provider is running)' });
+    try {
+      const r = await providers.first('frontingChecks', c.req.query('fresh') === '1');
+      return c.json({ fronting, checks: r?.checks ?? null, checkedAt: r?.checkedAt ?? null } satisfies FrontingResponse);
+    } catch (e) {
+      return handle(c, e);
+    }
   });
 
   // ---------------- apps ----------------

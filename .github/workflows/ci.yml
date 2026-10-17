@@ -188,7 +188,7 @@ jobs:
         timeout-minutes: 3
         run: |
           for f in "$(ls -d ${TMPDIR:-/tmp}/hw-fr-* 2>/dev/null | head -1)"/data/logs/*.log; do [ -f "$f" ] && { echo "== $f"; tail -50 "$f"; }; done; true
-          if [ "$RUNNER_OS" = macOS ]; then sudo -n pfctl -s info 2>&1 | head -3; sudo -n pfctl -a com.apple/hallway -s nat 2>&1; sudo -n launchctl print system/hallway.pf 2>&1 | head -20; fi; true
+          if [ "$RUNNER_OS" = macOS ]; then sudo -n pfctl -s info 2>&1 | head -3; sudo -n pfctl -s Interfaces -v 2>&1 | head -3; sudo -n pfctl -a com.apple/hallway -s nat 2>&1; sudo -n launchctl print system/hallway.pf 2>&1 | head -20; fi; true
 
   # ---------------------------------------------------------------------------------------------------------------
   # Docs site (website/). The site is its own npm project, with its own package.json and lockfile; the root

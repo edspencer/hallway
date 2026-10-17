@@ -17,7 +17,8 @@ dev servers directly. In **direct mode** (the default) every app's address is `h
 **fronted mode**, which the user turns on with `hallway setup`, each app also gets `https://<slug>.localhost` (or
 `<slug>.<base>` on their own domain). The live facts above (when this guide comes from a running daemon) say which
 mode is on, and each app's `url` in `/api/state` is the address to give the user. Don't run `hallway setup` or `hallway teardown` yourself: they need sudo, so they're the
-user's to run.
+user's to run. Both show their plan and ask `Continue? [y/N]` in the terminal before they change anything; never pass
+`--yes` for the user (it exists for scripts and CI).
 
 On Windows (best effort) all of that works except fronted mode: `hallway run` makes a per-user scheduled task.
 
@@ -126,6 +127,7 @@ All JSON, on 127.0.0.1 only. Writes need `Content-Type: application/json`.
 | GET | `/api/lost` | What was lost at the last reboot (`null` if nothing) |
 | POST | `/api/lost/<id>/restart`, `/api/lost/<id>/service` | `{}` or `{"slug": "..."}`: start it again once, or as a service |
 | POST | `/api/lost/<id>/dismiss`, `/api/lost/dismiss` | Clear one, or the whole notice |
+| GET | `/api/fronting` | Local domains (`https://<app>.localhost`): on or off, and in fronted mode `hallway doctor`'s networking checks. Turning them on is `hallway setup`, for the user to run |
 | POST | `/api/observed/<id>/claim` | `{"slug": "...", "name": "...", "expected": "adhoc"}`: turn one into an app |
 | POST | `/api/observed/<id>/ignore` | `{"by": "port" \| "process" \| "dir"}`: hide it (adds to `ignore.yaml`) |
 | GET | `/api/config` | The settings in force |
@@ -242,7 +244,7 @@ One app per file: `apps/<slug>.yaml`. The slug is the file name. The slug: lower
 | `project.dir` | text | `null` | The project directory (`~` allowed). |
 | `project.repo` | text | `null` | The repository URL. |
 | `tags` | list of text | `[]` | Free-form tags, for filtering. |
-| `icon` | text | `auto` | `auto` (the site's favicon), an emoji, a path to an image in the data home, or an image URL. |
+| `icon` | text | `auto` | `auto` (the site's favicon, else a registry-matched brand mark, D66), an emoji, a path to an image in the data home, an image URL, or `si:<slug>` for a specific brand from the registry (src/lib/brands.ts). |
 
 ### `bookmarks/<group>.yaml`
 
@@ -257,7 +259,7 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `links[].title` | text | the URL's host name | The link text. |
 | `links[].url` | text | **required** | Where it goes. |
 | `links[].description` | text | `null` | A tooltip. |
-| `links[].icon` | text | `auto` | `auto` (the site's favicon), an emoji, a path to an image in the data home, or an image URL. |
+| `links[].icon` | text | `auto` | `auto` (the site's favicon, else a registry-matched brand mark, D66), an emoji, a path to an image in the data home, an image URL, or `si:<slug>` for a specific brand from the registry (src/lib/brands.ts). |
 | `links[].tags` | list of text | `[]` | Free-form tags, for filtering. |
 
 ### `ignore.yaml`
@@ -312,6 +314,8 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `dashboard.title` | text | the machine's host name | The page title. |
 | `dashboard.sections` | list of `apps` \| `observed` \| `bookmarks` | `[apps, observed, bookmarks]` | Which sections to show, in order. |
 | `dashboard.theme` | `auto` \| `dark` \| `light` | `auto` | `auto` follows the system. |
+| `dashboard.hints` | mapping |  | One-off suggestions on the dashboard. Dismissing one there sets it to false here. |
+| `dashboard.hints.localDomains` | true/false | `true` | The "Local domains" panel: how to turn on https://<app>.localhost (`hallway setup`). Shown only in direct mode, and never on Windows. |
 
 Unknown keys are kept when Hallway writes a file, and reported as warnings. A file that fails to parse or validate is never overwritten: Hallway keeps using its last good version and shows the error (file, line, message) until it is fixed.
 

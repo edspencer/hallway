@@ -793,16 +793,8 @@ kbd {
   object-fit: cover;
 }
 .hw-door--card .hw-door-panes,
-.hw-door--card .hw-door-knob,
-.hw-door--card .hw-door-plate {
+.hw-door--card .hw-door-knob {
   display: none;
-}
-.hw-door-plate {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1;
 }
 .hw-door-knob {
   position: absolute;
@@ -920,9 +912,6 @@ kbd {
     linear-gradient(10deg, transparent 40%, var(--hw-board) 40% 49%, transparent 49%),
     linear-gradient(-12deg, transparent 57%, var(--hw-board) 57% 66%, transparent 66%);
   opacity: 0.92;
-}
-.hw-door--down .hw-door-plate {
-  z-index: 3;
 }
 
 /* unknown (a prober is running but hasn't reached it): a door in shadow, drawn as an outline */
@@ -1105,6 +1094,18 @@ kbd {
 .hw-tile-glyph {
   font-size: 24px;
   line-height: 1;
+}
+/* a registry-matched brand (D66): the mark is the hero, so it gets a bigger tile than a favicon or monogram, in the
+   same ink the monogram uses (the door's own paint, darkened) — the paint itself already carries the brand's hex. */
+.hw-tile--brand {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+.hw-tile-brand {
+  width: 36px;
+  height: 36px;
+  fill: color-mix(in oklab, var(--paint), var(--hw-paint-shade) 30%);
 }
 
 /* ---------------------------------------------------------------------------------------------------------------- */
@@ -2409,6 +2410,197 @@ kbd {
 }
 
 /* ---------------------------------------------------------------------------------------------------------------- */
+/* local domains (D63): the panel in direct mode, the header's control, and its dialog                               */
+/* ---------------------------------------------------------------------------------------------------------------- */
+
+.hw-domains {
+  margin: 0 0 28px;
+  padding: 14px 16px 16px;
+  border-radius: var(--hw-radius);
+  border: 1px solid var(--hw-line-strong);
+  border-left: 3px solid var(--hw-accent);
+  background: var(--hw-bg-raised);
+}
+.hw-domains-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.hw-domains-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.hw-domains-title svg {
+  color: var(--hw-accent-text);
+}
+.hw-domains-text {
+  margin: 0 0 8px;
+  max-width: 78ch;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.hw-domains-quiet {
+  color: var(--hw-text-muted);
+}
+.hw-domains-text code,
+.hw-domains-check code {
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+.hw-domains-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 24px;
+  margin-top: 10px;
+}
+.hw-domains-cmds {
+  /* command | copy | what it does, in columns, so the rows line up */
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hw-domains-cmds li {
+  display: contents;
+}
+.hw-domains-cmd {
+  padding: 4px 9px;
+  border-radius: var(--hw-radius-small);
+  background: var(--hw-bg-sunken);
+  border: 1px solid var(--hw-line);
+  font-size: 13px;
+}
+.hw-domains-copy {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.hw-domains-what {
+  font-size: 12.5px;
+  color: var(--hw-text-subtle);
+}
+.hw-domains-docs {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.hw-domains-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--hw-radius-pill);
+  border: 1px solid var(--hw-line-strong);
+  background: transparent;
+  color: var(--hw-text-muted);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hw-domains-btn:hover {
+  background: var(--hw-bg-hover);
+  color: var(--hw-text);
+}
+.hw-domains-btn-off {
+  color: var(--hw-text-faint);
+}
+.hw-domains-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--hw-text-faint);
+}
+.hw-domains-dot--ok {
+  background: var(--hw-healthy);
+}
+.hw-domains-dot--warn {
+  background: var(--hw-unhealthy);
+}
+.hw-domains-dot--fail {
+  border-radius: 1px;
+  background: var(--hw-down);
+}
+.hw-domains-dot--checking {
+  animation: hw-pulse 1.4s ease-in-out infinite;
+}
+
+.hw-domains-dialog {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+.hw-domains-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.hw-domains-when {
+  font-weight: 400;
+  color: var(--hw-text-subtle);
+}
+.hw-domains-recheck {
+  margin-left: auto;
+  height: 26px;
+  font-size: 12px;
+}
+.hw-domains-checks {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.hw-domains-check {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.hw-domains-mark {
+  font-family: var(--hw-font-mono);
+  font-weight: 700;
+  text-align: center;
+}
+.hw-domains-check--pass .hw-domains-mark {
+  color: var(--hw-healthy);
+}
+.hw-domains-check--warn .hw-domains-mark {
+  color: var(--hw-unhealthy);
+}
+.hw-domains-check--fail .hw-domains-mark {
+  color: var(--hw-down);
+}
+.hw-domains-check--info .hw-domains-mark {
+  color: var(--hw-text-subtle);
+}
+.hw-domains-fix {
+  display: block;
+  color: var(--hw-text-muted);
+}
+
+/* ---------------------------------------------------------------------------------------------------------------- */
 /* narrow screens                                                                                                    */
 /* ---------------------------------------------------------------------------------------------------------------- */
 
@@ -2453,8 +2645,25 @@ kbd {
     font-size: 10.5px;
   }
   .hw-brand-sep,
-  .hw-brand-title {
+  .hw-brand-title,
+  .hw-domains-btn-label {
     display: none;
+  }
+  .hw-domains-btn {
+    padding: 0 8px;
+  }
+  .hw-domains-cmds {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hw-domains-cmds li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+  .hw-domains-what {
+    flex-basis: 100%;
+    margin-bottom: 4px;
   }
   .hw-counts .hw-count--stopped {
     display: none;

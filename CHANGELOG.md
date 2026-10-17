@@ -1,5 +1,19 @@
 # hallway
 
+## 0.6.0
+
+### Minor Changes
+
+- [#38](https://github.com/edspencer/hallway/pull/38) [`c40e1c3`](https://github.com/edspencer/hallway/commit/c40e1c3eba7267fb5279ad42f7f492446ee795f6) Thanks [@edspencer](https://github.com/edspencer)! - Doors with no favicon now get a brand mark instead of a plain monogram, for apps the dashboard can recognise — Ollama, Postgres, Redis, Grafana and around 40 other self-hosted and developer tools — matched from the process name, the command line, the supervisor's label or (as a last resort) a well-known port. Set `icon: si:<slug>` on any app to pick one yourself. The floating port-number badge in the middle of each door is gone: the port already read in the address line underneath, and the badge wasn't a click target, so it only cost clicks.
+
+- [#35](https://github.com/edspencer/hallway/pull/35) [`854dcd6`](https://github.com/edspencer/hallway/commit/854dcd678fa0122dccf43013d65f546546650224) Thanks [@edspencer](https://github.com/edspencer)! - Local domains are discoverable. `hallway` / `npx hallway` prints a HALLWAY banner on a terminal (no art or colour when piped, nothing extra with `--quiet`), the dashboard's address, and, while local domains are off, how to turn them on with `hallway setup`; from npx, how to keep it running. If Hallway is already running on the port, it says where and exits 0 instead of failing. The dashboard shows a dismissible **Local domains** panel in direct mode (dismissal is saved in `config.yaml` as `dashboard.hints.localDomains`), and a **Local domains** control in the header that brings it back or, once fronted mode is on, shows `hallway doctor`'s networking checks. `hallway doctor` says when local domains are off. New: `GET /api/fronting`, `PATCH /api/hints`, `fronting` in `/api/state`. Not on Windows, where `hallway setup` refuses.
+
+- [#41](https://github.com/edspencer/hallway/pull/41) [`e47df12`](https://github.com/edspencer/hallway/commit/e47df1249937216b9975721898f3fbb8e6b06452) Thanks [@edspencer](https://github.com/edspencer)! - `hallway setup` and `hallway teardown` now ask before they change anything: they print the plan (what `--print` shows), say what will ask for what (sudo's password in the terminal and, on macOS, a separate Touch ID or password dialog for certificate trust settings), and ask `Continue? [y/N]`, defaulting to no. `--yes` skips the question; with no terminal and no `--yes` they refuse with a usage error (exit 2) before doing anything.
+
+### Patch Changes
+
+- [#36](https://github.com/edspencer/hallway/pull/36) [`eecdbf5`](https://github.com/edspencer/hallway/commit/eecdbf58f38459e6d3601547b48f183f6ec924b6) Thanks [@edspencer](https://github.com/edspencer)! - macOS fronted mode: when another tool has told pf to skip loopback (`set skip on lo0`), which leaves Hallway's 443/80 redirect installed but ignored, `hallway doctor` now says so (naming what enabled pf) with the fix, and `hallway setup` clears it with a printed sudo step (loading macOS's own `/etc/pf.conf` again, then the redirect) when that can't drop anyone else's rules. Setup's final check reports that cause instead of "nothing answered". Also quieter setup output: `brew install` runs without Homebrew's auto-update, cleanup and hints, and the expected "Boot-out failed: 3: No such process" from the first `launchctl bootout` is no longer shown.
+
 ## 0.5.2
 
 ### Patch Changes

@@ -13,8 +13,8 @@ Hallway gives them all a front door:
 - **Health at a glance** — state and uptime history for each, calm when things are intentionally off, loud only when
   something that should be running isn't.
 - **Memorable HTTPS hostnames** — `https://review.localhost` instead of `localhost:5622`, with no DNS setup by
-  default (or under your own domain). `hallway setup` runs Caddy as you, never as root, and prints each privileged
-  step before it runs it.
+  default (or under your own domain). `hallway setup` runs Caddy as you, never as root, shows its whole plan and
+  asks before it runs any of it.
 - **Survives reboots** — the things you want kept alive run as native OS services (launchd on macOS, systemd on
   Linux, a per-user scheduled task on Windows), and after a restart Hallway lists what was running before and didn't come back, with one click to start
   each again.
@@ -45,7 +45,11 @@ hallway open               # or browse to http://localhost:4255
 
 To try it first, `npx hallway` runs the dashboard in the foreground until you close the terminal. To keep it, install
 it: `npm i -g hallway && hallway service install`. (Hallway won't install a service from npx: npm can delete its
-cache at any time, which would break the service at the next login.)
+cache at any time, which would break the service at the next login.) If the service is already running, `npx hallway`
+says where and exits.
+
+Local domains (`https://hallway.localhost`, `https://<app>.localhost`) are off until you run `hallway setup`; the
+startup banner, the dashboard's **Local domains** panel and `hallway doctor` all say so, and how.
 
 Hallway now lists every web server it finds listening on this machine. **Claim** one to give it a door (that writes
 `~/.hallway/apps/<slug>.yaml`), or declare one yourself:
