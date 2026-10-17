@@ -22,10 +22,10 @@ node bind.mjs 127.0.0.1:443 '[::1]:443' 0.0.0.0:443 '[::]:443' 127.0.0.1:80 '[::
 h "1b. caddy: unprivileged bind on 127.0.0.1:443 and 0.0.0.0:443"
 for addr in 127.0.0.1 0.0.0.0; do
   printf '{\n admin off\n}\nhttp://:443 {\n bind %s\n respond "caddy on %s:443"\n}\n' $addr $addr > "$WORK/bind-$addr.Caddyfile"
-  T 6 caddy run --adapter caddyfile --config "$WORK/bind-$addr.Caddyfile" > "$WORK/bind-$addr.log" 2>&1 &
+  T 12 caddy run --adapter caddyfile --config "$WORK/bind-$addr.Caddyfile" > "$WORK/bind-$addr.log" 2>&1 &
   sleep 4
   echo "-- $addr: curl http://127.0.0.1:443 -> $(curl -s -m 2 http://127.0.0.1:443/ || echo 'no answer')"
-  tail -4 "$WORK/bind-$addr.log" | cut -c1-260
+  sleep 3; echo "   after 7s: $(curl -s -m 2 http://127.0.0.1:443/ || echo 'no answer')"; grep -v debug "$WORK/bind-$addr.log" | cut -c1-260 | tail -6
   wait
 done
 
@@ -126,7 +126,7 @@ echo "-- add-trusted-cert into the user domain (login keychain), 90 s limit, fir
 START=$(date +%s)
 T 30 security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "$ROOT"; echo "exit=$? after $(( $(date +%s) - START ))s"
 echo "-- again, answering SecurityAgent's dialog with the user's (CI-set) password via System Events:"
-PW="hw-exp-$RANDOM$RANDOM"; sudo dscl . -passwd /Users/runner "$PW" && echo "runner password set"
+PW="hw-exp-$RANDOM$RANDOM"; sudo sysadminctl -resetPasswordFor runner -newPassword "$PW" 2>&1 | tail -2; dscl . -authonly runner "$PW" && echo "runner password set"
 ( for i in $(seq 1 40); do
     if pgrep -x SecurityAgent >/dev/null; then sleep 2
       osascript -e 'tell application "System Events" to tell process "SecurityAgent" to get {name, entire contents} of window 1' 2>&1 | head -c 1500; echo
