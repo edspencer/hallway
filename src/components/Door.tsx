@@ -5,6 +5,7 @@
 import type { CSSProperties } from 'react';
 import type { AppView } from '../../shared/api';
 import { thumbUrl } from '../api';
+import { matchBrand } from '../lib/brands';
 import { paintFor } from '../lib/colour';
 import { ORPHANED_HINT, displayUrl, exposedHint, millis, percent } from '../lib/format';
 import { STATE_META, doorState, subtitle } from '../lib/status';
@@ -36,7 +37,12 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   const thumb = app.thumb ? thumbUrl(app.slug, app.thumb) : null;
   // a favicon is drawn small on the door; a screenshot is its glass; a generated card is the whole door (D55)
   const kind = thumb ? (app.thumbKind ?? 'favicon') : null;
-  const colour = useImageColour(kind === 'card' ? null : thumb);
+  const id = app.identity;
+  // no favicon and no explicit custom icon: a registry match (D63) stands in for the monogram
+  const brand = thumb
+    ? null
+    : matchBrand({ icon: app.config?.icon ?? null, process: id?.process ?? null, command: id?.command ?? null, supervisorLabel: id?.supervisor?.label ?? null, name: app.name, slug: app.slug, port: app.config?.port ?? null });
+  const colour = useImageColour(kind === 'card' ? null : thumb) ?? brand?.hex ?? null;
   const error = app.problems.find((p) => p.severity === 'error');
   const warnings = app.problems.filter((p) => p.severity === 'warning').length;
   const port = app.config?.port ?? null;
@@ -45,7 +51,6 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   const h = app.health;
   const stats = [h.uptime24h !== null ? percent(h.uptime24h) : null, h.latencyP50 !== null ? millis(h.latencyP50) : h.latencyMs !== null ? millis(h.latencyMs) : null].filter(Boolean).join(' · ');
   const expected = app.config?.expected;
-  const id = app.identity;
   const glyph = isGlyph(app.config?.icon) ? app.config!.icon : null;
   const style = { '--paint': paintFor(app.slug, colour) } as CSSProperties;
   const label = `${app.name}${sub ? `, ${sub}` : ''}: ${unchecked ? 'not checked' : STATE_META[state].label}${app.url ? `, ${displayUrl(app.url)}` : ''}`;
@@ -64,9 +69,8 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
         {kind === 'screenshot' || kind === 'card' ? (
           <img className={kind === 'card' ? 'hw-door-card' : 'hw-door-glass'} src={thumb!} alt="" decoding="async" />
         ) : (
-          <Tile name={app.name} src={thumb} glyph={glyph} className="hw-door-tile" />
+          <Tile name={app.name} src={thumb} glyph={glyph} brand={brand} className="hw-door-tile" />
         )}
-        <span className="hw-plate hw-door-plate">{port ?? '—'}</span>
         <span className="hw-door-knob" />
       </div>
       <div className="hw-door-body">

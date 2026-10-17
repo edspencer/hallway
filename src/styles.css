@@ -793,16 +793,8 @@ kbd {
   object-fit: cover;
 }
 .hw-door--card .hw-door-panes,
-.hw-door--card .hw-door-knob,
-.hw-door--card .hw-door-plate {
+.hw-door--card .hw-door-knob {
   display: none;
-}
-.hw-door-plate {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1;
 }
 .hw-door-knob {
   position: absolute;
@@ -920,9 +912,6 @@ kbd {
     linear-gradient(10deg, transparent 40%, var(--hw-board) 40% 49%, transparent 49%),
     linear-gradient(-12deg, transparent 57%, var(--hw-board) 57% 66%, transparent 66%);
   opacity: 0.92;
-}
-.hw-door--down .hw-door-plate {
-  z-index: 3;
 }
 
 /* unknown (a prober is running but hasn't reached it): a door in shadow, drawn as an outline */
@@ -1105,6 +1094,18 @@ kbd {
 .hw-tile-glyph {
   font-size: 24px;
   line-height: 1;
+}
+/* a registry-matched brand (D63): the mark is the hero, so it gets a bigger tile than a favicon or monogram, in the
+   same ink the monogram uses (the door's own paint, darkened) — the paint itself already carries the brand's hex. */
+.hw-tile--brand {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+.hw-tile-brand {
+  width: 36px;
+  height: 36px;
+  fill: color-mix(in oklab, var(--paint), var(--hw-paint-shade) 30%);
 }
 
 /* ---------------------------------------------------------------------------------------------------------------- */

@@ -1092,3 +1092,71 @@ being `/opt/homebrew`), and showed **exposed** with no explanation.
   only at `/` and `~` (as before): `/opt/homebrew` is a git repository, so a prefix has to be named.
 - **Observation ids** hash the project root or else the cwd, so a listener that used to be identified by a prefix's
   repository gets a new id (and a new row in `observed.json`) once; nothing else changes for it.
+
+### D63 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
+
+The author, on a real Mac: Ollama (port 11434) shows a plain "O" monogram, because its server answers "Ollama is
+running" with no `<link rel="icon">` at all — tier 1's only fallback is the hashed monogram. "I feel like this could
+look a lot slicker if these applications had much clearer brand identity… like the Okta dashboard: a bunch of logos
+that are easy to see at a glance." Separately, the floating port-number plate in the middle of each door (D23's
+"door-number plate" idea, built in v0) kept getting clicked by mistake: it sits over the door's live area but isn't
+itself a click target, and the port already appears in the address line underneath.
+
+- **The port plate is removed from the door face.** The port still reads in the address line (`localhost:5622`) and,
+  in fronted mode, in the secondary `:5622` link back round the proxy (`hw-door-direct`, unchanged) — both already
+  existed, so no information is lost, only a non-clickable decoration that duplicated it and ate clicks meant for the
+  card. `docs/05-ui.md`'s "Visual direction" table and "Ideas to explore" are updated; the door itself (`.hw-door-link`,
+  `position: absolute; inset: 0`) was always the one click target and is unaffected.
+- **A brand registry stands in for the monogram when there's no favicon and `icon: auto`.** Priority, highest first:
+  an explicit `icon: si:<slug>` (new; never falls through, even for an unknown slug — a typo is a miss, not a silent
+  substitute) → the existing favicon tier → an automatic registry match → the monogram. A custom `icon:` (a URL, a
+  path, an emoji) that failed to resolve is left alone, never silently overridden: auto-matching only runs for `auto`
+  or unset.
+- **Matching is pure and entirely client-side** (`src/lib/brands.ts`, tested under `node:test`). Every hint it needs —
+  process name, full command, the supervisor's label (`homebrew.mxcl.ollama`, D62), the app's name/slug, and its
+  declared port — is already on `AppView` (`identity`, `config`), sent to the dashboard for other reasons, so no
+  daemon change was needed to resolve a match. Tokens are matched whole (split on anything but a letter, digit or
+  `-`, so a dotted supervisor label splits into its parts), never as a substring, against a curated keyword list per
+  brand; a well-known default port (`11434` → Ollama, `5432` → Postgres, …) is tried only when nothing else matches,
+  and only for ports no other common tool shares (an ambiguous port hint is worse than none — the generator throws if
+  two curated entries claim the same one). Deliberately excluded: frontend framework icons (Next.js, Vite, …) — their
+  dev servers typically ship their own favicon already, so a registry entry would be redundant at best and a second,
+  competing source of truth at worst; and bare runtimes or generic words (`node`, `python`, `http`) are kept out of
+  every keyword list so they can never match (tested).
+- **The registry is a curated, generated subset, not the whole `simple-icons` package.** `simple-icons` (CC0; see its
+  `DISCLAIMER.md` for brands' own trademarks) is a **devDependency** only, ~16 MB unpacked for ~3500 brands, almost
+  none of which anyone runs on a dev machine. `scripts/brand-icons.mjs` extracts title, hex and SVG path for a
+  curated list (`CURATED`, ~45 self-hosted/infra tools: Ollama, Postgres, MySQL/MariaDB, MongoDB, Redis, SQLite,
+  Grafana, Prometheus, Jupyter, RabbitMQ, Elasticsearch/OpenSearch, Kibana, InfluxDB, nginx, n8n, Supabase, MinIO,
+  Portainer, Gitea, Jenkins, WordPress, Ghost, Consul, Traefik, Caddy, CouchDB, Neo4j, Kafka, Keycloak, Nextcloud,
+  Home Assistant, Plex, Jellyfin, Airflow, Metabase, Superset, Airbyte, Meilisearch, Uptime Kuma, Qdrant, Temporal,
+  Logstash, Vault, Milvus) into `src/lib/brands.data.ts`, committed, with **no `simple-icons` import left at run
+  time** (`smoke:pack` and the bundle size prove it: the generated file is ~65 kB of source, not 16 MB). `icon:
+  si:<slug>` only reaches this curated set; a brand not in it needs an entry added (`CURATED` + re-run the script),
+  or a direct favicon/image/path `icon:`.
+- **The door's paint comes from the brand's own hex when one matches** (`paintFor`, unchanged: it already accepted
+  any colour, not only one read from a favicon's pixels), toned down the same way a favicon's colour is (D28); the
+  mark itself is drawn bigger than a favicon tile (`.hw-tile--brand`, 56 px vs. 44 px) so it reads as the hero, in the
+  monogram's own ink formula (the door's paint, darkened) rather than the brand's raw hex, which keeps it legible
+  regardless of how light or dark that hex is (Ollama's own simple-icons hex is pure black).
+- **Rejected:**
+  - keeping the port plate but making it `pointer-events: none`: it would still visually read as clickable (it sits
+    dead centre, where a user's eye and cursor land first) and still duplicate the address;
+  - bundling all of `simple-icons` as a runtime dependency: 16 MB for ~3500 brands nobody runs locally, against the
+    package's existing discipline of keeping anything the dashboard doesn't need at run time out of `dependencies`;
+  - fetching icons from Simple Icons' CDN at run time: a network dependency and a privacy leak (the daemon would tell
+    a third party which brands of software someone runs) for a feature the spec requires to work offline;
+  - scraping an app's bundle or binary for an embedded icon (e.g. a macOS app bundle's `.icns`): fragile across
+    frameworks and platforms, and no safe, generic way to extract one from an arbitrary process;
+  - matching on the HTTP `Server` response header or page `<title>`: neither is captured for a *declared* app today
+    (`ListenerIdentity` carries no title; `sniff.ts`'s title is scanner-only, for not-yet-claimed listeners) — adding
+    that capture is server-side scope this PR doesn't need, since process/command/supervisor/port already resolve
+    the motivating case. Left as a follow-up if a brand with no distinguishing executable name ever needs it;
+  - a server-side `thumbKind: 'brand'` rendered through the existing thumbnail pipeline (`GET /…/thumb`): every hint
+    the match needs is already client-visible, so a server round trip would add latency and an extra endpoint for no
+    benefit, and would have made "favicon beats registry" (tried first, replaces nothing if it fails) harder to keep
+    simple than "no thumbnail → try the registry" already is on the client;
+  - the macOS app-bundle icon for processes under `/Applications/*.app`: deferred as a follow-up (noted in the PR),
+    not attempted here — it would need `server/platform/darwin.ts` to read and decode an `.icns`/`Info.plist`, which
+    is new daemon-side scope beyond this PR's door/thumbs-only diff, and no app on the author's own machine (Paddock,
+    Ollama) is bundle-launched, so there was nothing to verify it against.

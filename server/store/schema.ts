@@ -73,7 +73,7 @@ const pathCheck = (v: string | null) => (v === null || v.startsWith('/') ? null 
 const port = (doc: string, extra: Partial<Base> & { default?: number }): Field => ({ t: 'int', min: 1, max: 65535, doc, ...extra });
 const str = (doc: string, extra: Partial<Extract<Field, { t: 'string' }>> = {}): Field => ({ t: 'string', doc, ...extra });
 const tags: Field = { t: 'list', of: { t: 'string', doc: 'a tag', pattern: /^\S+$/, patternDoc: 'no spaces' }, default: [], doc: 'Free-form tags, for filtering.' };
-const icon: Field = str('`auto` (the site\'s favicon), an emoji, a path to an image in the data home, or an image URL.', { default: 'auto' });
+const icon: Field = str('`auto` (the site\'s favicon, else a registry-matched brand mark, D63), an emoji, a path to an image in the data home, an image URL, or `si:<slug>` for a specific brand from the registry (src/lib/brands.ts).', { default: 'auto' });
 
 // ---------------------------------------------------------------------------------------------------------------
 // The files
