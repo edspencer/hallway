@@ -4,7 +4,10 @@ import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppView, BookmarkGroupView, ObservedListener, StateResponse } from '../shared/api.ts';
+import type { AppView, BookmarkGroupView, ConfigView, FrontingCheck, FrontingResponse, ObservedListener, StateResponse } from '../shared/api.ts';
+import { darwinFronting } from '../server/platform/fronting-darwin.ts';
+import { win32Fronting } from '../server/platform/win32.ts';
+import { frontingInfo, frontingProvider, tildifyText } from '../server/proxy/status.ts';
 import { createApp } from '../server/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
 import { appUrl } from '../server/views.ts';
@@ -338,6 +341,96 @@ describe('security on the API', () => {
     assert.ok(fs.existsSync(path.join(home, 'apps/foo.yaml')));
     await store.patchConfig({ mode: 'direct' });
     assert.equal((await req('/api/apps/foo', { method: 'DELETE', host: 'localhost', headers: { origin: 'https://hallway.localhost' } })).status, 403, 'direct mode: the dashboard host is foreign again');
+  });
+});
+
+describe('local domains (D63)', () => {
+  test('/api/state: fronting is null with no provider, else what setup would give and whether it is on', async () => {
+    const { req, providers, store } = await setup();
+    assert.equal(((await (await req('/api/state')).json()) as StateResponse).fronting, null);
+    assert.equal((await req('/api/fronting')).status, 503);
+    providers.register(frontingProvider({ store, platform: { fronting: darwinFronting }, checks: async () => [] }));
+    const f = ((await (await req('/api/state')).json()) as StateResponse).fronting;
+    assert.deepEqual(f, { unsupported: null, mode: 'direct', dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null });
+    await store.patchConfig({ mode: 'fronted', domain: { base: 'myname.internal' }, proxy: { publicPort: 4443 } });
+    const g = ((await (await req('/api/state')).json()) as StateResponse).fronting!;
+    assert.equal(g.mode, 'fronted');
+    assert.equal(g.dashboardUrl, 'https://myname.internal:4443');
+    assert.equal(g.appUrl, 'https://<app>.myname.internal:4443');
+  });
+
+  test('paths in the push error are shown under ~', () => {
+    assert.equal(tildifyText('nothing on /home/me/.hallway/state/caddy/admin.sock', '/home/me'), 'nothing on ~/.hallway/state/caddy/admin.sock');
+    assert.equal(tildifyText('nothing on /home/meg/x', '/home/me'), 'nothing on /home/meg/x');
+    assert.equal(tildifyText('nothing on C:\\Users\\me\\.hallway\\x', 'C:\\Users\\me'), 'nothing on ~\\.hallway\\x');
+    assert.equal(tildifyText(null), null);
+  });
+
+  test('on Windows it says why not (and the dashboard shows nothing)', () => {
+    const f = frontingInfo(defaultConfig(), { fronting: win32Fronting });
+    assert.match(f.unsupported ?? '', /Windows/);
+  });
+
+  test('GET /api/fronting: no checks in direct mode; in fronted mode doctor\'s, cached until ?fresh=1 or a config change', async () => {
+    const { req, providers, store } = await setup();
+    let runs = 0;
+    const checks: FrontingCheck[] = [{ id: 'caddy', status: 'pass', message: 'Caddy 2.8' }];
+    let pushError: string | null = 'connect ENOENT';
+    providers.register(frontingProvider({ store, platform: { fronting: darwinFronting }, proxyStatus: () => ({ pushError }), checks: async () => (runs++, checks) }));
+    let r = (await (await req('/api/fronting')).json()) as FrontingResponse;
+    assert.equal(r.checks, null);
+    assert.equal(r.fronting.pushError, null, 'a push error means nothing in direct mode');
+    assert.equal(runs, 0, 'direct mode never runs the checks');
+    await store.patchConfig({ mode: 'fronted' });
+    r = (await (await req('/api/fronting')).json()) as FrontingResponse;
+    assert.deepEqual(r.checks, checks);
+    assert.ok(r.checkedAt);
+    assert.equal(r.fronting.pushError, 'connect ENOENT');
+    await req('/api/fronting');
+    assert.equal(runs, 1, 'cached');
+    await req('/api/fronting?fresh=1');
+    assert.equal(runs, 2);
+    await store.patchConfig({ proxy: { publicPort: 4443 } });
+    await req('/api/fronting');
+    assert.equal(runs, 3, 'a config change makes the last run stale');
+    pushError = null;
+    assert.equal(((await (await req('/api/fronting')).json()) as FrontingResponse).fronting.pushError, null);
+  });
+
+  test('a failing run of the checks is a 500, and isn\'t cached', async () => {
+    const { req, providers, store } = await setup();
+    let fail = true;
+    providers.register(frontingProvider({ store, platform: { fronting: darwinFronting }, checks: async () => { if (fail) throw new Error('boom'); return []; } }));
+    await store.patchConfig({ mode: 'fronted' });
+    const prev = process.stderr.write;
+    process.stderr.write = () => true;
+    try {
+      assert.equal((await req('/api/fronting')).status, 500);
+    } finally {
+      process.stderr.write = prev;
+    }
+    fail = false;
+    assert.deepEqual(((await (await req('/api/fronting')).json()) as FrontingResponse).checks, []);
+  });
+
+  test('PATCH /api/hints dismisses the panel into config.yaml, and brings it back; nothing else in the file', async () => {
+    const { req, home } = await setup();
+    const before = fs.existsSync(path.join(home, 'config.yaml')) ? fs.readFileSync(path.join(home, 'config.yaml'), 'utf8') : '';
+    const r = await req('/api/hints', { method: 'PATCH', json: { localDomains: false } });
+    assert.equal(r.status, 200);
+    assert.equal(((await r.json()) as ConfigView).config.dashboard.hints.localDomains, false);
+    const after = fs.readFileSync(path.join(home, 'config.yaml'), 'utf8');
+    assert.match(after, /hints:\n\s+localDomains: false/);
+    assert.ok(after.startsWith(before.split('\n')[0]!), 'the rest of the file is kept');
+    assert.equal(((await (await req('/api/state')).json()) as StateResponse).config.config.dashboard.hints.localDomains, false);
+    await req('/api/hints', { method: 'PATCH', json: { localDomains: true } });
+    assert.equal(((await (await req('/api/state')).json()) as StateResponse).config.config.dashboard.hints.localDomains, true);
+    // only hints, only booleans
+    for (const json of [{ mode: 'fronted' }, { localDomains: 'no' }, ['localDomains'], null])
+      assert.equal((await req('/api/hints', { method: 'PATCH', json })).status, 400, JSON.stringify(json));
+    assert.equal(((await (await req('/api/state')).json()) as StateResponse).config.config.mode, 'direct');
+    // the security rules apply: a foreign origin can't dismiss it
+    assert.equal((await req('/api/hints', { method: 'PATCH', json: { localDomains: false }, headers: { origin: 'https://evil.example' } })).status, 403);
   });
 });
 

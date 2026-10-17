@@ -3,7 +3,7 @@
 // fail line with a fix.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { HallwayConfig } from '../../shared/api.js';
+import type { FrontingCheck, HallwayConfig } from '../../shared/api.js';
 import { dataPaths, tildify } from '../config.js';
 import { type FrontingEnv, type Platform, type Runner } from '../platform/index.js';
 import { findTool } from '../platform/fronting.js';
@@ -14,16 +14,13 @@ import type { Store } from '../store/index.js';
 import { CaddyUnreachable, runningConfig, sameConfig } from './admin.js';
 import { CA_NAME, caddyPaths } from './caddy.js';
 import { httpsUrl } from './names.js';
+import { frontingInfo } from './status.js';
 import { httpProbe, isLoopback, readRoot, resolve, tlsProbe } from './probe.js';
 import { MIN_CADDY, isTrusted, portConflicts, versionAtLeast } from './setup.js';
 import { delegatedTlds, tldVerdict } from './tld.js';
 
-export interface NetCheck {
-  id: string;
-  status: 'pass' | 'warn' | 'fail' | 'skip';
-  message: string;
-  fix?: string;
-}
+/** A check (shared/api.ts): `info` is a fact worth knowing, neither a pass nor a problem. */
+export type NetCheck = FrontingCheck;
 
 export interface NetDeps {
   store: Store;
@@ -44,7 +41,17 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
   const out: NetCheck[] = [];
   const add = (c: NetCheck) => out.push(c);
   if (cfg.mode === 'direct') {
-    add({ id: 'networking', status: 'skip', message: 'fronted mode is off (mode: direct): apps are linked as http://localhost:<port>', fix: '`hallway setup` turns on https://<app>.localhost' });
+    // an info line, not a problem: direct mode is the default. It's here so that someone whose browser said "refused" at
+    // https://hallway.localhost learns why (D63)
+    const f = frontingInfo(cfg, platform);
+    if (f.unsupported) add({ id: 'networking', status: 'info', message: `local domains (fronted mode) are off: apps are linked as http://localhost:<port>. ${f.unsupported}` });
+    else
+      add({
+        id: 'networking',
+        status: 'info',
+        message: `local domains are off (mode: direct), so nothing answers at ${f.dashboardUrl} or ${f.appUrl} (a browser says the connection was refused); apps are linked as http://localhost:<port>`,
+        fix: '`hallway setup` turns them on (it prints each step first; `hallway setup --print` shows the plan and runs nothing)',
+      });
     return out;
   }
   const f = platform.fronting;

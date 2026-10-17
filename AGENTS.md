@@ -63,7 +63,8 @@ The human-facing version of the development conventions, with setup, CI and pull
 
 ```
 server/            the daemon and CLI (Node, TypeScript ESM, Hono)
-  cli.ts           `hallway` entry point (the package's bin); args.ts parses its arguments
+  cli.ts           `hallway` entry point (the package's bin); args.ts parses its arguments; banner.ts is what
+                   `serve` prints at startup (D63)
   commands/        every other command, by name in index.ts: services.ts (run, stop, start, restart, logs, service …),
                    apps.ts (app, bookmark), status.ts (status, scan, claim, ignore, open), offline.ts (the scan with no
                    daemon), lost.ts, setup.ts (setup, teardown), thumbs.ts, agents.ts (mcp, hook), doctor.ts;
@@ -101,6 +102,7 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   mcp/             the MCP server (D50–D53): index.ts (`/mcp`, Streamable HTTP), tools.ts (the tools and resources; none
                    starts a process), bridge.ts (`hallway mcp`: stdio forwarded to the daemon's `/mcp`)
   proxy/           fronted mode (D47): caddy.ts (apps + config → Caddy JSON), fallback.ts (generated/fallback.html),
+                   status.ts (local domains for the dashboard and the banner: `fronting`, `/api/fronting`, D63),
                    index.ts (the daemon pushes on every change), admin.ts (the admin socket), setup.ts (setup and
                    teardown: facts → plan → run), doctor.ts (networking checks), tld.ts, probe.ts, names.ts
   platform/fronting-*.ts  the privileged recipes per OS: the 443/80 redirect (pf / nftables), trust, the resolver
@@ -112,7 +114,8 @@ src/               the dashboard (React, built by Vite into dist/web)
   live.ts          GET /api/state, then SSE: refetch what each event names, reconnect with backoff
   api.ts           the client for the HTTP API (writes return conflict/invalid results for the forms)
   keyboard.ts      `/`, arrows (spatial), `c`, `i`, Esc, `?`;  ambient.ts: tab title + canvas favicon (D22)
-  components/      Door (app card), UptimeBar, LatencyChart, Drawer, Lost (the banner), Observed tray, Bookmarks,
+  components/      Door (app card), UptimeBar, LatencyChart, Drawer, Lost (the banner), LocalDomains (the panel and
+                   the header's dialog, D63), Observed tray, Bookmarks,
                    Header, Problems, Empty, …
   lib/             pure logic, tested under node: status counts, formatting, filter, door paint
   theme/tokens.css every colour, typeface and radius (theme.ts applies `dashboard.theme`)

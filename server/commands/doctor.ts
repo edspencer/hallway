@@ -1,7 +1,8 @@
 // `hallway doctor [--json]`: read-only diagnostics, each a pass / warn / fail line with a suggested fix
 // (docs/03-networking.md, "`hallway doctor`"). v0 checks the daemon, the data home and its files; with v1's services
 // it also checks every generated job for the PATH trap (docs/04) and a recorded Node that has gone. The networking
-// checks (Caddy, ports 80/443, the CA, DNS) arrive with fronted mode; in direct mode they don't apply.
+// checks (Caddy, ports 80/443, the CA, DNS) arrive with fronted mode; in direct mode an info line says local domains are
+// off and how to turn them on.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,7 +15,8 @@ import { pathProblem } from '../services/resolve.js';
 import { transientInstall } from '../services/transient.js';
 import { type Ctx, json, show } from './context.js';
 
-export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
+/** `info`: a fact worth knowing (local domains are off), neither a pass nor a problem. */
+export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skip' | 'info';
 
 export interface Check {
   id: string;
@@ -23,7 +25,7 @@ export interface Check {
   fix?: string;
 }
 
-const MARK: Record<CheckStatus, string> = { pass: '✓', warn: '!', fail: '✗', skip: '-' };
+const MARK: Record<CheckStatus, string> = { pass: '✓', warn: '!', fail: '✗', skip: '-', info: 'i' };
 
 export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<Check[]> {
   const checks: Check[] = [];

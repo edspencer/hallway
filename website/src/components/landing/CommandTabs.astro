@@ -60,12 +60,6 @@ const { idPrefix, class: className } = Astro.props;
 			</div>
 			<pre class="term-body"><code><span class="prompt">$</span> {QUICKSTART.command}</code></pre>
 		</div>
-		<p class="blurb">
-			{QUICKSTART.blurb}{' '}
-			<a href={QUICKSTART.link.href}>
-				{QUICKSTART.link.text} <span aria-hidden="true">→</span>
-			</a>
-		</p>
 	</div>
 </div>
 
@@ -269,22 +263,4 @@ const { idPrefix, class: className } = Astro.props;
 		margin-inline-end: 0.35rem;
 	}
 
-	.blurb {
-		margin: 0.9rem 0 0;
-		font-size: 0.86rem;
-		line-height: 1.6;
-		color: var(--text-subtle);
-	}
-
-	.blurb a {
-		color: var(--text-muted);
-		text-decoration: underline;
-		text-underline-offset: 3px;
-		text-decoration-color: color-mix(in oklab, var(--text-muted) 45%, transparent);
-		white-space: nowrap;
-	}
-
-	.blurb a:hover {
-		color: rgb(var(--accent));
-	}
 </style>

@@ -106,6 +106,8 @@ Full rationale for each is in [docs/09-decisions.md](docs/09-decisions.md).
 | D48 | `hallway setup`/`teardown` are printed plans (`--print` runs nothing), idempotent by checking the real thing; refusals (`.local`, HSTS TLDs, a held 443) and warnings; doctor's networking checks; cards show `:port` beside the hostname. |
 | D54 | **Lost at last reboot:** what was seen in the last scans before the boot and isn't listening now, kept in `state/lost.json` until dismissed; Restart once / Make it a service are `hallway run` (never MCP). |
 | D58 | **Windows: supported where feasible, best effort.** Native, no administrator rights, checked on CI's hosted runners; in stages (baseline, scanner, scheduled-task services); fronted mode out of scope there. |
+| D63 | **Local domains are discoverable:** the startup banner (TTY only; `--quiet` stays one line), a dismissible dashboard panel (`dashboard.hints` in `config.yaml`), a header control showing doctor's networking checks once on, and doctor's `info` line. The dashboard reports; only `hallway setup` changes anything. |
+| D66 | **Brand marks for doors with no favicon:** with `icon: auto` and no favicon, a curated registry (generated from the `simple-icons` devDependency, nothing at run time) is matched client-side against the process, command, supervisor label, name and, last, a well-known port; `icon: si:<slug>` picks one explicitly. The floating port plate on the door face is dropped: the address line already shows the port. |
 
 ## 5. Glossary
 

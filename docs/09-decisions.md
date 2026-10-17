@@ -1093,7 +1093,50 @@ being `/opt/homebrew`), and showed **exposed** with no explanation.
 - **Observation ids** hash the project root or else the cwd, so a listener that used to be identified by a prefix's
   repository gets a new id (and a new row in `observed.json`) once; nothing else changes for it.
 
-### D63 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
+### D63 — Local domains are discoverable: the startup banner, a dismissible dashboard panel, a header control, doctor (2026-10-17)
+
+Run on a real Mac as a service, 0.5.2 gave `ERR_CONNECTION_REFUSED` at `https://hallway.localhost`: fronted mode is
+opt-in (D15, D47) and nothing in the CLI or the dashboard said it existed, that it was off, or how to turn it on.
+
+- **The startup banner** (`server/banner.ts`), modelled on Local Review's: a HALLWAY wordmark in half blocks (6 rows,
+  fits 80 columns), copper to lamplight amber, and the version, only on a terminal (or with `FORCE_COLOR`), colour by
+  Node's own detection (`NO_COLOR`, `TERM=dumb`…), a one-line title on a narrow terminal. Then always
+  `Hallway on <url>` and `Data home: …` together (scripts wait for them), `Dashboard: <https url>` in fronted mode, a
+  three-line hint in direct mode where fronted mode can work, and, from npx's cache (D61), how to keep it running.
+  `--quiet` (every service job) prints only the first line, so service logs carry no art and no hints.
+- **Already running:** `hallway serve` on a port where a Hallway daemon answers `/api/health` says
+  `Hallway is already running at <url>` and exits 0 (the `npx hallway` with the service installed case). Something
+  else on the port is still exit 1, now saying it isn't Hallway.
+- **The dashboard** reads `fronting` in `/api/state` (`FrontingInfo`: unsupported, mode, the dashboard's and an app's
+  address, the last push error) from a provider (`server/proxy/status.ts`, registered by `serve`): with no provider
+  (an older daemon) it shows nothing. In direct mode, a **Local domains are off** panel above the apps says what they
+  give, how setup works, the two commands with copy buttons, and links to the website. In the header, a
+  **Local domains** control: off, it opens the same content as a dialog (the way back to a dismissed panel, with
+  "Show this on the page again"); on, it shows the dashboard's host with a tone from doctor's networking checks, and
+  the dialog lists them with their fixes. `GET /api/fronting` runs those checks on request only (they probe Caddy, the
+  redirect, the resolver), cached for 15 s, keyed on `domain` and `proxy` so a config edit invalidates them;
+  `?fresh=1` reruns them. On Windows (`fronting.unsupported`, D58) the dashboard shows neither.
+- **The daemon stays unprivileged and only reports.** The dashboard shows status and commands to copy; it never runs
+  setup. The panel's actions are one component (`SetupActions`), so a future "set it up from here" (Ed's open question:
+  a native admin prompt on macOS) slots in beside them without reshaping the panel.
+- **Dismissal is persisted in `config.yaml`** (`dashboard.hints.localDomains`, default true), through the store, by
+  a narrow `PATCH /api/hints` that accepts only known hint names with boolean values (not a general config PATCH, so
+  the page can't switch modes or ports). It survives across browsers and machines' worth of profiles, and is
+  hand-editable like everything else (D7).
+- **Doctor:** in direct mode the networking line is a new status, `info` (mark `i`, not counted as a pass, warning or
+  problem): local domains are off, so nothing answers at the dashboard's https address (a browser says refused), and
+  `hallway setup` turns them on. On Windows it says why they aren't available, with no command to run.
+- **Rejected:**
+  - `localStorage` for the dismissal: cheaper, but per browser and per profile, and invisible to the files; the
+    store costs one route.
+  - a general `PATCH /api/config`: more than the dashboard needs, and a page that can rewrite `mode` or `port` is a
+    bigger target than one that can hide a hint.
+  - running doctor's checks on every `/api/state` (the page must paint in milliseconds, D39), or on a timer in the
+    daemon (probes nobody looks at).
+  - a warning (not `info`) in doctor for direct mode: it's the default and a fine way to run; a warning would make
+    every fresh install look unhealthy.
+
+### D66 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
 
 The author, on a real Mac: Ollama (port 11434) shows a plain "O" monogram, because its server answers "Ollama is
 running" with no `<link rel="icon">` at all — tier 1's only fallback is the hashed monogram. "I feel like this could

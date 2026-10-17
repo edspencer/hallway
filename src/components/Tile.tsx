@@ -1,6 +1,6 @@
 // A favicon, brand or monogram tile (docs/05-ui.md, "Thumbnails", tier 1), and the dominant colour of the icon, which
 // becomes the door's paint. The colour is read from the image in a canvas (src/lib/colour.ts); icons come from the
-// daemon, so the canvas is never tainted. A brand mark (D63, src/lib/brands.ts) needs no canvas: its colour is the
+// daemon, so the canvas is never tainted. A brand mark (D66, src/lib/brands.ts) needs no canvas: its colour is the
 // registry's hex, known up front.
 import { useEffect, useState } from 'react';
 import type { BrandEntry } from '../lib/brands';

@@ -1,4 +1,4 @@
-// Brand icons for doors with no favicon (docs/05-ui.md "Thumbnails"; D63): when `icon: auto` finds no favicon, a
+// Brand icons for doors with no favicon (docs/05-ui.md "Thumbnails"; D66): when `icon: auto` finds no favicon, a
 // registry match gives the door a recognisable mark instead of a plain monogram — the motivating case is Ollama,
 // whose server just answers "Ollama is running" with no icon of its own. Everything here is pure and runs entirely
 // in the dashboard: the hints it needs (process, command, supervisor label, name, port) are already on `AppView`

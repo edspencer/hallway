@@ -38,7 +38,7 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   // a favicon is drawn small on the door; a screenshot is its glass; a generated card is the whole door (D55)
   const kind = thumb ? (app.thumbKind ?? 'favicon') : null;
   const id = app.identity;
-  // no favicon and no explicit custom icon: a registry match (D63) stands in for the monogram
+  // no favicon and no explicit custom icon: a registry match (D66) stands in for the monogram
   const brand = thumb
     ? null
     : matchBrand({ icon: app.config?.icon ?? null, process: id?.process ?? null, command: id?.command ?? null, supervisorLabel: id?.supervisor?.label ?? null, name: app.name, slug: app.slug, port: app.config?.port ?? null });

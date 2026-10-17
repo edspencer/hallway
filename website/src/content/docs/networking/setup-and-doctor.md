@@ -146,7 +146,12 @@ Read-only diagnostics. Each check prints pass, warn or fail with a suggested fix
   entries that no longer exist, or whose Node version has been uninstalled (see
   [the PATH trap](/concepts/services/#the-path-trap)).
 
-**<span class="ms ms--shipped">v1</span> Fronted mode**, when it is on:
+When fronted mode is off, an info line says so (`i local domains are off (mode: direct), so nothing answers at
+https://hallway.localhost …`) with `hallway setup` as the way to turn them on; on Windows it says why they aren't
+available.
+
+**<span class="ms ms--shipped">v1</span> Fronted mode**, when it is on (the dashboard's **Local domains** button shows
+the same checks):
 
 - Caddy: its version, its job, its admin socket answering and private, and the configuration it is running matching
   `generated/caddy.json`;

@@ -11,7 +11,10 @@ import type { AppConfig } from '../shared/api.ts';
 import { sameConfig } from '../server/proxy/admin.ts';
 import { caddyConfig, caddyPaths, caddyText, routeTable } from '../server/proxy/caddy.ts';
 import { fallbackHtml } from '../server/proxy/fallback.ts';
+import { networkChecks } from '../server/proxy/doctor.ts';
 import { restartCommands, startProxy } from '../server/proxy/index.ts';
+import { darwin } from '../server/platform/darwin.ts';
+import { win32 } from '../server/platform/win32.ts';
 import { appHosts, dialAddress, httpsUrl, tldOf } from '../server/proxy/names.ts';
 import { defaultConfig, validateApp } from '../server/store/schema.ts';
 import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore, rmTmp } from './fixture.ts';
@@ -271,5 +274,26 @@ describe('the daemon side: startProxy', { skip: onWindows("fronted mode is unsup
     await until(() => /refused the config .*nope/.test(p.status().pushError ?? ''));
     await p.stop();
     await fake.close();
+  });
+});
+
+describe("doctor's networking checks in direct mode (D63)", () => {
+  test('an info line: local domains are off, why hallway.localhost is refused, and `hallway setup`; on Windows, why not', async () => {
+    const s = await tmpStore();
+    try {
+      const deps = { store: s.store, services: null, query: async () => ({ code: 1, stdout: '', stderr: '' }), env: {}, userHome: '/home/me' };
+      const [mac] = await networkChecks({ ...deps, platform: darwin });
+      assert.equal(mac!.id, 'networking');
+      assert.equal(mac!.status, 'info');
+      assert.match(mac!.message, /^local domains are off \(mode: direct\), so nothing answers at https:\/\/hallway\.localhost or https:\/\/<app>\.localhost \(a browser says the connection was refused\)/);
+      assert.match(mac!.fix!, /^`hallway setup` turns them on/);
+      const [win, ...more] = await networkChecks({ ...deps, platform: win32 });
+      assert.equal(more.length, 0);
+      assert.equal(win!.status, 'info');
+      assert.match(win!.message, /Windows/);
+      assert.equal(win!.fix, undefined, 'no command to suggest where setup refuses');
+    } finally {
+      s.cleanup();
+    }
   });
 });
