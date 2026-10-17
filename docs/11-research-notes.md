@@ -428,7 +428,10 @@ that Mac:*
 - **CI** (`scripts/fronted-real.mjs`, macOS only): after setup passes, it loads macOS's own pf.conf with
   `set skip on lo0` in front (`(echo 'set skip on lo0'; cat /etc/pf.conf) | sudo pfctl -f -`), checks that 443 stops
   answering and doctor's `redirect` line names the skip with the fix, runs `hallway setup` (which must clear it), then
-  sets the skip again and runs doctor's fix as printed.
+  sets the skip again and runs doctor's fix as printed. **Run 39037620811 (macos-latest) passed all three:** the real
+  `pfctl -s Interfaces -v` output parsed (`lo0 (skip)`), the main ruleset was judged stock, setup's step cleared the
+  skip and 443 answered, and so did the printed fix. No enabler was named there (only pfctl references on a runner),
+  so the References parser is still checked only against the reconstructed fixture.
 - **From the same run, smaller:** Homebrew's auto-update and hints buried setup's steps (setup now runs `brew install`
   with `HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1`), and the first
   `launchctl bootout system/hallway.pf` printed "Boot-out failed: 3: No such process" (expected: nothing was loaded

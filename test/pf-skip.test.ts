@@ -228,13 +228,19 @@ describe('setup', () => {
 
 describe('quieter setup output (the same real-Mac run)', () => {
   test("the first bootout's \"No such process\" isn't shown: its stderr is dropped", async () => {
-    const r = darwinFronting.redirect(darwinFacts().env);
-    const bootout = r.cmds.find((c) => c.argv[1] === 'bootout')!;
-    assert.equal(bootout.quiet, true);
-    assert.equal(bootout.mayFail, true);
-    const quiet: boolean[] = [];
-    await runPlan({ refusals: [], warnings: [], steps: [{ kind: 'run', why: 'x', recipe: r }] }, { out: () => {}, exec: async (_argv, o) => (quiet.push(!!o?.quiet), 0) });
-    assert.deepEqual(quiet, [false, false, true, false]);
+    const dir = tmpDir('hw-test-quiet-');
+    try {
+      // runPlan stages the recipe's files first: into a throwaway directory
+      const r = darwinFronting.redirect({ ...darwinFacts().env, setupDir: dir });
+      const bootout = r.cmds.find((c) => c.argv[1] === 'bootout')!;
+      assert.equal(bootout.quiet, true);
+      assert.equal(bootout.mayFail, true);
+      const quiet: boolean[] = [];
+      await runPlan({ refusals: [], warnings: [], steps: [{ kind: 'run', why: 'x', recipe: r }] }, { out: () => {}, exec: async (_argv, o) => (quiet.push(!!o?.quiet), 0) });
+      assert.deepEqual(quiet, [false, false, true, false]);
+    } finally {
+      rmTmp(dir);
+    }
   });
 
   test("Homebrew installs run without its auto-update, cleanup or hints", () => {
