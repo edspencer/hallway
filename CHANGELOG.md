@@ -1,5 +1,13 @@
 # hallway
 
+## 0.7.0
+
+### Minor Changes
+
+- [#43](https://github.com/edspencer/hallway/pull/43) [`7bea881`](https://github.com/edspencer/hallway/commit/7bea881cca8c2c648ec66ac67c7f2f158c0dd8e5) Thanks [@edspencer](https://github.com/edspencer)! - The dashboard's **Local domains** panel now offers setup's three tiers (No admin, System-wide, No prompts), the one recommended for your machine first, each with its address, what it will ask for and its `hallway setup --trust …` command to copy. No admin and No prompts have a **Turn on** button that runs setup from the dashboard after saying what will happen (on macOS, No admin asks once for your own Touch ID or password); System-wide still runs in a terminal. Once on, the header names the tier, e.g. `hallway.localhost · no admin`.
+
+- [#42](https://github.com/edspencer/hallway/pull/42) [`c6bb5e5`](https://github.com/edspencer/hallway/commit/c6bb5e517aed479773da88c75e7d70c27a0c81e9) Thanks [@edspencer](https://github.com/edspencer)! - Local domains without admin rights. `hallway setup` now offers three tiers, asked on a terminal or chosen with `--trust`: **No admin** (`--trust user`) trusts Hallway's certificate for your account only, so on macOS it asks just for your own Touch ID or password and needs no administrator (on Linux it uses your NSS database, which Chrome reads, with no prompt; links carry `:4443`); **System-wide** (`--trust system`) is the setup you know, and the one custom domains need; **No prompts** (`--trust none`) serves plain `http://<app>.localhost` and asks for nothing. On macOS, launchd now holds loopback ports 443 and 80 for Hallway in every tier, with small forwarders handing connections to Caddy, so there is no pf redirect any more and nothing another tool's firewall rules can switch off. Re-running `hallway setup` (with any `--trust`) moves a Mac set up by an earlier version off its pf redirect; that removal needs sudo once. Switching tier removes what the old one added. `hallway doctor` checks each tier, every link Hallway gives follows the tier's scheme and port, and `config.yaml` records it as `proxy.trust` (and `proxy.scheme`). From `npx`, setup on macOS now asks you to install Hallway first, since the forwarders run it.
+
 ## 0.6.0
 
 ### Minor Changes
