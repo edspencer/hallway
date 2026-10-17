@@ -8,6 +8,7 @@ import { parsePort } from '../config.js';
 import { ProviderRegistry } from '../providers.js';
 import { probeOnce } from '../services/probe.js';
 import { appViews } from '../views.js';
+import { publicUrl } from '../proxy/names.js';
 import { type Ctx, json, show, table } from './context.js';
 import { offlineObserved, offlineClaim } from './offline.js';
 
@@ -162,7 +163,7 @@ export async function ignore(ctx: Ctx, pos: string[], flags: Record<string, stri
 export async function open(ctx: Ctx, pos: string[], flags: Record<string, string>, rest?: string[]): Promise<number> {
   check('open', flags, [], pos, 0, rest);
   const cfg = ctx.store().currentConfig();
-  const url = cfg.mode === 'fronted' ? `https://${cfg.domain.dashboard}` : `http://localhost:${cfg.port}`;
+  const url = cfg.mode === 'fronted' ? publicUrl(cfg.domain.dashboard, cfg.proxy) : `http://localhost:${cfg.port}`;
   const daemon = await ctx.daemon();
   if (!daemon) ctx.err(`hallway: nothing is answering on http://localhost:${cfg.port}. Start the daemon with \`hallway service install\` (or \`hallway serve\`).\n`);
   const [cmd, args] = ctx.platform().openCommand(url);

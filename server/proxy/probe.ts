@@ -15,10 +15,10 @@ export interface HttpAnswer {
   location: string | null;
 }
 
-/** `GET http://127.0.0.1:<port>/` with `Host: <host>`; null if nothing answered. */
-export function httpProbe(port: number, host: string, timeoutMs = 2000, address = '127.0.0.1'): Promise<HttpAnswer | null> {
+/** `GET http://127.0.0.1:<port><path>` with `Host: <host>`; null if nothing answered. */
+export function httpProbe(port: number, host: string, timeoutMs = 2000, address = '127.0.0.1', path = '/'): Promise<HttpAnswer | null> {
   return new Promise((resolve) => {
-    const req = http.request({ host: address, port, path: '/', method: 'GET', headers: { host }, timeout: timeoutMs }, (res) => {
+    const req = http.request({ host: address, port, path, method: 'GET', headers: { host }, timeout: timeoutMs }, (res) => {
       res.resume();
       resolve({ status: res.statusCode ?? 0, server: (res.headers.server as string) ?? null, location: (res.headers.location as string) ?? null });
     });

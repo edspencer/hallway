@@ -13,8 +13,8 @@ Hallway gives them all a front door:
 - **Health at a glance** — state and uptime history for each, calm when things are intentionally off, loud only when
   something that should be running isn't.
 - **Memorable HTTPS hostnames** — `https://review.localhost` instead of `localhost:5622`, with no DNS setup by
-  default (or under your own domain). `hallway setup` runs Caddy as you, never as root, shows its whole plan and
-  asks before it runs any of it.
+  default (or under your own domain). `hallway setup` runs Caddy as you, never as root, can work with no admin
+  rights at all, shows its whole plan and asks before it runs any of it.
 - **Survives reboots** — the things you want kept alive run as native OS services (launchd on macOS, systemd on
   Linux, a per-user scheduled task on Windows), and after a restart Hallway lists what was running before and didn't come back, with one click to start
   each again.
@@ -75,14 +75,24 @@ An agent can also read `http://localhost:4255/llms.txt`: what this Hallway has, 
 
 ```sh
 hallway setup --print      # the whole plan; runs nothing
-hallway setup              # https://<app>.localhost and https://hallway.localhost
-hallway setup --domain myname.internal    # or under your own domain
+hallway setup              # asks which tier, then https://<app>.localhost and https://hallway.localhost
+hallway setup --domain myname.internal    # or under your own domain (System-wide)
 hallway teardown           # undo it all, back to http://localhost:<port>
 ```
 
-Caddy runs as you, on loopback ports 4443 and 4480. Its privileged changes are each printed and run through
-`sudo`: redirecting ports 443 and 80 to Caddy, trusting Hallway's local certificate authority, and, for a custom
-domain, a resolver entry for that domain only. It needs Caddy 2.7 or later.
+Setup has three tiers (`--trust user|system|none`):
+
+| | macOS | Linux | Asks for |
+| --- | --- | --- | --- |
+| **No admin** (`user`) | `https://<app>.localhost` | `https://<app>.localhost:4443` | macOS: your own Touch ID or password, once (not an admin prompt). Linux: nothing. The certificate is trusted for your account only (on Linux, by Chrome and Chromium). |
+| **System-wide** (`system`) | `https://<app>.localhost` | `https://<app>.localhost` | sudo. Trusted for every account; custom domains need it. |
+| **No prompts** (`none`) | `http://<app>.localhost` | `http://<app>.localhost:4480` | Nothing. Plain HTTP: Safari drops `Secure` cookies. |
+
+Caddy runs as you, on loopback ports 4443 and 4480. On macOS, launchd holds loopback 443 and 80 for it, with no
+sudo, in every tier. Privileged changes happen only in System-wide, each printed and run through `sudo`: trusting
+Hallway's local certificate authority system-wide, on Linux redirecting ports 443 and 80 to Caddy, and, for a custom
+domain, a resolver entry for that domain only. On macOS, install Hallway with `npm i -g hallway` first. It needs
+Caddy 2.7 or later. Details: [Fronted mode](https://hallway.edspencer.net/networking/fronted-mode/).
 
 ## Status
 
@@ -99,10 +109,10 @@ domain, a resolver entry for that domain only. It needs Caddy 2.7 or later.
 - **0.5.0:** Windows managed services: `hallway service install` and `hallway run`, as per-user scheduled tasks.
 
 What's left is v2's last criterion: running everything on a real Mac. Everything has been run end to end on Linux;
-on macOS it's tested on CI (including real launchd jobs, `hallway setup` with its pf redirect and trusted
-certificate, and teardown) but not yet on a developer's Mac. In particular, no browser has been tried against
-fronted mode on a Mac, nothing has been checked across a real reboot, and whether the pf redirect survives a macOS
-update is unknown. Windows has run only on CI's runners: a real logon starting the scheduled tasks, and an
+on macOS it's tested on CI (including real launchd jobs, `hallway setup` with launchd's sockets on 443 and 80 and a
+trusted certificate, and teardown). On a developer's Mac, Safari, Chrome and Apple's `curl` have accepted a
+certificate whose root is trusted for the user only (the No admin tier's way), but nothing has been checked across a real reboot, and Firefox
+is untried. Windows has run only on CI's runners: a real logon starting the scheduled tasks, and an
 interactive desktop user's dev servers, are untested. Reports are welcome. The design is in [spec.md](spec.md) and [docs/](docs/).
 
 ## Development quick start

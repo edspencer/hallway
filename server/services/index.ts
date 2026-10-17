@@ -18,9 +18,9 @@ import { type Platform, type Runner, type ServiceManager, type ServiceSpec, type
 import type { Store } from '../store/index.js';
 import type { ResolvedNode } from './resolve.js';
 import { transientInstall, transientMessage } from './transient.js';
-import { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, appSpec, daemonSpec, helperSpec, slugOfLabel } from './spec.js';
+import { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, type Forward, appLabel, appSpec, daemonSpec, forwardSpec, forwards, helperSpec, isForwardLabel, slugOfLabel } from './spec.js';
 
-export { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, logFiles, slugOfLabel } from './spec.js';
+export { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, forwards, isForwardLabel, logFiles, slugOfLabel } from './spec.js';
 
 /** What a job's manifest records (generated/services/<label>.json). */
 export interface ServiceManifest {
@@ -118,7 +118,7 @@ export class Services {
    * an app's job (called before anything is written for it).
    */
   refuseTransient(label?: string) {
-    if (label !== DAEMON_LABEL && this.manager.kind !== 'schtasks') return;
+    if (label !== DAEMON_LABEL && !(label && isForwardLabel(label)) && this.manager.kind !== 'schtasks') return;
     const t = transientInstall(this.cliScript);
     if (t) throw new ServiceError(transientMessage(t, label === DAEMON_LABEL ? 'hallway service install' : undefined));
   }
@@ -252,6 +252,7 @@ export class Services {
       try {
         let spec: ServiceSpec;
         if (label === DAEMON_LABEL) spec = this.daemonSpec();
+        else if (isForwardLabel(label) && this.wantedForward(label)) spec = this.forwardSpec(this.wantedForward(label)!);
         else if ((label === CADDY_LABEL || label === DNSMASQ_LABEL) && this.readManifest(label)?.program[0])
           spec = this.helperSpec(label === CADDY_LABEL ? 'caddy' : 'dnsmasq', this.readManifest(label)!.program[0]);
         else if (s && this.store.apps.get(s)?.value?.service) spec = this.appSpec(s);
@@ -296,6 +297,48 @@ export class Services {
   /** Is the helper's job installed? */
   helperInstalled(kind: 'caddy' | 'dnsmasq') {
     return this.manager.list().includes(kind === 'caddy' ? CADDY_LABEL : DNSMASQ_LABEL);
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Loopback 443 and 80 on macOS: launchd's sockets, handed to Caddy by forwarders (D65). Behind these three methods,
+  // so that a native helper giving Caddy the sockets itself could replace the forwarders without setup, teardown or
+  // doctor noticing.
+  // ---------------------------------------------------------------------------------------------------------------
+
+  /** Why a job running Hallway's CLI (a forwarder's, the daemon's) can't be written from here, or null: the CLI is in
+   *  npx's cache or the like (D61), or a checkout that hasn't been built. For refusing before anything is changed. */
+  cliProblem(): string | null {
+    const t = transientInstall(this.cliScript);
+    if (t) return transientMessage(t, 'hallway setup');
+    return fs.existsSync(this.cliScript) ? null : `${this.cliScript} doesn't exist: build Hallway first (npm run build)`;
+  }
+
+  forwardSpec(f: Forward): ServiceSpec {
+    this.refuseTransient(f.label);
+    if (!fs.existsSync(this.cliScript)) throw new ServiceError(`${this.cliScript} doesn't exist: build Hallway first (npm run build)`);
+    return forwardSpec(f, this.store.home, this.cliScript, { env: this.env, userHome: this.userHome, node: this.node });
+  }
+
+  /** The forwarder config.yaml wants under this label, if any (fronted mode's scheme and ports). */
+  private wantedForward(label: string): Forward | null {
+    const cfg = this.store.currentConfig();
+    return forwards(cfg.proxy, cfg.proxy.scheme).find((f) => f.label === label) ?? null;
+  }
+
+  /** Load exactly these forwarders: each one's job written and loaded, any other `hallway.forward.*` removed. */
+  async forwardersUp(want: readonly Forward[]): Promise<void> {
+    const specs = want.map((f) => this.forwardSpec(f));
+    for (const label of this.forwardersInstalled()) if (!want.some((f) => f.label === label)) await this.removeLabel(label);
+    for (const spec of specs) await this.up(spec);
+  }
+
+  /** The forwarders' jobs that exist. */
+  forwardersInstalled(): string[] {
+    return this.manager.list().filter(isForwardLabel);
+  }
+
+  async removeForwarders(): Promise<void> {
+    for (const label of this.forwardersInstalled()) await this.removeLabel(label);
   }
 
   // ---------------------------------------------------------------------------------------------------------------

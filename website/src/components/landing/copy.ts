@@ -94,7 +94,7 @@ export const VALUE_PROPS = [
 		icon: 'lock',
 		ms: 'v1',
 		title: 'Memorable HTTPS names',
-		body: 'Turn on fronted mode with hallway setup and every app gets https://<slug>.localhost with a locally trusted certificate, through Caddy running as you. No DNS server needed; your own domain, such as myname.internal, if you want one.',
+		body: 'Turn on fronted mode with hallway setup and every app gets https://<slug>.localhost with a locally trusted certificate, through Caddy running as you. No admin rights needed: trust it for your account only, or system-wide. No DNS server needed; your own domain, such as myname.internal, if you want one.',
 	},
 	{
 		icon: 'refresh',
@@ -145,7 +145,7 @@ export const FEATURES = [
 	{
 		ms: 'v1',
 		title: 'Names instead of numbers',
-		body: 'In fronted mode, Caddy serves each app at https://<slug>.localhost with a certificate your machine trusts. Adding an app never needs sudo; the privileged steps are one guided hallway setup that prints every command before it runs.',
+		body: 'In fronted mode, Caddy serves each app at https://<slug>.localhost with a certificate your machine trusts. Adding an app never needs sudo, and setup needs none either unless you want the certificate trusted system-wide: one guided hallway setup that prints every command before it runs.',
 		mock: 'address',
 		alt: 'Mock-up of a browser address bar showing a padlock and https://slides.localhost',
 	},

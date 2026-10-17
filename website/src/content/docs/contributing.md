@@ -26,8 +26,8 @@ spec explains why:
 - **Verify the unverified, especially on a Mac.** The
   [open questions](https://github.com/edspencer/hallway/blob/main/docs/10-open-questions.md) and the research notes'
   "unverified on macOS" list name what still needs checking by experiment: whether Safari resolves `*.localhost`,
-  whether Safari, Chrome and Firefox trust the certificate after `hallway setup`, whether services come back after a
-  logout or a reboot, and whether the pf redirect survives a macOS update.
+  whether Firefox trusts the certificate after `hallway setup`, and whether services and launchd's sockets on 443
+  and 80 come back after a logout or a reboot.
 - **Disagree in writing.** If you think a decision is wrong, record your alternative and the reasoning in an issue or
   a PR to `docs/09-decisions.md`, rather than quietly building something different.
 

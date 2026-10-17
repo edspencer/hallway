@@ -9,7 +9,8 @@ import type { FrontingCheck, FrontingInfo, HallwayConfig } from '../../shared/ap
 import type { Platform } from '../platform/index.js';
 import type { StateProvider } from '../providers.js';
 import type { Store } from '../store/index.js';
-import { httpsUrl } from './names.js';
+import { publicUrl } from './names.js';
+import { currentTier } from './tiers.js';
 
 /** Every path under the home directory in `text`, as `~/…` (either separator: on Windows a message may use both). */
 export function tildifyText(text: string | null, home = os.homedir()): string | null {
@@ -20,12 +21,12 @@ export function tildifyText(text: string | null, home = os.homedir()): string | 
 
 /** Pure: config.yaml, the platform's fronting (for `unsupported`), and the proxy's last push error. */
 export function frontingInfo(cfg: HallwayConfig, platform: Pick<Platform, 'fronting'>, pushError: string | null = null): FrontingInfo {
-  const port = cfg.proxy.publicPort;
   return {
     unsupported: platform.fronting.unsupported ?? null,
     mode: cfg.mode,
-    dashboardUrl: httpsUrl(cfg.domain.dashboard, port),
-    appUrl: httpsUrl(`<app>.${cfg.domain.base}`, port),
+    trust: cfg.mode === 'fronted' ? currentTier(cfg) : null,
+    dashboardUrl: publicUrl(cfg.domain.dashboard, cfg.proxy),
+    appUrl: publicUrl(`<app>.${cfg.domain.base}`, cfg.proxy),
     base: cfg.domain.base,
     pushError: cfg.mode === 'fronted' ? pushError : null,
   };

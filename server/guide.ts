@@ -25,6 +25,8 @@ export interface LiveFacts {
   home: string;
   mode: string;
   base: string;
+  /** Fronted mode: what an app's address looks like (`https://<slug>.localhost`, `http://…` in the No prompts tier). */
+  appsAt?: string;
   apps: { slug: string; name: string; port: number | null; url: string | null; expected: string | null; error: boolean }[];
   groups: { group: string; title: string; links: number }[];
   /** "Lost at last reboot", when there's a notice (D54). */
@@ -97,7 +99,7 @@ function liveFacts(i: GuideInput, f: LiveFacts): string {
     '',
     `- Served at ${i.url}, version ${f.version}. It listens on 127.0.0.1 only: fetch its URLs with \`curl\` (a web-fetch tool may refuse localhost).`,
     `- Data home: ${code(f.home)}. Apps are ${code(path.join(f.home, 'apps', '<slug>.yaml'))}; bookmark groups are ${code(path.join(f.home, 'bookmarks', '<group>.yaml'))}.`,
-    `- Mode: ${f.mode}${f.mode === 'fronted' ? ` (apps at https://<slug>.${f.base})` : ' (apps are linked as http://localhost:<port>)'}.`,
+    `- Mode: ${f.mode}${f.mode === 'fronted' ? ` (apps at ${f.appsAt ?? `https://<slug>.${f.base}`})` : ' (apps are linked as http://localhost:<port>)'}.`,
     `- Apps (pick a slug that isn't taken):`,
     apps,
     `- Bookmark groups:`,

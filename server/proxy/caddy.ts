@@ -5,16 +5,18 @@
 //   https://<slug>.<base>, aliases → the app, with Host rewritten to the upstream (D9) unless proxy.preserveHost
 //   http://<anything>             → a redirect to https:// on the public port
 //   an upstream that doesn't answer → generated/fallback.html, with the upstream's error status
+// With `proxy.scheme: http` (the No prompts tier, D65) there's no HTTPS at all: the same routes are served as plain
+// HTTP on httpPort, and nothing is redirected.
 //
-// Caddy runs as the user, on loopback ports above 1024 (proxy.httpsPort/httpPort); `hallway setup` redirects 443 and
-// 80 to them. Its admin API is a Unix socket in the data home with mode 0600, never a TCP port, so only the user's own
+// Caddy runs as the user, on loopback ports above 1024 (proxy.httpsPort/httpPort), and never binds 443 or 80 itself:
+// `hallway setup` hands those to it (macOS: launchd's sockets and forwarders; Linux: an nftables redirect). Its admin API is a Unix socket in the data home with mode 0600, never a TCP port, so only the user's own
 // processes can reconfigure it, and it holds no privilege they don't already have (D47).
 import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import type { AppConfig, HallwayConfig } from '../../shared/api.js';
 import { dataPaths } from '../config.js';
-import { appHosts, dialAddress } from './names.js';
+import { appHosts, dialAddress, publicPort as linkPort } from './names.js';
 
 /** The name of Hallway's local CA. Caddy's root certificate is called `<name> - <year> ECC Root`. */
 export const CA_NAME = 'Hallway Local CA';
@@ -103,7 +105,8 @@ export function caddyConfig(input: CaddyInput): CaddyOutput {
   const { config, ipv6 = true } = input;
   const paths = caddyPaths(input.home);
   const { routes, problems } = routeTable(input);
-  const { httpsPort, httpPort, publicPort } = config.proxy;
+  const { httpsPort, httpPort } = config.proxy;
+  const publicPort = linkPort(config.proxy);
   const listen = (port: number) => [`127.0.0.1:${port}`, ...(ipv6 ? [`[::1]:${port}`] : [])];
 
   const proxyRoute = (r: Route) => ({
@@ -121,6 +124,42 @@ export function caddyConfig(input: CaddyInput): CaddyOutput {
     ],
   });
 
+  const errors = {
+    routes: [
+      {
+        handle: [
+          { handler: 'rewrite', uri: '/fallback.html' },
+          { handler: 'headers', response: { set: { 'Cache-Control': ['no-store'] } } },
+          { handler: 'file_server', root: paths.generated, status_code: '{http.error.status_code}' },
+        ],
+      },
+    ],
+  };
+
+  if (config.proxy.scheme === 'http') {
+    const json = {
+      admin: { listen: adminAddress(paths.socket), config: { persist: false } },
+      storage: { module: 'file_system', root: paths.data },
+      apps: {
+        http: {
+          http_port: httpPort,
+          https_port: httpsPort,
+          servers: {
+            'hallway-http': {
+              listen: listen(httpPort),
+              protocols: ['h1'],
+              routes: routes.map(proxyRoute),
+              errors,
+              // plain HTTP and nothing else: no certificates, no redirect to HTTPS
+              automatic_https: { disable: true },
+            },
+          },
+        },
+      },
+    };
+    return { json, routes, problems };
+  }
+
   const json = {
     admin: { listen: adminAddress(paths.socket), config: { persist: false } },
     storage: { module: 'file_system', root: paths.data },
@@ -134,17 +173,7 @@ export function caddyConfig(input: CaddyInput): CaddyOutput {
             // HTTP/3 would advertise the high UDP port (Alt-Svc); the redirect covers TCP only
             protocols: ['h1', 'h2'],
             routes: routes.map(proxyRoute),
-            errors: {
-              routes: [
-                {
-                  handle: [
-                    { handler: 'rewrite', uri: '/fallback.html' },
-                    { handler: 'headers', response: { set: { 'Cache-Control': ['no-store'] } } },
-                    { handler: 'file_server', root: paths.generated, status_code: '{http.error.status_code}' },
-                  ],
-                },
-              ],
-            },
+            errors,
             // our own redirect (below) knows the public port; Caddy's would point at httpsPort
             automatic_https: { disable_redirects: true },
           },

@@ -27,6 +27,24 @@ export function renderPlist(spec: ServiceSpec): string {
     '    <array>',
     ...spec.program.map((a) => `      ${str(a)}`),
     '    </array>',
+    ...(spec.socket
+      ? [
+          // launchd binds it (as root) and hands it over as stdin; the job starts on the first connection (D65)
+          key('Sockets'),
+          '    <dict>',
+          '      <key>Listener</key>',
+          '      <dict>',
+          `        <key>SockNodeName</key>     ${str(spec.socket.address)}`,
+          `        <key>SockServiceName</key>  ${str(String(spec.socket.port))}`,
+          `        <key>SockFamily</key>       ${str(spec.socket.address.includes(':') ? 'IPv6' : 'IPv4')}`,
+          '      </dict>',
+          '    </dict>',
+          key('inetdCompatibility'),
+          '    <dict>',
+          '      <key>Wait</key>         <true/>',
+          '    </dict>',
+        ]
+      : []),
     `${key('RunAtLoad')}          ${bool(spec.runAtLoad)}`,
     `${key('KeepAlive')}          ${bool(spec.keepAlive)}`,
     `${key('ThrottleInterval')}   <integer>10</integer>`,
@@ -126,6 +144,8 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
         await bootstrap(spec.label);
         if (spec.runAtLoad) return; // bootstrap starts a RunAtLoad job
       }
+      // an inetd-style job is started by launchd on a connection, never by hand: loaded is as running as it gets
+      if (spec.socket) return;
       await launchctl(['kickstart', target(spec.label)]);
     },
     async stop(label) {
@@ -136,7 +156,9 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
     async restart(spec, { reload = false } = {}) {
       const st = await status(spec.label);
       if (!st.loaded) return this.start(spec);
-      if (!reload) {
+      // an inetd-style job is restarted by unloading and loading it again (launchd binds its socket afresh): a kickstart
+      // would start it with no connection waiting, which launchd's inetd mode doesn't promise to handle
+      if (!reload && !spec.socket) {
         await launchctl(['kickstart', '-k', target(spec.label)]);
         return;
       }
@@ -144,7 +166,7 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
       await bootout(spec.label);
       await launchctl(['enable', target(spec.label)]);
       await bootstrap(spec.label);
-      if (!spec.runAtLoad) await launchctl(['kickstart', target(spec.label)]);
+      if (!spec.runAtLoad && !spec.socket) await launchctl(['kickstart', target(spec.label)]);
     },
     status,
     async remove(label) {

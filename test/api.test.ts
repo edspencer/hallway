@@ -351,12 +351,17 @@ describe('local domains (D63)', () => {
     assert.equal((await req('/api/fronting')).status, 503);
     providers.register(frontingProvider({ store, platform: { fronting: darwinFronting }, checks: async () => [] }));
     const f = ((await (await req('/api/state')).json()) as StateResponse).fronting;
-    assert.deepEqual(f, { unsupported: null, mode: 'direct', dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null });
+    assert.deepEqual(f, { unsupported: null, mode: 'direct', trust: null, dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null });
     await store.patchConfig({ mode: 'fronted', domain: { base: 'myname.internal' }, proxy: { publicPort: 4443 } });
     const g = ((await (await req('/api/state')).json()) as StateResponse).fronting!;
     assert.equal(g.mode, 'fronted');
     assert.equal(g.dashboardUrl, 'https://myname.internal:4443');
     assert.equal(g.appUrl, 'https://<app>.myname.internal:4443');
+    assert.equal(g.trust, 'system', 'set up before the tiers: System-wide');
+    // the No prompts tier (D65): plain HTTP, and the apps' own links follow
+    await store.patchConfig({ domain: { base: null }, proxy: { publicPort: null, trust: 'none', scheme: 'http' } });
+    const n = ((await (await req('/api/state')).json()) as StateResponse).fronting!;
+    assert.deepEqual([n.trust, n.dashboardUrl, n.appUrl], ['none', 'http://hallway.localhost', 'http://<app>.localhost']);
   });
 
   test('paths in the push error are shown under ~', () => {

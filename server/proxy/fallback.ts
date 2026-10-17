@@ -9,7 +9,7 @@ import path from 'node:path';
 import type { HallwayConfig } from '../../shared/api.js';
 import { ROOT, WEB_DIST } from '../config.js';
 import type { ProxyAppInput } from './caddy.js';
-import { appHosts, dialAddress, httpsUrl } from './names.js';
+import { appHosts, dialAddress, publicUrl } from './names.js';
 
 /** The design tokens: the copy Vite puts in the built dashboard (the npm package), else the source (a checkout). */
 export const TOKENS_CSS = [path.join(WEB_DIST, 'tokens.css'), path.join(ROOT, 'src', 'theme', 'tokens.css')];
@@ -39,8 +39,8 @@ export function fallbackHtml({ config, apps, restart, directUrl, now = new Date(
   };
   const rows = sorted
     .map(({ slug, config: a }) => {
-      const url = httpsUrl(`${slug}.${config.domain.base}`, config.proxy.publicPort);
-      return `<li><a href="${esc(url)}">${esc(a.name)}</a> <span class="host">${esc(url.replace(/^https:\/\//, ''))}</span> <span class="port">:${a.port}</span></li>`;
+      const url = publicUrl(`${slug}.${config.domain.base}`, config.proxy);
+      return `<li><a href="${esc(url)}">${esc(a.name)}</a> <span class="host">${esc(url.replace(/^https?:\/\//, ''))}</span> <span class="port">:${a.port}</span></li>`;
     })
     .join('\n      ');
   // inline JSON can't contain `</script>`: `<` is escaped

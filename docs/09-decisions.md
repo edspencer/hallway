@@ -597,6 +597,11 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
 
 ### D47 — Fronted mode: Caddy runs as you; the only root parts are a fixed redirect, the trusted root and the resolver (2026-10-16; resolves Q-CADDY-UNPRIVILEGED, Q-CADDY-RESUME, Q-CADDY-TRUST, Q-HMR, Q-DASHBOARD-HOST)
 
+> **Superseded in part by D65 (2026-10-17).** On macOS there is no redirect in any tier: launchd binds loopback 443 and
+> 80 for LaunchAgents that forward to Caddy's ports, with no root. The pf anchor and `hallway.pf` LaunchDaemon below
+> are only ever removed now (by setup moving an older install, and by teardown). Trust is per tier (system-wide here,
+> or for the user only, or none). Linux keeps the nftables redirect, in the System-wide tier only. The rest stands.
+
 - **Caddy is a user-level job** (`hallway.caddy`: a LaunchAgent / systemd user unit) on `127.0.0.1` and `[::1]`,
   ports `proxy.httpsPort` (4443) and `proxy.httpPort` (4480), started as `caddy run --config generated/caddy.json`.
   Its **admin API is a Unix socket in the data home with mode 0600** (`state/caddy/admin.sock`), never TCP. Since
@@ -649,6 +654,11 @@ after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under 
   `/etc/resolver/<base>`, Safari (Q-SAFARI-LOCALHOST). See `11-research-notes.md`.
 
 ### D48 — Setup, teardown and doctor for fronted mode; the dashboard's second address (2026-10-16)
+
+> **Updated by D65 (2026-10-17):** setup first chooses a tier (`--trust user|system|none`, or a question on a
+> terminal); a step may now also be `[you]` with no sudo (trusting the root for your account). Teardown also removes
+> the forwarders and user-domain trust, and clears `proxy.trust`/`proxy.scheme`. doctor's checks follow the tier (see
+> D65). The macOS golden plans are per tier (`test/fixtures/proxy/setup-darwin*.txt`).
 
 - **Setup is a plan of printed steps** (`server/proxy/setup.ts`): facts are gathered read-only, the plan is a pure
   function of them (golden files for macOS and Linux), and `--print` prints it. Steps are `[Hallway]` (its own files
@@ -1138,6 +1148,11 @@ opt-in (D15, D47) and nothing in the CLI or the dashboard said it existed, that 
 
 ### D64 — pf told to skip loopback: diagnosed by doctor, cleared by setup when that's safe, never at boot (2026-10-17)
 
+> **Superseded by D65 (2026-10-17).** With the pf redirect retired on macOS, a `set skip on lo0` no longer affects
+> fronted mode (launchd's sockets aren't pf rules; CI checks it), so the detection, the parsers and setup's reload
+> step were removed. An install that still has the old redirect is told to re-run `hallway setup`, which moves it to
+> launchd's sockets. Kept for the record.
+
 On the author's Mac (0.5.2, the first real-Mac run of fronted mode; research notes), `hallway setup` did everything
 but the final check: nothing answered on 443. The anchor's four rdr rules were loaded, the `hallway.pf` LaunchDaemon
 had exited 0, Caddy answered on 4443, and `pfctl -s Interfaces -v` showed **`lo0 (skip)`**. Something other than
@@ -1184,11 +1199,14 @@ and in most VPN kill-switch and firewall-app rulesets, so others will hit this. 
   fail: nothing is loaded yet) is `quiet`, its stderr dropped, so "Boot-out failed: 3: No such process" no longer
   looks like an error. sudo prompts on the terminal, not stderr, so a password prompt still shows.
 
-### D65 — **Proposed** (awaiting the author): fronted mode without admin rights, in three tiers (2026-10-17)
+### D65 — **Accepted**: fronted mode without admin rights, in three tiers; launchd's sockets handed to Caddy by Node forwarders (2026-10-17)
 
-**Status: a proposal, not built.** The author asked whether fronted mode can work on a Mac where admin is granted only
-briefly (MDM). The experiments are in `11-research-notes.md`, "Fronted mode without admin rights" (CI runners) and
-"… verified on a real Mac" (the author's Mac, 2026-10-17); what is still unverified is listed at the end. Nothing here changes D47 or D48 until it's approved.
+**Status: accepted by the author on 2026-10-17, with option 2 below (Node forwarders, no native code), and built**
+(0.7.0). The author asked whether fronted mode can work on a Mac where admin is granted only briefly (MDM). The
+experiments are in `11-research-notes.md`, "Fronted mode without admin rights" (CI runners) and "… verified on a real
+Mac" (the author's Mac, 2026-10-17). It supersedes D47's pf redirect on macOS (every tier), and updates D48 and D64;
+"As built" at the end of this entry records what was settled while building it, and what is still unverified on a
+real Mac.
 
 **What the experiments changed.** D47 assumed loopback 443 needs root on macOS, hence the pf redirect. It doesn't
 have to: **launchd binds `127.0.0.1:443`, `[::1]:443` and `127.0.0.1:80` for an ordinary LaunchAgent** (its
@@ -1224,6 +1242,9 @@ Chrome reads) is writable without any prompt.
   2. **No native code: Node forwarders.** One LaunchAgent per socket with `inetdCompatibility { Wait = true }`, each
      running `hallway forward 4443` (a byte pipe on `listen({ fd: 0 })`; measured 11–17 ms per new connection vs 13 ms
      direct). Only Node, which every Hallway user already runs, but three more processes and a hop.
+     **Chosen by the author (2026-10-17).** The native helper (1) is **deferred**, not rejected: it may come later, and
+     the forwarders sit behind one seam (`Services.forwardersUp` / `forwardersInstalled` / `removeForwarders`, and the
+     plan's single "Have launchd hold loopback …" step) so that swapping them for it changes nothing a user sees.
   (`/usr/bin/nc` per connection also works, 27 ms, but spawns a process per connection and its handling of
   long-lived WebSockets is unverified: rejected as the main path.)
 - **Caddy must not try to bind :80 itself.** With its own certificates, Caddy still starts an HTTP→HTTPS redirect
@@ -1290,7 +1311,8 @@ That adds a write route that installs a LaunchAgent; it would get the same Host/
 accept only those two tiers, never `system`. The header control, once on, names the tier ("Local domains · no
 admin").
 
-**Rejected:** a user Caddy on `0.0.0.0:443` with any filter (LAN exposure; `IP_BOUND_IF` lo0 was verified *not* to
+**Rejected:** the native helper's costs for now (a first native file in the package, a macOS build step in the release,
+an unknown binary on allow-listed Macs): deferred, see option 1. Also rejected: a user Caddy on `0.0.0.0:443` with any filter (LAN exposure; `IP_BOUND_IF` lo0 was verified *not* to
 stop inbound packets on another interface); Linux user socket units (EACCES, verified) or `setcap`/the sysctl (D47);
 a Hallway-owned public domain with its certificate's key in the package (the CA must revoke it, BR 4.9.1.1); making
 plain HTTP the default (Safari's `Secure` cookies, and HTTPS keeps the question closed, D6).
@@ -1304,11 +1326,54 @@ or say to run it in bash.
 Safari, Chrome and Apple's curl (Q-USER-TRUST); a user LaunchAgent's `Sockets` on a privileged loopback port, with
 no sudo and no prompt, not reachable on en0.
 
-**Still to verify before building:** Firefox's `enterprise_roots` with a user-domain root; the trust dialog when
-setup runs from a LaunchAgent (the dashboard's Turn on); launchd's sockets after logout/login and a reboot, and on 443
-and 80 specifically (the author's pf redirect held 443, so 444 was used); `[::1]`; what happens when Docker Desktop (or similar) already holds `127.0.0.1:443`; Vite HMR's WebSocket
-through Caddy on launchd's fds; on a managed Mac, the "Background Items Added" notification and whether MDM blocks
-user LaunchAgents with `Sockets`.
+**As built (2026-10-17).**
+- **Forwarders** (`server/forward.ts`, `server/services/spec.ts` `forwards`/`forwardSpec`): `hallway.forward.https`,
+  `…https6`, `…http`, `…http6`, one per address (inetd mode hands a job one socket), each `node <installed cli.js>
+  forward <Caddy's port>`, to 127.0.0.1 whatever the family; plain HTTP has only the two on 80. `RunAtLoad` and
+  `KeepAlive` false: launchd starts one on its first connection and again on the next if it ever exits; `start` never
+  kickstarts it and `restart` unloads and loads it (launchd binds the socket afresh). The pipe allows half-close, lets
+  `pipe` carry backpressure, has no timeouts, never crashes on a connection's error, and logs a refused upstream once a
+  minute. `hallway forward <port> --listen <port>` listens on a port instead of fd 0, for trying it by hand. Measured
+  through it on Linux (forwarder → Caddy → Vite 8): a real HMR update after 20 s idle, no reload.
+- **D61 applies to the forwarders** (they run Hallway's CLI): `refuseTransient` covers `hallway.forward.*`, and setup
+  refuses up front on macOS from npx's cache (`Services.cliProblem`), before anything changes. `service regenerate`
+  rewrites them from config.yaml like the daemon's job; doctor checks their Node and program like any job.
+- **The tier** is `proxy.trust` (absent: none chosen; a fronted install from before the tiers is `system`), with
+  `proxy.scheme` (`http` for none) and `proxy.publicPort` (Linux user/none: 4443/4480; the default 443 means 80 with
+  `scheme: http`). Every link (API `url`s, `FrontingInfo`, `/llms.txt`, the fallback page, `hallway open`, setup and
+  doctor) comes from one `publicUrl(host, proxy)`.
+- **Recommended tier:** macOS as above; Linux System-wide for a user in `sudo`/`wheel`/`admin` (or root) when systemd
+  and `nft` are there, else No admin. Without a terminal, or with `--yes` or `--print`, and no `--trust`: the current
+  tier, else the recommended one, said in one line. `--domain` with another `--trust` is a usage error.
+- **Switching tier removes what the old one added**, each found by asking the real thing: the pf redirect of an older
+  install (macOS) or the nftables redirect (Linux, leaving System-wide); system-wide trust (leaving System-wide);
+  user-domain trust (going to No prompts, or to System-wide on macOS; on Linux System-wide's trust includes the NSS
+  database, so it stays); a custom domain's resolver and dnsmasq (any tier but System-wide goes back to `*.localhost`).
+  The plan says "Moving from <old> to <new>: what the old tier added is removed (that needs sudo, this once)".
+- **macOS user trust:** found with `security find-certificate -a -Z` on the login keychain and the root's name in
+  `security dump-trust-settings`; removed with `security remove-trusted-cert` then `delete-certificate -Z` (both may
+  fail harmlessly, marked as possibly asking). The step refuses up front when the console user isn't this user (`stat
+  -f %Su /dev/console`: SSH), since the dialog would wait forever. **Linux user trust:** `certutil` on
+  `sql:~/.pki/nssdb`, made first (`certutil -N --empty-password`) if Chrome hasn't run; no certutil is a refusal with
+  how to install it.
+- **What will ask** (D67) is said for every plan, now including "Nothing here will ask for a password."
+- **D64's pf-skip detection is gone** with the pf redirect: launchd's sockets aren't subject to pf's `set skip`
+  (checked in CI). doctor names an old pf redirect as left over (`leftover-redirect`: "`hallway setup --trust <tier>`
+  removes it (it needs admin, this once)"), and a leftover system-wide trust in another tier (`leftover-trust`).
+- **CI** (`scripts/fronted-real.mjs`): 0.6.0's System-wide setup from npm, migrated by this build; the criteria
+  System-wide (launchd on macOS, `[::1]` too, a 30 s idle TLS connection through the forwarder, pf told to skip lo0
+  without effect); a custom domain; then No admin as a plan (macOS) and for real (Linux, NSS), No prompts for real
+  everywhere; teardown leaving no forwarder, pf file, trust or NSS entry.
+
+**Still unverified on a real Mac** (CI's macOS runner covers launchd's sockets on 443/80 and `[::1]`, the migration from
+0.6.0 and plain HTTP, but has no person at the screen): the No admin trust step run *by setup* (the same `security`
+command Ed ran by hand with Touch ID); Safari and Chrome on `https://hallway.localhost` through the forwarders; Vite HMR
+through launchd → forwarder → Caddy (verified on Linux with `--listen`, not through launchd's fd); the forwarders after
+logout/login and a reboot; whether removing *real* user trust settings prompts; Firefox's `enterprise_roots` with a
+user-domain root; the trust dialog when setup runs from a LaunchAgent (the dashboard's Turn on, D63's follow-up); Docker
+Desktop (or similar) already holding `127.0.0.1:443` (setup should refuse: "443 answers, but not with Hallway's
+certificate"); on a managed Mac, the "Background Items Added" notification and whether MDM blocks user LaunchAgents
+with `Sockets`.
 
 ### D66 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
 

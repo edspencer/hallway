@@ -20,7 +20,7 @@ above to keep it: Hallway won't install a service from npx's cache, which npm ca
 
 The dashboard opens at `http://localhost:4255`. The page title is your machine's name. A **Local domains are off**
 panel at the top explains how to get `https://hallway.localhost` and `https://<app>.localhost` instead (one
-`hallway setup`; see [Fronted mode](/networking/fronted-mode/)). Dismiss it if you're happy with ports: the
+`hallway setup`, which can need no admin rights at all; see [Fronted mode](/networking/fronted-mode/)). Dismiss it if you're happy with ports: the
 **Local domains** button at the top right brings it back.
 
 ## 2. Meet what is already running
@@ -113,7 +113,8 @@ See [Working with agents](/agents/overview/).
 - [Services and reboots](/concepts/services/): keep apps running across restarts, and see what the last reboot took
   down.
 - [Fronted mode](/networking/fronted-mode/): `https://slides.localhost` instead of a port, after one
-  `hallway setup` (macOS and Linux only).
+  `hallway setup`, in the tier you choose: no admin, system-wide, or plain HTTP with no prompts (macOS and Linux
+  only).
 - [Thumbnails](/concepts/thumbnails/): screenshots of your apps on their doors, or generated cards.
 - The [MCP server](/agents/mcp/) and the [dev-server hook](/agents/hook/), for coding agents.
 - The [CLI reference](/reference/cli/) and the [file formats](/reference/app-yaml/).

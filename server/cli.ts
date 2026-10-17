@@ -49,11 +49,13 @@ Bookmarks
   bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
 
 Fronted mode (https://<app>.localhost, or your own domain)
-  setup [--domain BASE] [--print] [--yes]
-                                    Run Caddy for your apps, redirect ports 443 and 80 to it and trust its
-                                    certificates. Shows the plan and asks before it runs anything; the privileged
-                                    steps run through sudo. --print shows the plan and runs nothing; --yes doesn't
-                                    ask (needed without a terminal).
+  setup [--trust user|system|none] [--domain BASE] [--print] [--yes]
+                                    Run Caddy for your apps on https://<app>.localhost. Asks which tier: user
+                                    trusts its certificate for your account only (no admin), system for every
+                                    account (admin; needed for --domain), none is plain HTTP (no prompts at all).
+                                    Shows the plan and asks before it runs anything. --print shows the plan and
+                                    runs nothing; --yes doesn't ask (needed without a terminal). Run it again
+                                    with another --trust to switch tier.
   teardown [--uninstall-packages] [--print] [--yes]
                                     Undo setup and go back to http://localhost:<port> links. Asks first, like setup.
 
@@ -199,6 +201,15 @@ async function main(argv: string[]): Promise<number | undefined> {
       if (!args[0]) throw new UsageError('supervise needs a job file');
       const { supervise } = await import('./platform/supervise.js');
       return supervise(args[0], { log: (s) => process.stderr.write(`hallway: ${s}\n`) });
+    }
+    // what launchd runs to hand loopback 443 and 80 to Caddy (server/forward.ts, D65); internal, so not in --help
+    case 'forward': {
+      check(cmd, flags, ['listen'], args, 1, rest);
+      const to = parsePort(args[0] ?? '');
+      const listen = flags.listen === undefined ? 'fd0' : parsePort(flags.listen);
+      if (!to || listen === null || listen === 0) throw new UsageError('forward needs a port to forward to (and --listen takes a port)');
+      const { forward } = await import('./forward.js');
+      return forward(to, listen, (s) => process.stderr.write(`${new Date().toISOString()} hallway forward: ${s}\n`));
     }
     default: {
       const { COMMANDS, makeCtx } = await commands();

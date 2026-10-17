@@ -1,4 +1,0 @@
-TOKENS:
-PID      Process Name                 TOKEN                    TIMESTAMP
-412      pfd                          9813589183660731843      67 days 04:12:09
-88213    pfctl                        4411938712204416611      0 days 00:01:17

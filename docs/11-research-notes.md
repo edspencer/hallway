@@ -437,7 +437,7 @@ that Mac:*
   `launchctl bootout system/hallway.pf` printed "Boot-out failed: 3: No such process" (expected: nothing was loaded
   yet; now quiet).
 
-### Fronted mode without admin rights (D65, proposed), 2026-10-17
+### Fronted mode without admin rights (D65, accepted and built: see "The tiers as built" below), 2026-10-17
 
 The question: can fronted mode work on a Mac where the user isn't an admin (an MDM-managed work Mac that grants
 admin only for minutes at a time)? Today `hallway setup` needs admin twice: the pf redirect, and trusting the root
@@ -581,6 +581,47 @@ Run by the author on his own Mac (current macOS, not MDM-managed, his user an ad
 - **zsh's paste handling.** With oh-my-zsh's `url-quote-magic`, pasting multi-line commands escaped `;`, `>` and `(`
   that followed URLs, breaking them. Commands Hallway prints for copying should avoid shell metacharacters right after
   a URL, or say to run them in bash (D65).
+
+### The tiers as built (D65), 2026-10-17
+
+The author chose option 2 (Node forwarders). What was run while building it, on Linux (Debian 12 container, no
+systemd: `test/fixtures/fake-systemctl` ran the user units; Caddy 2.11.2 release binary; `certutil` 3.87 from
+Debian's `libnss3-tools`, unpacked into a temp directory; a throwaway `HOME` and data home). *Verified:*
+
+- **No prompts** (`--trust none`): setup with no prompt at all; Caddy serves plain HTTP on 4480 only (no HTTPS server,
+  no CA made); `http://review.localhost:4480` reached a strict app with Host rewritten (`X-Forwarded-Host:
+  review.localhost:4480`); `/api/state` gave every app `http://<slug>.localhost:4480`; doctor: plain HTTP answers, and
+  the Safari `Secure`-cookie note.
+- **No admin** (`--trust user`): setup made `~/.pki/nssdb` itself (`certutil -N --empty-password`; Chrome hadn't run)
+  and added the root, no sudo; `https://review.localhost:4443` with `--cacert <root>`; `http://…:4480` → 308 to
+  `https://…:4443`; doctor: "trusted for your account (your NSS database)" and the info line on who else won't trust it.
+  Caddy was *not* restarted between tiers (same pid): the new config went over the admin socket.
+- **Switching** none → user → none removed the NSS entry; teardown from user removed the NSS entry and Caddy's job
+  and cleared `proxy.trust`/`proxy.scheme`/`proxy.publicPort`.
+- **The forwarder** (`hallway forward 4480 --listen 5280`, as launchd runs it but on a port instead of fd 0) in front
+  of Caddy (plain HTTP) in front of a Vite 8 dev server: in Chromium (Playwright), `[vite] connected.`; after 20 s
+  idle, editing an imported module hot-updated the page (the text changed, a marker set on `window` survived: no
+  reload). The unit tests drive the pipe through a WebSocket upgrade, half-close, a 32 MB transfer to a paused reader
+  (the upstream is made to wait: backpressure), a refused upstream (said once, still accepting) and a client reset.
+
+**CI's macOS runner (macos-latest), run 39051974164, 2026-10-17, passed every check:** 0.6.0's System-wide setup from
+npm (pf anchor, `hallway.pf`, System keychain), then this build's `setup --trust system`: the pf files and rules gone,
+the four forwarders loaded, `https://hallway.localhost` answering throughout and after, on `127.0.0.1` and `[::1]`
+(443 and 80); doctor named 0.6.0's pf redirect as left over before the move. Then the v1 criteria with launchd's
+sockets; pf loaded with `set skip on lo0` and 443 still answered; a TLS connection to 443 idle for 30 s, then a request,
+answered; the custom domain; No admin as a plan; No prompts for real (`http://review.localhost` through the forwarder on
+80, nothing on 443); teardown leaving no forwarder, pf file or trust. One bug it found: once launchd had started the
+forwarders, `lsof` showed `node` on 443/80 and setup refused to run again; it now recognises its own `cli.js forward`.
+
+*Not run here, so unverified until CI's macOS job or a real Mac (the macOS job now covers what isn't listed below):* everything launchd does with the forwarders' plists
+(`Sockets` with inetd `Wait`, the fd 0 handover to Node, on 443 and 80, `127.0.0.1` and `::1`), and the macOS trust
+steps. CI's "Fronted mode (real launchd, keychain)" job runs all of it except the No admin trust step (a Touch ID
+dialog nobody can answer on a runner), including migrating from 0.6.0's pf redirect. **Still unverified on a real
+Mac** (the list in D65): the No admin trust step run by setup; Safari and Chrome through the forwarders; Vite HMR
+through launchd → forwarder → Caddy; the forwarders after logout/login and a reboot; removing real user trust settings
+(may prompt); Firefox's `enterprise_roots` with a user-domain root; setup's trust dialog when the daemon (a
+LaunchAgent) runs it; Docker Desktop or similar already on `127.0.0.1:443`; MDM blocking user LaunchAgents with
+`Sockets`, and the "Background Items Added" notification.
 
 ## Windows (D58), GitHub's hosted runners, 2026-10-16
 

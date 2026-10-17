@@ -8,10 +8,10 @@ you're in.
 
 | | **Direct mode** <span class="ms ms--v0">v0</span>, the default | **Fronted mode** <span class="ms ms--shipped">v1</span>, optional |
 | --- | --- | --- |
-| App URLs | `http://localhost:<port>` | `https://<slug>.<base-domain>` |
+| App URLs | `http://localhost:<port>` | `https://<slug>.<base-domain>` (in some [tiers](/networking/fronted-mode/#three-tiers), `http://` or with a port) |
 | Dashboard | `http://localhost:4255` | `https://hallway.localhost` (or your custom domain's apex), and still `http://localhost:4255` |
-| Needs | Nothing | Caddy 2.7 or later; a one-time certificate trust; for custom domains, dnsmasq |
-| Sudo | Never | Once, during [`hallway setup`](/networking/setup-and-doctor/) (and again to undo it) |
+| Needs | Nothing | Caddy 2.7 or later; a one-time certificate trust (except plain HTTP); for custom domains, dnsmasq |
+| Sudo | Never | Your pick of [three tiers](/networking/fronted-mode/#three-tiers) in [`hallway setup`](/networking/setup-and-doctor/): **No admin** (on macOS your own Touch ID or password, once), **System-wide** (sudo once, and again to undo it), or **No prompts** (plain HTTP, nothing asked) |
 | Platforms | macOS, Linux and Windows (best effort) | macOS and Linux only |
 
 ## Direct mode
@@ -23,11 +23,12 @@ is the main thing Hallway is for.
 ## Fronted mode
 
 [Caddy](https://caddyserver.com), running as you, sits in front of your apps and serves each one at a memorable
-HTTPS hostname. A fixed redirect sends loopback ports 443 and 80 to Caddy's own ports, 4443 and 4480:
+HTTPS hostname. Loopback ports 443 and 80 reach Caddy's own ports, 4443 and 4480: on macOS through sockets launchd
+holds for you, on Linux through a fixed redirect (System-wide; the other tiers put Caddy's port in links):
 
 ```mermaid
 flowchart TB
-  B["Browser"] -- "https://slides.localhost" --> R["127.0.0.1:443, redirected"]
+  B["Browser"] -- "https://slides.localhost" --> R["127.0.0.1:443 (launchd's socket, or redirected)"]
   R --> C["Caddy (as you) on 127.0.0.1:4443"]
   C -- ":4321" --> S["Slides"]
   C -- ":7333" --> L["Log viewer"]
@@ -38,8 +39,9 @@ flowchart TB
 - The default base domain is **`localhost`**: apps live at `<slug>.localhost`. Browsers and macOS resolve any
   `*.localhost` name to your own machine with no configuration at all, and the name is reserved forever, so there is
   no DNS server to run.
-- **HTTPS is required.** Caddy issues certificates from its own local certificate authority, kept in the data home,
-  which `hallway setup` trusts once.
+- **HTTPS by default.** Caddy issues certificates from its own local certificate authority, kept in the data home,
+  which `hallway setup` trusts once: for your account only (No admin) or for every account (System-wide). The No
+  prompts tier serves plain HTTP instead, with nothing to trust.
 - **Adding an app never needs sudo.** The unprivileged daemon pushes routes to Caddy's admin API whenever an app file
   changes.
 - Hallway's daemon **never proxies app traffic itself**; Caddy does, including WebSockets for hot reload.
@@ -52,4 +54,6 @@ The details of Caddy, certificates and Host-header rewriting are in [Fronted mod
 
 `http://localhost:<port>` counts as a **secure context** in browsers. `http://app.myname.internal` does not. Without
 TLS, moving an app behind a hostname would silently break `crypto.subtle`, service workers, `getUserMedia`, the async
-clipboard API and everything else gated on secure contexts. HTTPS everywhere removes the question.
+clipboard API and everything else gated on secure contexts. HTTPS everywhere removes the question. (`*.localhost` is
+the exception, a secure context even over HTTP, which is why the No prompts tier is plain HTTP on `localhost` only;
+Safari still drops `Secure` cookies there.)

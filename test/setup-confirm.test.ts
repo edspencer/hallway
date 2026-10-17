@@ -7,7 +7,7 @@ import { UsageError } from '../server/args.ts';
 import { platformFor } from '../server/platform/index.ts';
 import { type Plan, type SetupDeps, confirmPlan, promptsAhead, runPlan } from '../server/proxy/setup.ts';
 
-const trust = (done = false) => ({ kind: 'run' as const, why: 'Trust the CA', done, dialog: true, recipe: { files: [], cmds: [{ argv: ['security', 'add-trusted-cert'], sudo: true }] } });
+const trust = (done = false) => ({ kind: 'run' as const, why: 'Trust the CA', done, dialog: platformFor('darwin').fronting.trustDialog, recipe: { files: [], cmds: [{ argv: ['security', 'add-trusted-cert'], sudo: true }] } });
 const redirect = (done = false) => ({ kind: 'run' as const, why: 'Redirect 443', done, recipe: { files: [], cmds: [{ argv: ['launchctl', 'bootstrap'], sudo: true }] } });
 const mine = { kind: 'hallway' as const, why: 'Write Caddy’s configuration', action: async () => {} };
 const plan = (...steps: Plan['steps']): Plan => ({ refusals: [], warnings: ['a warning'], steps });
@@ -86,8 +86,9 @@ describe('what will ask', () => {
     assert.match(promptsAhead(plan(trust(true), redirect()), darwin)!, /^sudo will ask for your password, here in the terminal/);
     assert.match(promptsAhead(plan(trust(), redirect()), darwin, true)!, /^You'll be asked by a separate macOS dialog/);
   });
-  test('Linux has no such dialog; nothing privileged left to do: nothing to say', () => {
-    assert.match(promptsAhead(plan(trust(), redirect()), linux)!, /^sudo will ask/);
-    assert.equal(promptsAhead(plan(mine, trust(true), redirect(true)), darwin), null);
+  test('Linux has no such dialog; nothing privileged left to do: it says nothing will ask (D65)', () => {
+    const linuxTrust = { ...trust(), dialog: undefined };
+    assert.match(promptsAhead(plan(linuxTrust, redirect()), linux), /^sudo will ask/);
+    assert.equal(promptsAhead(plan(mine, trust(true), redirect(true)), darwin), 'Nothing here will ask for a password.');
   });
 });

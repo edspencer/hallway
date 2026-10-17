@@ -31,7 +31,7 @@ export type Field =
   | (Base & { t: 'string'; default?: string | null; pattern?: RegExp; patternDoc?: string })
   | (Base & { t: 'int'; default?: number | null; min?: number; max?: number })
   | (Base & { t: 'bool'; default?: boolean })
-  | (Base & { t: 'enum'; values: readonly string[]; default?: string })
+  | (Base & { t: 'enum'; values: readonly string[]; default?: string | null })
   | (Base & { t: 'list'; of: Field; default?: unknown[]; minItems?: number; maxItems?: number; unique?: boolean })
   | (Base & { t: 'object'; fields: Record<string, Field>; /** absent → null rather than an object of defaults */ optional?: boolean })
   | (Base & { t: 'map'; of: Field });
@@ -208,12 +208,14 @@ export const CONFIG_SCHEMA: Field = {
     },
     proxy: {
       t: 'object',
-      doc: 'Fronted mode\'s Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` redirects 443 and 80 to them.',
+      doc: 'Fronted mode\'s Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` hands 443 and 80 to them (macOS: launchd\'s sockets; Linux: an nftables redirect, System-wide tier only).',
       fields: {
         caddy: str('The Caddy binary.', { nullable: true, default: null, defaultDoc: '`caddy` on your PATH, else Homebrew\'s' }),
         httpsPort: port('The loopback port Caddy serves HTTPS on.', { default: 4443 }),
-        httpPort: port('The loopback port Caddy serves HTTP (a redirect to HTTPS) on.', { default: 4480 }),
-        publicPort: port('The HTTPS port in links: 443 once `hallway setup` has redirected it to `httpsPort`. Set it to `httpsPort` to use fronted mode with no setup (links then carry the port).', { default: 443 }),
+        httpPort: port('The loopback port Caddy serves HTTP on: a redirect to HTTPS, or the apps themselves with `scheme: http`.', { default: 4480 }),
+        publicPort: port('The port in links: 443 (or 80 with `scheme: http`), which `hallway setup` hands to Caddy\'s ports. Set it to `httpsPort` to use fronted mode with nothing on 443 (links then carry the port); setup does that itself on Linux for the `user` and `none` tiers.', { default: 443 }),
+        trust: { t: 'enum', values: ['user', 'system', 'none'], nullable: true, default: null, doc: 'The tier `hallway setup` set up (D65), written by setup: `user` trusts Hallway\'s certificate for your account only (no admin), `system` for every account (admin; custom domains need it), `none` serves plain HTTP (no certificate, no prompt).', defaultDoc: 'none chosen (a setup from before the tiers counts as `system`)' },
+        scheme: { t: 'enum', values: ['https', 'http'], default: 'https', doc: 'The scheme in links. `http` is the `none` tier: Caddy serves plain HTTP and redirects nothing.' },
       },
     },
     probe: {
