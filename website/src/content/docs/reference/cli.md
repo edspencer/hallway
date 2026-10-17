@@ -62,8 +62,8 @@ Each command is marked with the milestone it belongs to. Everything on this page
 
 | Command | Description | |
 | --- | --- | --- |
-| `hallway setup [--domain BASE] [--print]` | Run Caddy for your apps, redirect ports 443 and 80 to it and trust its certificates, so apps are at `https://<app>.localhost` (or under `BASE`). Prints each step first; the privileged ones run through `sudo`. `--print` shows the plan and runs nothing. macOS and Linux only: on Windows it refuses and changes nothing. See [Setup](/networking/setup-and-doctor/). | <span class="ms ms--shipped">v1</span> |
-| `hallway teardown [--uninstall-packages] [--print]` | Undo setup and go back to `http://localhost:<port>` links. `--uninstall-packages` also uninstalls Homebrew's Caddy and dnsmasq. | <span class="ms ms--shipped">v1</span> |
+| `hallway setup [--domain BASE] [--print] [--yes]` | Run Caddy for your apps, redirect ports 443 and 80 to it and trust its certificates, so apps are at `https://<app>.localhost` (or under `BASE`). Shows the plan and asks `Continue? [y/N]` before it runs anything; the privileged steps run through `sudo`. `--print` shows the plan and runs nothing; `--yes` doesn't ask (needed with no terminal). macOS and Linux only: on Windows it refuses and changes nothing. See [Setup](/networking/setup-and-doctor/). | <span class="ms ms--shipped">v1</span> |
+| `hallway teardown [--uninstall-packages] [--print] [--yes]` | Undo setup and go back to `http://localhost:<port>` links. Asks first, like setup. `--uninstall-packages` also uninstalls Homebrew's Caddy and dnsmasq. | <span class="ms ms--shipped">v1</span> |
 
 ## Coding agents
 

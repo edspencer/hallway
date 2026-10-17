@@ -18,9 +18,22 @@ their `http://localhost:<port>` addresses.
 
 ```sh
 hallway setup --print                    # show the full plan; run nothing
-hallway setup                            # fronted mode on *.localhost
+hallway setup                            # fronted mode on *.localhost (asks before it runs anything)
 hallway setup --domain myname.internal   # under your own domain instead
 ```
+
+Typing `hallway setup` changes nothing on its own. It prints the plan below, says what will ask you for what, and
+waits for an answer:
+
+```
+You'll be asked twice: for your password by sudo, here in the terminal, and then by a separate macOS dialog (Touch ID
+or your password) to change certificate trust settings, which macOS asks for itself, even under sudo (Big Sur and later).
+Continue? [y/N]
+```
+
+The default is no: anything but `y` or `yes` (Enter, Ctrl-D) runs nothing. On Linux there is no dialog, only sudo's
+password prompt. For a script or CI, `hallway setup --yes` doesn't ask; with no terminal to ask on and no `--yes`,
+setup refuses (exit 2) before it does anything.
 
 The plan is a numbered list, and each step is tagged with who does it:
 
@@ -51,7 +64,7 @@ resolver entry for that domain. See [Custom domains](/networking/custom-domains/
 The rules it follows:
 
 - **Each privileged command is printed with a one-line reason, then run with `sudo`**, so you see exactly what
-  happens; `sudo` asks for your password as usual.
+  happens; `sudo` asks for your password as usual. The whole plan is shown, and you're asked to continue, first.
 - **It is idempotent.** Re-running it checks the real state (the root in the trust store, the installed files' exact
   contents, a TLS handshake on port 443) and only does what is missing; already-done steps say so. If a command fails,
   the run stops there, and running setup again carries on.
@@ -126,7 +139,8 @@ hallway teardown
 hallway teardown --uninstall-packages    # also uninstall Caddy and dnsmasq from Homebrew
 ```
 
-It removes only what it finds: the resolver entry, the dnsmasq job, the redirect, the trusted root and the Caddy job,
+Like setup, it shows what it will remove and asks `Continue? [y/N]` first (`--yes` skips the question). It removes
+only what it finds: the resolver entry, the dnsmasq job, the redirect, the trusted root and the Caddy job,
 with `sudo` for the privileged ones, then sets `mode: direct`. The dashboard keeps working at
 `http://localhost:4255`. Homebrew packages are left alone unless you ask; on Linux, `--uninstall-packages` only
 reminds you to use your package manager. The certificate authority stays in the data home, unused, so a later setup

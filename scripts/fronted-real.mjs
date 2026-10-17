@@ -113,7 +113,7 @@ try {
   await until('the squatter on 443', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0, 10000);
   await sleep(1500);
   await check('setup refuses, before doing anything', async () => {
-    const r = hw('setup');
+    const r = hw('setup', '--yes');
     assert.notEqual(r.code, 0);
     assert.match(r.out, /port 443|443 answers/);
     assert.match(r.out, /Setup stopped before doing anything/);
@@ -132,8 +132,16 @@ try {
     assert.deepEqual(leftovers(), []);
   });
 
+  step('D67: with no terminal and no --yes, setup refuses (it would ask first), and changes nothing');
+  await check('setup with no TTY', async () => {
+    const r = hw('setup');
+    assert.equal(r.code, 2, 'a usage error');
+    assert.match(r.out, /no terminal to ask on: run it in one, or pass --yes/);
+    assert.deepEqual(leftovers(), []);
+  });
+
   step('criteria 1–2: setup, for real');
-  must('setup');
+  must('setup', '--yes');
   const ca = path.join(data, 'state', 'caddy', 'data', 'pki', 'authorities', 'local', 'root.crt');
   await check('https://hallway.localhost serves the dashboard with a certificate the system trusts', async () => {
     const r = curl('https://hallway.localhost/api/health');
@@ -160,7 +168,7 @@ try {
 
   step('idempotent: setup again does only what is missing');
   await check('re-running setup', async () => {
-    const out = must('setup');
+    const out = must('setup', '--yes');
     assert.match(out, /already done/);
   });
 
@@ -197,7 +205,7 @@ try {
       assert.ok(c.fix.includes(RELOAD), c.fix);
     });
     await check('setup clears it (the main ruleset is stock, so it may), and 443 answers again', async () => {
-      assert.match(must('setup'), /\$ sudo pfctl -f \/etc\/pf\.conf/);
+      assert.match(must('setup', '--yes'), /\$ sudo pfctl -f \/etc\/pf\.conf/);
       await until('443 through the redirect', async () => health() === 200, 15000);
       assert.doesNotMatch(sh('sudo', ['-n', 'pfctl', '-s', 'Interfaces', '-v']).out, /lo0 \(skip\)/);
       assert.equal(redirectCheck().status, 'pass');
@@ -226,7 +234,7 @@ try {
   await until('the daemon again', async () => (await fetch('http://localhost:4255/api/health').catch(() => null))?.ok);
 
   step('criterion 9: a custom domain');
-  must('setup', '--domain', 'myname.internal');
+  must('setup', '--yes', '--domain', 'myname.internal');
   await check('https://myname.internal is the dashboard', async () => {
     const r = await until('myname.internal', async () => {
       const x = curl('https://myname.internal/api/health');
@@ -253,13 +261,13 @@ try {
 
   step('criterion 10: .local is refused');
   await check('setup --domain foo.local', async () => {
-    const r = hw('setup', '--domain', 'foo.local');
+    const r = hw('setup', '--yes', '--domain', 'foo.local');
     assert.notEqual(r.code, 0);
     assert.match(r.out, /mDNS/);
   });
 
   step('criterion 11: teardown leaves nothing behind; the dashboard keeps working directly');
-  must('teardown');
+  must('teardown', '--yes');
   await check('no files, jobs, redirect or trusted root left', async () => {
     assert.deepEqual(leftovers(), []);
     if (darwin) {
@@ -279,10 +287,10 @@ try {
     }, 10000);
     assert.match(s.apps.find((a) => a.slug === 'review').url, /^http:\/\/localhost:/);
   });
-  await check('teardown again: nothing to undo', async () => assert.match(must('teardown'), /Nothing to undo/));
+  await check('teardown again: nothing to undo', async () => assert.match(must('teardown', '--yes'), /Nothing to undo/));
 } finally {
   step('clean up');
-  hw('teardown');
+  hw('teardown', '--yes');
   hw('service', 'uninstall');
   review.child.kill();
   other.child.kill();
