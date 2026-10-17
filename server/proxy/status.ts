@@ -11,9 +11,11 @@ import type { StateProvider } from '../providers.js';
 import type { Store } from '../store/index.js';
 import { httpsUrl } from './names.js';
 
-/** Every path under the home directory in `text`, as `~/…`. */
+/** Every path under the home directory in `text`, as `~/…` (either separator: on Windows a message may use both). */
 export function tildifyText(text: string | null, home = os.homedir()): string | null {
-  return text && home && home !== path.parse(home).root ? text.split(home + path.sep).join('~' + path.sep) : text;
+  if (!text || !home || home === path.parse(home).root) return text;
+  for (const sep of ['/', '\\']) text = text.split(home + sep).join('~' + sep);
+  return text;
 }
 
 /** Pure: config.yaml, the platform's fronting (for `unsupported`), and the proxy's last push error. */

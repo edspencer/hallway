@@ -362,6 +362,7 @@ describe('local domains (D63)', () => {
   test('paths in the push error are shown under ~', () => {
     assert.equal(tildifyText('nothing on /home/me/.hallway/state/caddy/admin.sock', '/home/me'), 'nothing on ~/.hallway/state/caddy/admin.sock');
     assert.equal(tildifyText('nothing on /home/meg/x', '/home/me'), 'nothing on /home/meg/x');
+    assert.equal(tildifyText('nothing on C:\\Users\\me\\.hallway\\x', 'C:\\Users\\me'), 'nothing on ~\\.hallway\\x');
     assert.equal(tildifyText(null), null);
   });
 

@@ -118,11 +118,14 @@ describe('scan, claim, ignore and status without a daemon', () => {
     const by = (id: string) => d.checks.find((c: { id: string }) => c.id === id);
     assert.equal(by('data-home').status, 'pass');
     // direct mode: an info line saying local domains are off, and how to turn them on (D63)
+    // (on Windows, where setup refuses, it says why instead, with no command: D58)
+    const windows = process.platform === 'win32';
     assert.equal(by('networking').status, 'info');
-    assert.match(by('networking').message, /local domains are off .* https:\/\/hallway\.localhost/);
-    assert.match(by('networking').fix, /hallway setup/);
+    assert.match(by('networking').message, windows ? /^local domains \(fronted mode\) are off: .*Windows/ : /local domains are off .* https:\/\/hallway\.localhost/);
+    if (windows) assert.equal(by('networking').fix, undefined);
+    else assert.match(by('networking').fix, /hallway setup/);
     const text = await hallway(['doctor']);
-    assert.match(text.stdout, /^i local domains are off/m);
+    assert.match(text.stdout, /^i local domains (\(fronted mode\) )?are off/m);
     assert.equal(r.code, d.ok ? 0 : 1);
   });
 });
