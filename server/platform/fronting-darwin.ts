@@ -194,6 +194,7 @@ const BREW_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', 
 
 export const darwinFronting: Fronting = {
   userServiceNoun: 'LaunchAgent',
+  trustDialog: 'a separate macOS dialog (Touch ID or your password) to change certificate trust settings, which macOS asks for itself, even under sudo (Big Sur and later)',
   // everything the macOS recipes run ships with macOS
   detect: () => ({ nft: null, certutil: null, systemctl: null, resolved: false, caStore: null }),
   helperDirs: BREW_DIRS,

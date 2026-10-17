@@ -295,6 +295,12 @@ platform recipes in `server/platform/fronting-darwin.ts` and `fronting-linux.ts`
   `[sudo]` (each command shown exactly, after the contents of any file it installs). Files to install as root are first
   written to `generated/setup/` as the user and then copied with `sudo install`, so what lands in `/etc` is exactly
   what was shown. `hallway setup --print` prints the whole plan and runs nothing.
+- **It asks first (D67).** Typing `hallway setup` changes nothing by itself: it prints the plan (what `--print`
+  shows), says what will ask for what (sudo's password in the terminal; on macOS, when the root isn't trusted yet,
+  also the system's own Touch ID or password dialog for changing trust settings, which macOS requires even under sudo
+  since Big Sur), then asks `Continue? [y/N]`. Anything but `y`/`yes` (Enter and Ctrl-D included) runs nothing and
+  exits 1. `--yes` skips the question (scripts, CI); with no terminal and no `--yes` it's a usage error (exit 2),
+  before anything runs. `hallway teardown` asks the same way.
 - **Idempotent:** a part already in place is skipped, judged by asking the real thing (the root's fingerprint in the
   trust store; the installed files' exact text plus a TLS handshake on 443 that meets Hallway's CA). Re-running only
   fixes what is missing; a failed command stops the run, and running it again picks up where it stopped.
@@ -304,7 +310,7 @@ platform recipes in `server/platform/fronting-darwin.ts` and `fronting-linux.ts`
   store (with what to install). **Warnings:** a delegated TLD (a domain you might own); a made-up TLD; Caddy older
   than 2.7; something on port 2019. The TLD check uses IANA's list, cached for a week in `cache/iana-tlds.txt`; a
   failed fetch is a warning.
-- **`hallway teardown [--print] [--uninstall-packages]`** reverses only what is there (the resolver, the dnsmasq job,
+- **`hallway teardown [--print] [--uninstall-packages] [--yes]`** reverses only what is there (the resolver, the dnsmasq job,
   the redirect, the trusted root, the Caddy job) and sets `mode: direct`; the dashboard keeps working on
   `http://localhost:4255`. It never removes packages unless asked (`--uninstall-packages`: Homebrew's `caddy` and
   `dnsmasq`; on Linux it says to use the package manager). The CA stays, unused, in the data home.

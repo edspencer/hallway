@@ -17,7 +17,8 @@ dev servers directly. In **direct mode** (the default) every app's address is `h
 **fronted mode**, which the user turns on with `hallway setup`, each app also gets `https://<slug>.localhost` (or
 `<slug>.<base>` on their own domain). The live facts above (when this guide comes from a running daemon) say which
 mode is on, and each app's `url` in `/api/state` is the address to give the user. Don't run `hallway setup` or `hallway teardown` yourself: they need sudo, so they're the
-user's to run.
+user's to run. Both show their plan and ask `Continue? [y/N]` in the terminal before they change anything; never pass
+`--yes` for the user (it exists for scripts and CI).
 
 On Windows (best effort) all of that works except fronted mode: `hallway run` makes a per-user scheduled task.
 

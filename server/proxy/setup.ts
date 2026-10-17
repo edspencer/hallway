@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { HallwayConfig } from '../../shared/api.js';
+import { UsageError } from '../args.js';
 import { dataPaths, tildify } from '../config.js';
 import { type Cmd, type FrontingEnv, FrontingUnsupported, type LoopbackSkip, type Platform, type Recipe, type Runner, type StagedFile, dnsmasqConf, mergeListeners } from '../platform/index.js';
 import { findTool } from '../platform/fronting.js';
@@ -73,6 +74,9 @@ export interface SetupDeps {
   exec?: (argv: string[], opts?: { quiet?: boolean }) => Promise<number>;
   /** Is this process root already? (Then commands run without sudo.) */
   isRoot?: boolean;
+  /** Asking before anything changes (D67): `yes` (--yes) skips the question; `ask` is a terminal to ask on. With
+   *  neither, setup and teardown refuse. */
+  confirm?: { yes?: boolean; ask?: (question: string) => Promise<string> };
   /** For tests: probes and the TLD list. */
   tlds?: Set<string> | null;
   probe443?: () => Promise<'ours' | 'other' | 'none'>;
@@ -218,7 +222,8 @@ export async function isTrusted(deps: Pick<SetupDeps, 'platform' | 'query'>, env
 export type Step =
   | { kind: 'hallway'; why: string; detail?: string[]; done?: boolean; action: () => Promise<void> }
   // recheck, just before it runs: true is done already; a string is why it isn't needed (or won't be done)
-  | { kind: 'run'; why: string; recipe: Pick<Recipe, 'files' | 'cmds'>; done?: boolean; recheck?: () => Promise<boolean | string> };
+  // dialog: its commands may raise the OS's own authorisation dialog (macOS trust settings), besides sudo's prompt
+  | { kind: 'run'; why: string; recipe: Pick<Recipe, 'files' | 'cmds'>; done?: boolean; recheck?: () => Promise<boolean | string>; dialog?: boolean };
 
 export interface Plan {
   /** Reasons not to go ahead at all. */
@@ -299,7 +304,7 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
     steps.push({ kind: 'hallway', why: `Write dnsmasq's configuration: ${facts.base} and every name under it → loopback`, detail: [show(path.join(gen, 'dnsmasq.conf'))], action: a.writeDnsmasq });
     steps.push({ kind: 'hallway', why: `Run dnsmasq as you, on 127.0.0.1:${facts.dnsPort}, as a ${f.userServiceNoun} (hallway.dnsmasq)`, action: a.startDnsmasq });
   }
-  if (recipes.trust) steps.push({ kind: 'run', why: recipes.trust.why, recipe: recipes.trust, done: facts.done.trust, recheck: a.isTrusted });
+  if (recipes.trust) steps.push({ kind: 'run', why: recipes.trust.why, recipe: recipes.trust, done: facts.done.trust, recheck: a.isTrusted, dialog: !!f.trustDialog });
   if (recipes.redirect) steps.push({ kind: 'run', why: recipes.redirect.why, recipe: recipes.redirect, done: facts.done.redirect });
   // pf told to skip loopback by another tool (D64). Asked once more just before: sudo -n can usually see by then,
   // since the redirect step has just used sudo. Cleared only when that can't take anyone else's rules with it.
@@ -355,6 +360,38 @@ export function formatPlan(plan: Plan, opts: { isRoot?: boolean; printOnly?: boo
   }
   if (opts.printOnly) out.push('', plan.refusals.length ? 'Nothing was run (and setup would stop: see ✗ above).' : 'Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.');
   return out.join('\n') + '\n';
+}
+
+/** What will ask for what, said before the question (D67): sudo's password in the terminal, and the OS's own dialog. */
+export function promptsAhead(plan: Plan, platform: Platform, isRoot = false): string | null {
+  const pending = plan.steps.filter((s) => !s.done && s.kind === 'run') as Extract<Step, { kind: 'run' }>[];
+  const sudo = !isRoot && pending.some((s) => s.recipe.cmds.some((c) => c.sudo));
+  const dialog = platform.fronting.trustDialog && pending.some((s) => s.dialog) ? platform.fronting.trustDialog : null;
+  if (sudo && dialog) return `You'll be asked twice: for your password by sudo, here in the terminal, and then by ${dialog}.`;
+  if (sudo) return 'sudo will ask for your password, here in the terminal (it remembers it for a few minutes).';
+  if (dialog) return `You'll be asked by ${dialog}.`;
+  return null;
+}
+
+/** Print the plan and ask before running it (D67). False: the answer was no. Throws UsageError with no terminal and no
+ *  --yes. With --yes the plan isn't printed up front: each step is still printed as it runs. */
+export async function confirmPlan(plan: Plan, deps: Pick<SetupDeps, 'out' | 'confirm' | 'isRoot' | 'platform'>, what: 'setup' | 'teardown'): Promise<boolean> {
+  const c = deps.confirm;
+  if (!c?.yes && !c?.ask) throw new UsageError(`\`hallway ${what}\` asks before it changes anything, and there's no terminal to ask on: run it in one, or pass --yes (\`hallway ${what} --print\` shows what it would do)`);
+  const ahead = promptsAhead(plan, deps.platform, deps.isRoot);
+  if (c.yes) {
+    if (ahead) deps.out(`${ahead}\n\n`);
+    return true;
+  }
+  deps.out(formatPlan(plan, { isRoot: deps.isRoot }));
+  deps.out(`\n${ahead ? `${ahead}\n` : ''}`);
+  const answer = (await c.ask!('Continue? [y/N] ')).trim();
+  if (/^y(es)?$/i.test(answer)) {
+    deps.out('\n');
+    return true;
+  }
+  deps.out(`Nothing was run.${what === 'setup' ? ' `hallway setup --print` shows the plan again.' : ''}\n`);
+  return false;
 }
 
 const quote = (a: string) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`);
@@ -540,7 +577,9 @@ export async function setup(deps: SetupDeps, opts: { domain?: string; print?: bo
     deps.out('Setup stopped before doing anything.\n');
     return 1;
   }
-  for (const w of plan.warnings) deps.out(`! ${w}\n`);
+  if (!(await confirmPlan(plan, deps, 'setup'))) return 1;
+  // the plan printed the warnings already, unless --yes skipped it
+  if (deps.confirm?.yes) for (const w of plan.warnings) deps.out(`! ${w}\n`);
   deps.out(`Setting up fronted mode: https://<app>.${facts.base}, the dashboard at ${httpsUrl(facts.dashboard)}. Each step is printed before it runs; the sudo ones may ask for your password.\n\n`);
   await runPlan(plan, deps);
   deps.out(`\nDone. The dashboard is at ${httpsUrl(facts.dashboard)}${facts.custom ? '' : ''}; \`hallway doctor\` checks everything.${deps.platform.id === 'darwin' ? ' Firefox: set security.enterprise_roots.enabled to true in about:config to trust the same certificates.' : ''}\n`);
@@ -613,7 +652,8 @@ export async function teardown(deps: SetupDeps, opts: { uninstallPackages?: bool
     deps.out(formatPlan(plan, { isRoot: deps.isRoot, printOnly: true }));
     return 0;
   }
-  for (const w of plan.warnings) deps.out(`! ${w}\n`);
+  if (!(await confirmPlan(plan, deps, 'teardown'))) return 1;
+  if (deps.confirm?.yes) for (const w of plan.warnings) deps.out(`! ${w}\n`);
   await runPlan(plan, deps);
   deps.out(`\nDone. Fronted mode is gone; the dashboard is at http://localhost:${deps.store.currentConfig().port}.\n`);
   return 0;

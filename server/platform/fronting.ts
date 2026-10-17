@@ -90,6 +90,9 @@ export interface Fronting {
   loopbackSkip?(run: Runner): Promise<LoopbackSkip>;
   /** Clear that skip, then load the redirect again; `when` is its `why` for a plan that couldn't check yet. */
   unskip?(): Recipe & { when: string };
+  /** Where trusting (or untrusting) a certificate raises the OS's own dialog even under sudo (macOS): what it is, for
+   *  the warning setup gives before it asks to continue (D67). */
+  trustDialog?: string;
   /** Hallway's own service manager words for people (`LaunchAgent` / `systemd user unit`). */
   userServiceNoun: string;
   /** Find the tools the recipes need. */

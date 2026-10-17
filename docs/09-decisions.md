@@ -1183,3 +1183,30 @@ and in most VPN kill-switch and firewall-app rulesets, so others will hit this. 
   Homebrew's auto-update and hints don't bury setup's steps; and the redirect's first `launchctl bootout` (expected to
   fail: nothing is loaded yet) is `quiet`, its stderr dropped, so "Boot-out failed: 3: No such process" no longer
   looks like an error. sudo prompts on the terminal, not stderr, so a password prompt still shows.
+
+### D67 — setup and teardown ask before they act: the plan, what will prompt, `Continue? [y/N]` (2026-10-17)
+
+Asked for by the author after the first real-Mac run: `hallway setup` started changing the machine the moment it was
+typed. Its steps were printed as they ran, but the first sudo prompt arrived before anyone had seen the whole plan,
+and the second prompt (macOS's own dialog for the trust step) came as a surprise.
+
+- **Before anything runs** (after the facts are gathered and nothing refuses), setup prints the plan, the same text
+  `--print` shows, and then one line saying what will ask for what: sudo's password in the terminal, and, on macOS
+  when the trust step is still to do, a separate system dialog (Touch ID or password) for changing certificate trust
+  settings, which macOS has required since Big Sur even for root. Then `Continue? [y/N]`.
+- **The default is no.** Only `y`/`yes` (any case) goes ahead; Enter, Ctrl-D or anything else prints "Nothing was
+  run." and exits 1 (it didn't do what was asked; scripts can tell).
+- **`--yes`** skips the question (and the up-front plan: each step is still printed as it runs, so a log shows
+  everything). It's for scripts and CI; the agent guide tells agents never to pass it for the user.
+- **No terminal and no `--yes` is a usage error** (exit 2, with the usage), before anything runs: a question nobody can
+  answer must not turn into a silent yes or a hang. "A terminal" is stdin and stdout both TTYs.
+- **teardown** asks the same way (its plan, what will prompt, the question). Its "Nothing to undo" and Windows'
+  "nothing to undo" exit before asking, and so does a setup that refuses.
+- The words for the OS dialog are the platform's (`Fronting.trustDialog`, macOS only); a plan step that may raise it is
+  marked `dialog` (setup's trust step). Teardown's untrust (`security delete-certificate`, D47's research notes) ran
+  headless on CI, so it isn't marked; unverified on a desktop Mac.
+- **Rejected:**
+  - asking before each sudo step instead of once: more questions, and still no view of the whole plan first;
+  - default yes (`[Y/n]`): the point is that typing the command alone changes nothing;
+  - treating no terminal as yes (as some installers do): a pipe or an agent's shell would then run sudo steps unasked;
+  - `-y` as well: one spelling, and a short flag is easy to add later, hard to take back.
