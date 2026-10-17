@@ -146,6 +146,9 @@ export async function portConflicts(
   return { conflicts, seen };
 }
 
+/** A command line that's one of Hallway's forwarders (`node …/cli.js forward 4443`), as launchd runs them. */
+export const isOurForwarder = (command: string) => /[/\\]cli\.js forward \d+(\s|$)/.test(command);
+
 /** How loopback 443/80 reach Caddy for a tier on this platform. A hand-set `publicPort: httpsPort` from before the
  *  tiers (fronted mode with nothing on 443, D47) is kept for System-wide, the only tier that had it. */
 export function lowPortsFor(platform: Pick<Platform, 'fronting'>, tier: Trust, cfg: Pick<HallwayConfig, 'proxy'>): LowPorts {
@@ -197,7 +200,8 @@ export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust:
   const dnsmasq = custom ? { path: findTool('dnsmasq', env.PATH, f.helperDirs), install: f.installHelper('dnsmasq', env) } : null;
 
   // the low ports this tier needs, by scheme: plain HTTP needs only 80
-  const lows = lowPorts === 'none' ? [] : scheme === 'https' ? [{ port: 443, what: 'HTTPS' }, { port: 80, what: 'HTTP' }] : [{ port: 80, what: 'HTTP' }];
+  // a forwarder of ours that launchd has started (macOS) shows up as a node on 443/80: it isn't in the way
+  const lows = (lowPorts === 'none' ? [] : scheme === 'https' ? [{ port: 443, what: 'HTTPS' }, { port: 80, what: 'HTTP' }] : [{ port: 80, what: 'HTTP' }]).map((l) => ({ ...l, oursIf: isOurForwarder }));
   const ours = (file: string) => (cmd: string) => cmd.includes(file);
   const { conflicts, seen } = await portConflicts(platform, [
     ...lows,

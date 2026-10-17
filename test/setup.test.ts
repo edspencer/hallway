@@ -420,3 +420,13 @@ describe('Windows (D58)', () => {
     for (const r of [f.redirect!, f.unredirect, f.trust, f.untrust, f.userTrust!, f.userUntrust!, f.resolver, f.unresolver]) assert.throws(() => r({} as FrontingEnv), /not supported on Windows|isn't supported on Windows/);
   });
 });
+
+describe("our own forwarders aren't squatters", () => {
+  test('a node running `cli.js forward <port>` on 443/80 is ours; anything else is not', async () => {
+    const { isOurForwarder } = await import('../server/proxy/setup.ts');
+    assert.ok(isOurForwarder('/opt/homebrew/bin/node /opt/homebrew/lib/node_modules/hallway/dist/server/cli.js forward 4443'));
+    assert.ok(isOurForwarder('C:\\node\\node.exe C:\\hallway\\dist\\server\\cli.js forward 4480'));
+    assert.ok(!isOurForwarder('/usr/bin/node /srv/proxy.js'));
+    assert.ok(!isOurForwarder('/usr/bin/node /x/cli.js forwarder 443'));
+  });
+});

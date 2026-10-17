@@ -127,7 +127,8 @@ try {
   step('migration: the System-wide setup of 0.6.0 (from npm; pf on macOS), then this build');
   // npx's copy of the last release, run against the same data home: what a user upgrading from it has
   await check('0.6.0 sets up System-wide', async () => {
-    const r = sh('npx', ['-y', 'hallway@0.6.0', 'setup', '--yes'], { env, timeout: 8 * 60_000 });
+    // from the temp directory: in the checkout, npx would take this package (also called hallway) for the one asked for
+    const r = sh('npx', ['-y', 'hallway@0.6.0', 'setup', '--yes'], { env, cwd: tmp, timeout: 8 * 60_000 });
     process.stdout.write(r.out.replace(/^/gm, '    | '));
     assert.equal(r.code, 0);
     assert.equal(status(curl('https://hallway.localhost/api/health')), 200);
