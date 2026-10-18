@@ -12,9 +12,9 @@ you, listening on `127.0.0.1` only.
   bookmarks, managed services, the MCP server, thumbnails and running Hallway as a login service (a LaunchAgent or a
   systemd user unit) all work as your own user.
 - <span class="ms ms--shipped">v1</span> **Fronted mode can need no admin at all.** [`hallway setup`](/networking/setup-and-doctor/)
-  has [three tiers](/networking/fronted-mode/#three-tiers). **No admin** trusts Hallway's certificate for your account
-  only (on macOS, your own Touch ID or password, once; on Linux, no prompt), and **No prompts** serves plain HTTP and
-  asks for nothing. Only **System-wide** needs root: trusting a certificate authority for every account, on Linux
+  has [three tiers](/networking/fronted-mode/#three-tiers). **User certificate** trusts Hallway's certificate for your account
+  only (on macOS, your own Touch ID or password, once; on Linux, no prompt), and **No HTTPS** serves plain HTTP and
+  asks for nothing. Only **System-wide certificate** needs root: trusting a certificate authority for every account, on Linux
   redirecting ports 443 and 80, and, for a custom domain, adding a resolver entry. Setup **prints each command and why
   before it runs anything**, has a `--print` mode that runs nothing, and is undone by `hallway teardown`.
 - <span class="ms ms--shipped">v1</span> **After setup, no more sudo.** Adding, changing or removing an app
@@ -33,7 +33,7 @@ So **Caddy never runs as root.** It runs as you, on loopback ports 4443 and 4480
 in your data home that only you can open (mode 0600). Since Caddy has no privilege, reaching its API gains nothing.
 On macOS, launchd (already root) binds loopback 443 and 80 on your behalf and hands them to small LaunchAgents of your
 own that pass connections on to Caddy, so no tier needs sudo for the ports. The root parts left are fixed, read
-nothing you could rewrite later, and belong to the System-wide tier only: the system-wide trusted root, on Linux an
+nothing you could rewrite later, and belong to the System-wide certificate tier only: the system-wide trusted root, on Linux an
 nftables redirect from 443 and 80 to Caddy's ports, and for a custom domain the resolver entry. See
 [The security model](/networking/setup-and-doctor/#the-security-model).
 

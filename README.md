@@ -79,20 +79,20 @@ An agent can also read `http://localhost:4255/llms.txt`: what this Hallway has, 
 ```sh
 hallway setup --print      # the whole plan; runs nothing
 hallway setup              # asks which tier, then https://<app>.localhost and https://hallway.localhost
-hallway setup --domain myname.internal    # or under your own domain (System-wide)
+hallway setup --domain myname.internal    # or under your own domain (System-wide certificate)
 hallway teardown           # undo it all, back to http://localhost:<port>
 ```
 
-Setup has three tiers (`--trust user|system|none`):
+Setup has three tiers (`--trust user|system|none`); User certificate is the recommended one:
 
 | | macOS | Linux | Asks for |
 | --- | --- | --- | --- |
-| **No admin** (`user`) | `https://<app>.localhost` | `https://<app>.localhost:4443` | macOS: your own Touch ID or password, once (not an admin prompt). Linux: nothing. The certificate is trusted for your account only (on Linux, by Chrome and Chromium). |
-| **System-wide** (`system`) | `https://<app>.localhost` | `https://<app>.localhost` | sudo. Trusted for every account; custom domains need it. |
-| **No prompts** (`none`) | `http://<app>.localhost` | `http://<app>.localhost:4480` | Nothing. Plain HTTP: Safari drops `Secure` cookies. |
+| **User certificate** (`user`) | `https://<app>.localhost` | `https://<app>.localhost:4443` | macOS: your own Touch ID or password, once (not an admin prompt). Linux: nothing. The certificate is trusted for your account only (on Linux, by Chrome and Chromium). |
+| **System-wide certificate** (`system`) | `https://<app>.localhost` | `https://<app>.localhost` | sudo. Trusted for every account; custom domains need it. |
+| **No HTTPS** (`none`) | `http://<app>.localhost` | `http://<app>.localhost:4480` | Nothing. Plain HTTP: Safari drops `Secure` cookies. |
 
 Caddy runs as you, on loopback ports 4443 and 4480. On macOS, launchd holds loopback 443 and 80 for it, with no
-sudo, in every tier. Privileged changes happen only in System-wide, each printed and run through `sudo`: trusting
+sudo, in every tier. Privileged changes happen only in System-wide certificate, each printed and run through `sudo`: trusting
 Hallway's local certificate authority system-wide, on Linux redirecting ports 443 and 80 to Caddy, and, for a custom
 domain, a resolver entry for that domain only. On macOS, install Hallway with `npm i -g hallway` first. It needs
 Caddy 2.7 or later. Details: [Fronted mode](https://hallway.edspencer.net/networking/fronted-mode/).
@@ -114,7 +114,7 @@ Caddy 2.7 or later. Details: [Fronted mode](https://hallway.edspencer.net/networ
 What's left is v2's last criterion: running everything on a real Mac. Everything has been run end to end on Linux;
 on macOS it's tested on CI (including real launchd jobs, `hallway setup` with launchd's sockets on 443 and 80 and a
 trusted certificate, and teardown). On a developer's Mac, Safari, Chrome and Apple's `curl` have accepted a
-certificate whose root is trusted for the user only (the No admin tier's way), but nothing has been checked across a real reboot, and Firefox
+certificate whose root is trusted for the user only (the User certificate tier's way), but nothing has been checked across a real reboot, and Firefox
 is untried. Windows has run only on CI's runners: a real logon starting the scheduled tasks, and an
 interactive desktop user's dev servers, are untested. Reports are welcome. The design is in [spec.md](spec.md) and [docs/](docs/).
 

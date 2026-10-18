@@ -26,11 +26,11 @@ configuration in `~/.hallway`. What it's built to guarantee, and so what counts 
 - **Nothing of Hallway's runs as root: not the daemon, not Caddy.** On macOS, launchd binds loopback ports 443 and
   80 as root on your behalf and hands them to small LaunchAgents of yours that pass connections on to Caddy, as you.
   The privileged steps belong only to `hallway setup` and `hallway teardown`,
-  which print each step before running it through `sudo`, and only to their System-wide tier: trusting Hallway's
+  which print each step before running it through `sudo`, and only to their System-wide certificate tier: trusting Hallway's
   local certificate authority system-wide (on macOS, in the System keychain), on Linux redirecting ports 443 and 80
-  to Caddy's loopback ports, and a resolver entry for a custom domain. The No admin tier trusts the certificate for
-  your account only, and No prompts serves plain HTTP; neither uses sudo, except once to remove what an earlier
-  System-wide setup (or an older Hallway's pf redirect) installed. Caddy's admin API is a Unix socket only you
+  to Caddy's loopback ports, and a resolver entry for a custom domain. The User certificate tier trusts the certificate for
+  your account only, and No HTTPS serves plain HTTP; neither uses sudo, except once to remove what an earlier
+  System-wide certificate setup (or an older Hallway's pf redirect) installed. Caddy's admin API is a Unix socket only you
   can open (mode 0600, in the data home).
 - **MCP never launches processes.** No MCP tool starts, stops or installs anything, and none can add a `service`
   block or change a port (D10, D53). The dashboard's HTTP API is different: it can write an app's

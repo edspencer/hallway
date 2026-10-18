@@ -89,8 +89,8 @@ Hallway writes nowhere else, except:
 - <span class="ms ms--shipped">v1</span> one per managed service: `~/Library/LaunchAgents/hallway.app.<slug>.plist`
   on macOS, `~/.config/systemd/user/hallway-app-<slug>.service` on Linux, `\hallway.app.<slug>` on Windows;
 - <span class="ms ms--shipped">v1</span> during `hallway setup` only (macOS and Linux): the user-level Caddy (and dnsmasq) jobs, on
-  macOS the launchd forwarders for ports 443 and 80, the root certificate trusted for your account (No admin) and,
-  in the System-wide tier, the privileged pieces it prints and runs through `sudo`: the system trust, on
+  macOS the launchd forwarders for ports 443 and 80, the root certificate trusted for your account (User certificate) and,
+  in the System-wide certificate tier, the privileged pieces it prints and runs through `sudo`: the system trust, on
   Linux the 443/80 redirect and, for a custom domain, the resolver entry. The full list is in
   [Setup](/networking/setup-and-doctor/#what-it-changes-outside-the-data-home); `hallway teardown` removes them.
 - <span class="ms ms--shipped">v2</span> npm's own download cache (usually `~/.npm`), which the `npm install` behind

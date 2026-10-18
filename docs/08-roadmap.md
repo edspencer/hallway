@@ -62,7 +62,7 @@ and custom-domain DNS via a `systemd-resolved` drop-in pointing at Hallway's use
 > | # | Result | Evidence |
 > |---|--------|----------|
 > | 1 | Met | CI's "Fronted mode (real …)" jobs run `setup` for real on Linux and macOS; re-running it reported the parts already done ("Fronted mode in CI"). `--print`'s plans are golden files in `test/setup.test.ts`. |
-> | 2 | Partly | The certificate is trusted system-wide on both CI runners (`curl` with no `--cacert`; `security verify-cert` on macOS). **Driven on a real Mac, 2026-10-17/18:** Safari and Chrome loaded `https://hallway.localhost` and app subdomains with no warning, under the No admin tier's user-domain trust (Q-SAFARI-LOCALHOST resolved for both). Firefox is still unchecked. |
+> | 2 | Partly | The certificate is trusted system-wide on both CI runners (`curl` with no `--cacert`; `security verify-cert` on macOS). **Driven on a real Mac, 2026-10-17/18:** Safari and Chrome loaded `https://hallway.localhost` and app subdomains with no warning, under the User certificate (then "No admin") tier's user-domain trust (Q-SAFARI-LOCALHOST resolved for both). Firefox is still unchecked. |
 > | 3 | Met | `https://review.localhost` reached a strict app with Host rewritten, and an app declared while running was routed with no restart (CI, both OSes; by hand on Linux, "Fronted mode experiments"). |
 > | 4 | Met | Vite 8 behind `https://vite.localhost:4443` in Chromium: hot update with no reload ("Fronted mode experiments"); **confirmed on a real Mac, 2026-10-17/18**, through launchd → forwarder → Caddy once 0.7.1 fixed D68's `[::1]`-only binding: a real hot update with no reload. |
 > | 5 | Partly | `hallway run` and `--persist` (KeepAlive / `Restart=always` bringing a killed app back) on real launchd and systemd ("Managed services on real launchd and systemd"). "After a reboot … listed under Lost at last reboot" only in simulation ("Lost at last reboot, simulated"); no real reboot on either OS. |
@@ -108,9 +108,10 @@ moved forward to v0/v1: D26.)
 > **Status: mostly built.** MCP and the dev-server hook were released in 0.2.0, screenshot thumbnails, generated cards
 > and the fast 90-day view in 0.3.0 (D55–D57). Criteria 1–4 are met (1 and 2 on 2026-10-16: `11-research-notes.md`,
 > "The v2 MCP acceptance run"; 3 and 4 the same day: "Thumbnails and the 90-day view"). Criterion 5, a real Mac, is
-> what's left: a 2026-10-17/18 run on the author's own Mac settled the No admin trust step run by `hallway setup`
-> itself, Safari and Chrome through the forwarders, Vite HMR through launchd → forwarder → Caddy, and the D69 upgrade
-> fix (`11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop Mac"); still unverified
+> what's left: a 2026-10-17/18 run on the author's own Mac settled the User certificate (then "No admin") trust step
+> run by `hallway setup` itself, Safari and Chrome through the forwarders, Vite HMR through launchd → forwarder →
+> Caddy, and the D69 upgrade fix, and on 2026-10-18 the dashboard's Turn on raising the Touch ID dialog from the
+> LaunchAgent daemon (D70) (`11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop Mac"); still unverified
 > there: logout/login and a reboot, Firefox, a managed (MDM) Mac, Docker Desktop holding 443, and `hallway teardown`.
 
 Acceptance criteria:

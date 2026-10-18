@@ -74,7 +74,7 @@ export function tierText(platformId: Platform['id'], tier: Trust, admin: boolean
       return {
         name,
         summary: 'For custom domains and every account; needs an administrator',
-        asks: mac ? `Needs ${who}, so it runs in a terminal: it trusts the certificate for every account on this Mac.` : `Needs ${who}, so it runs in a terminal: it redirects ports 443 and 80 and trusts the certificate system-wide.`,
+        asks: mac ? `Needs ${who}: it trusts the certificate for every account on this Mac.` : `Needs ${who}: it redirects ports 443 and 80 and trusts the certificate system-wide.`,
         note: 'Custom domains (--domain) need it, and so do other accounts and tools that read only the system\'s certificates.',
       };
     }

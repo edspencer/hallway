@@ -30,7 +30,7 @@ describe('which tier to recommend (D70)', () => {
     ]);
   });
   test("being an administrator only changes how System-wide certificate says it needs one", () => {
-    assert.match(tierText('darwin', 'system', true).asks, /^Needs an administrator's password, so it runs in a terminal/);
+    assert.match(tierText('darwin', 'system', true).asks, /^Needs an administrator's password: it trusts/);
     assert.match(tierText('darwin', 'system', false).asks, /^Needs an administrator \(this account isn't one\)/);
     assert.match(tierText('linux', 'system', false).asks, /^Needs sudo, which this account doesn't have/);
     assert.equal(tierText('darwin', 'user', true).asks, tierText('darwin', 'user', false).asks);

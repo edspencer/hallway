@@ -20,40 +20,40 @@ their `http://localhost:<port>` addresses.
 ```sh
 hallway setup --print                    # show the full plan; run nothing
 hallway setup                            # asks which tier, then asks before it runs anything
-hallway setup --trust user               # No admin
-hallway setup --trust system             # System-wide
-hallway setup --trust none               # No prompts (plain HTTP)
-hallway setup --domain myname.internal   # under your own domain (System-wide)
+hallway setup --trust user               # User certificate
+hallway setup --trust system             # System-wide certificate
+hallway setup --trust none               # No HTTPS (plain HTTP)
+hallway setup --domain myname.internal   # under your own domain (System-wide certificate)
 ```
 
 On macOS, install Hallway first (`npm i -g hallway`): setup installs jobs that run the installed `hallway`, so it
 refuses to run from npx's cache.
 
-**First, the tier.** On a terminal with no `--trust`, setup asks, with the recommended tier (and the one you have, if
-any) marked; Enter takes the default. On a Mac:
+**First, the tier.** On a terminal with no `--trust`, setup asks, with the recommended tier, User certificate (and the
+one you have, if any), marked; Enter takes the default. On a Mac:
 
 ```
 Local domains: open your apps by name instead of by port.
 
-  1) No admin     https://review.localhost   (recommended)
-     macOS asks for your own password or Touch ID once, to trust Hallway's certificate for your account.
-     Tools that bring their own certificate list (Node, Python) need to be told about it.
-  2) System-wide  https://review.localhost
-     Needs an administrator: trusts it for every account.
-     Custom domains (--domain) need this.
-  3) No prompts   http://review.localhost
-     Nothing at all.
-     Plain HTTP. Browser APIs that need a secure context still work on .localhost; Safari drops Secure cookies.
+  1) User certificate         https://review.localhost   (recommended)
+     macOS asks for your Touch ID or password once, to trust Hallway's certificate for your account. It isn't an administrator prompt.
+     Safari, Chrome and Apple's curl trust it; tools that bring their own certificate list (Node, Python) need to be told about it.
+  2) System-wide certificate  https://review.localhost
+     Needs an administrator's password: it trusts the certificate for every account on this Mac.
+     Custom domains (--domain) need it, and so do other accounts and tools that read only the system's certificates.
+  3) No HTTPS                 http://review.localhost
+     Nothing will ask for a password.
+     Plain HTTP: browser APIs that need a secure context still work on .localhost, but Safari drops Secure cookies.
 
 Which? [1]
 ```
 
-What each tier asks for and gives up, and which is recommended where, is on
+What each tier asks for and gives up, and when to choose another, is on
 [Fronted mode: three tiers](/networking/fronted-mode/#three-tiers). With no terminal, or with `--yes`, setup doesn't
-ask: it keeps the tier you have, or else takes the recommended one, and prints which.
+ask: it keeps the tier you have, or else takes User certificate, and prints which.
 
 **Then the plan.** Typing `hallway setup` changes nothing on its own. It prints the plan below, says what will ask you
-for what, and waits for an answer. For No admin on a Mac:
+for what, and waits for an answer. For User certificate on a Mac:
 
 ```
 You'll be asked by macOS, for your Touch ID or password, to change *your* certificate trust settings. This is not an
@@ -61,8 +61,8 @@ administrator prompt.
 Continue? [y/N]
 ```
 
-For System-wide it's sudo's password in the terminal (and on macOS, the trust dialog after it); for No prompts, and
-No admin on Linux, it's `Nothing here will ask for a password.` The default is no: anything but `y` or `yes` (Enter,
+For System-wide certificate it's sudo's password in the terminal (and on macOS, the trust dialog after it); for No HTTPS, and
+User certificate on Linux, it's `Nothing here will ask for a password.` The default is no: anything but `y` or `yes` (Enter,
 Ctrl-D) runs nothing. For a script or CI, `hallway setup --yes` doesn't ask; with no terminal to ask on and no
 `--yes`, setup refuses (exit 2) before it does anything.
 
@@ -71,7 +71,7 @@ The plan is a numbered list, and each step is tagged with who does it:
 - **`[Hallway]`**: Hallway's own files and user-level jobs, as you.
 - **`[you]`**: a command run as you, with no sudo: on macOS, `brew install caddy` (and `dnsmasq` for a custom domain)
   if they're missing, with Homebrew's auto-update, cleanup and hints turned off for that one command so its output
-  doesn't bury setup's; and No admin's trust step.
+  doesn't bury setup's; and User certificate's trust step.
 - **`[sudo]`**: a privileged change. The exact command is shown; a file to be installed as root is first written to
   `~/.hallway/generated/setup/` as you, shown in full, then copied into place with `sudo install`.
 
@@ -79,13 +79,13 @@ For fronted mode on `localhost`, it:
 
 1. installs Caddy if it is missing (macOS, with Homebrew; on Linux it stops and says how to get a release binary);
 2. writes Caddy's configuration (`generated/caddy.json`) and the fallback page, and checks them with `caddy validate`;
-3. starts **Caddy as you**, as the user-level job `hallway.caddy`, on `127.0.0.1:4443` and `:4480` (No prompts: only
+3. starts **Caddy as you**, as the user-level job `hallway.caddy`, on `127.0.0.1:4443` and `:4480` (No HTTPS: only
    `:4480`), with its admin API on a private socket;
-4. on macOS, in every tier, has **launchd hold loopback 443 and 80** for Caddy (only 80 for No prompts): one small
+4. on macOS, in every tier, has **launchd hold loopback 443 and 80** for Caddy (only 80 for No HTTPS): one small
    LaunchAgent per socket, `hallway.forward.https`, `…https6`, `…http` and `…http6`, with no sudo;
-5. trusts Hallway's local certificate authority: **[you]** for your account only (No admin), or **[sudo]**
-   system-wide (System-wide); No prompts has no certificate;
-6. on Linux, System-wide only, **[sudo]** redirects loopback ports 443 and 80 to Caddy's 4443 and 4480;
+5. trusts Hallway's local certificate authority: **[you]** for your account only (User certificate), or **[sudo]**
+   system-wide (System-wide certificate); No HTTPS has no certificate;
+6. on Linux, System-wide certificate only, **[sudo]** redirects loopback ports 443 and 80 to Caddy's 4443 and 4480;
 7. removes what another tier added, if you're switching (and, on a Mac set up by an older Hallway, **[sudo]** its pf
    redirect);
 8. sets `mode: fronted` and the tier (`proxy.trust`, `proxy.scheme`, `proxy.publicPort`) in `config.yaml`;
@@ -103,11 +103,11 @@ The rules it follows:
   contents, the jobs, a TLS handshake on port 443) and only does what is missing; already-done steps say so. If a
   command fails, the run stops there, and running setup again carries on.
 - **It refuses before running anything** when the domain is `.local`, a TLD on browsers' HSTS preload list (`.dev`,
-  `.app`, …), `.example` or `.invalid`; when `--domain` comes with a tier other than System-wide; when anything else
+  `.app`, …), `.example` or `.invalid`; when `--domain` comes with a tier other than System-wide certificate; when anything else
   holds a low port the tier needs, or Caddy's or dnsmasq's ports (it names the process, its PID and command line);
-  when a helper it needs is missing and can't be installed (on Linux, No admin needs `certutil`); on macOS, when it
-  runs from npx's cache, or when No admin's trust dialog has nobody at the Mac's screen to answer it (over SSH, say);
-  and on Linux, for System-wide, when there is no systemd, no `nft` or no system CA store it recognises. It **warns**
+  when a helper it needs is missing and can't be installed (on Linux, User certificate needs `certutil`); on macOS, when it
+  runs from npx's cache, or when User certificate's trust dialog has nobody at the Mac's screen to answer it (over SSH, say);
+  and on Linux, for System-wide certificate, when there is no systemd, no `nft` or no system CA store it recognises. It **warns**
   about a real or made-up TLD, a Caddy older than 2.7, and another Caddy's admin API on port 2019.
 
 :::tip[Pasting into zsh]
@@ -130,7 +130,7 @@ into a privilege escalation. So Hallway doesn't run one.
   sockets aren't reachable from your network.
 - **Its admin API is a Unix socket in your data home** (`state/caddy/admin.sock`) with mode 0600, never a TCP port.
   Only your own processes can reach it, and since Caddy holds no privilege, reaching it gains them nothing.
-- **The only privileged changes are fixed, read nothing you could rewrite later, and belong to System-wide:**
+- **The only privileged changes are fixed, read nothing you could rewrite later, and belong to System-wide certificate:**
   1. **Trusting Hallway's local certificate authority system-wide**: in the System keychain on macOS, in the system
      CA store on Linux (plus your own NSS database, without sudo).
   2. **On Linux, the redirect** of loopback ports 443 → 4443 and 80 → 4480: an nftables table of Hallway's own
@@ -138,7 +138,7 @@ into a privilege escalation. So Hallway doesn't run one.
   3. **For a custom domain only, the resolver entry**: `/etc/resolver/<base>` on macOS, a `systemd-resolved` drop-in
      on Linux, pointing that one domain at Hallway's dnsmasq, which also runs as you.
 
-  Each is printed and run through `sudo`. No admin and No prompts make none of them. After setup, adding, changing or
+  Each is printed and run through `sudo`. User certificate and No HTTPS make none of them. After setup, adding, changing or
   removing an app never needs sudo again: the daemon reconfigures Caddy through its socket, as you.
 
 Rejected along the way: a root Caddy with its admin API on TCP or on a user-only socket (your own processes could
@@ -152,9 +152,9 @@ port). See [No root in the daemon](/guarantees/no-root/).
 | --- | --- | --- |
 | Caddy, as you | `~/Library/LaunchAgents/hallway.caddy.plist` | `~/.config/systemd/user/hallway-caddy.service` |
 | dnsmasq, as you (custom domain) | `~/Library/LaunchAgents/hallway.dnsmasq.plist` | `~/.config/systemd/user/hallway-dnsmasq.service` |
-| Ports 443 and 80 | `~/Library/LaunchAgents/hallway.forward.{https,https6,http,http6}.plist`, as you (every tier) | `/etc/hallway/redirect.nft`, `/etc/systemd/system/hallway-redirect.service` (sudo; System-wide only) |
-| The trusted root, No admin | your login keychain, as you | your NSS database (`~/.pki/nssdb`), as you |
-| The trusted root, System-wide (sudo) | the System keychain | the system CA store (e.g. `/usr/local/share/ca-certificates/hallway-local-ca.crt`); your NSS database, as you |
+| Ports 443 and 80 | `~/Library/LaunchAgents/hallway.forward.{https,https6,http,http6}.plist`, as you (every tier) | `/etc/hallway/redirect.nft`, `/etc/systemd/system/hallway-redirect.service` (sudo; System-wide certificate only) |
+| The trusted root, User certificate | your login keychain, as you | your NSS database (`~/.pki/nssdb`), as you |
+| The trusted root, System-wide certificate (sudo) | the System keychain | the system CA store (e.g. `/usr/local/share/ca-certificates/hallway-local-ca.crt`); your NSS database, as you |
 | The resolver (sudo, custom domain) | `/etc/resolver/<base>` | `/etc/systemd/resolved.conf.d/hallway.conf` |
 
 Caddy's configuration, certificates and state, dnsmasq's configuration, and the files staged for `sudo` all stay in
@@ -211,13 +211,13 @@ the same checks):
 - on macOS, launchd's forwarders installed and loaded (`✓ 443 and 80 on loopback: launchd, for hallway.caddy`), and a
   warning if an older Hallway's pf redirect is still installed (`hallway setup` removes it, with sudo once);
 - a TLS handshake through 443 (or Caddy's port) that verifies against Hallway's root, and the HTTP-to-HTTPS redirect;
-  for No prompts, `✓ http://hallway.localhost answers (plain HTTP)` and an info line that Safari won't keep `Secure`
+  for No HTTPS, `✓ http://hallway.localhost answers (plain HTTP)` and an info line that Safari won't keep `Secure`
   cookies over plain HTTP;
-- the root trusted for the tier: System-wide, by the system, with a note for Firefox; No admin,
+- the root trusted for the tier: System-wide certificate, by the system, with a note for Firefox; User certificate,
   `✓ Hallway's root is trusted for your account`, and an info line on who doesn't trust it (on macOS other accounts
   and tools with their own CA list, with the Node settings to use; on Linux everything but Chrome and Chromium, with
   the root's path for `curl --cacert` and `NODE_EXTRA_CA_CERTS`); a warning if a system-wide trust is left over from
-  System-wide;
+  System-wide certificate;
 - `*.localhost` resolving (a warning only: browsers resolve it themselves);
 - for a custom domain: its TLD (delegated or made up, checked against IANA's list), dnsmasq running and bound to
   loopback only, the resolver entry in place, and both `<base>` and a name under it resolving to your machine.

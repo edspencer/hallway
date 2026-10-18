@@ -40,7 +40,7 @@ always there without you starting anything:
   with `loginctl enable-linger $USER`. Hallway never does that for you, and `hallway doctor` warns while it is off.
 - **Windows** (best effort): a scheduled task, `\hallway.daemon`, that starts when you log on and runs
   `hallway supervise`, which keeps the daemon running and writes its logs. Its files are in
-  `%LOCALAPPDATA%\hallway\tasks\`. It runs while you're logged on. No administrator rights are needed, and none
+  `%LOCALAPPDATA%\hallway\tasks\`. It runs while you're logged on. User certificateistrator rights are needed, and none
   are asked for. This has run for real on GitHub's Windows runners, but a real logon starting it hasn't been tried on
   a Windows desktop yet.
 
@@ -83,9 +83,9 @@ macOS, if they're running. `hallway doctor` flags a daemon that's a different ve
 | --- | --- |
 | **OS** | macOS (launchd) or Linux (systemd user units). Windows is best effort (per-user scheduled tasks): everything but fronted mode works; see [the roadmap](/roadmap/#windows) for what hasn't been checked on a real Windows desktop. |
 | **Node** | 22.13 or later (for the built-in `node:sqlite` that holds uptime history). |
-| **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`, and only for fronted mode's System-wide tier (or to leave it). |
-| **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional, and macOS and Linux only. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and Hallway installed with `npm i -g` (on macOS setup won't run from npx). Then it depends on the [tier](/networking/fronted-mode/#three-tiers): No admin needs your own password or Touch ID once on macOS, and `certutil` on Linux; System-wide needs one guided sudo step, and on Linux systemd, `nft` and a system CA store; No prompts needs nothing more. See [Setup](/networking/setup-and-doctor/). |
-| **For custom domains** <span class="ms ms--shipped">v1</span> | Optional, System-wide tier only. dnsmasq (Homebrew's on macOS, which setup installs; on Linux the `dnsmasq-base` package or similar) and, on Linux, `systemd-resolved`. |
+| **Privileges** | None. The daemon never runs as root, and nothing asks for sudo except `hallway setup` and `hallway teardown`, and only for fronted mode's System-wide certificate tier (or to leave it). |
+| **For fronted mode** <span class="ms ms--shipped">v1</span> | Optional, and macOS and Linux only. [Caddy](https://caddyserver.com) 2.7 or later (on macOS `hallway setup` installs it with Homebrew; on Linux, put a release binary from caddyserver.com on your `PATH`), and Hallway installed with `npm i -g` (on macOS setup won't run from npx). Then it depends on the [tier](/networking/fronted-mode/#three-tiers): User certificate needs your own password or Touch ID once on macOS, and `certutil` on Linux; System-wide certificate needs one guided sudo step, and on Linux systemd, `nft` and a system CA store; No HTTPS needs nothing more. See [Setup](/networking/setup-and-doctor/). |
+| **For custom domains** <span class="ms ms--shipped">v1</span> | Optional, System-wide certificate tier only. dnsmasq (Homebrew's on macOS, which setup installs; on Linux the `dnsmasq-base` package or similar) and, on Linux, `systemd-resolved`. |
 | **For screenshots** <span class="ms ms--shipped">v2</span> | Optional. About 300 MB of disk: `hallway thumbs enable` downloads a headless browser into the data home. See [Thumbnails](/concepts/thumbnails/). |
 
 ## Why port 4255?
