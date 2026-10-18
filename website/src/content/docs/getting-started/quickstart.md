@@ -114,8 +114,8 @@ See [Working with agents](/agents/overview/).
 - [Services and reboots](/concepts/services/): keep apps running across restarts, and see what the last reboot took
   down.
 - [Fronted mode](/networking/fronted-mode/): `https://slides.localhost` instead of a port, after one
-  `hallway setup`, in the tier you choose: no admin, system-wide, or plain HTTP with no prompts (macOS and Linux
-  only).
+  `hallway setup`, in the tier you choose: User certificate (recommended; no admin), System-wide certificate, or No
+  HTTPS (macOS and Linux only). The dashboard's Local domains panel can turn it on for you.
 - [Thumbnails](/concepts/thumbnails/): screenshots of your apps on their doors, or generated cards.
 - The [MCP server](/agents/mcp/) and the [dev-server hook](/agents/hook/), for coding agents.
 - The [CLI reference](/reference/cli/) and the [file formats](/reference/app-yaml/).
