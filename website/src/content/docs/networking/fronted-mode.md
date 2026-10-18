@@ -179,12 +179,14 @@ mode.
 - `hallway teardown` removes the root from wherever it was trusted. The CA itself stays in the data home, unused.
 
 :::caution[Partly checked on a real Mac]
-On a real Mac, a root trusted for the user only (No admin's way) asked only for Touch ID, and Safari, Chrome and
-Apple's `curl` then trusted its certificates; and a user LaunchAgent's launchd socket on a privileged loopback port
-answered with no sudo and no prompt. CI's macOS runners run setup for real with launchd's sockets on 443 and 80 (No
-admin's trust step only as a plan: nobody can answer its dialog there). Still to check on a desktop Mac: Firefox with
-a root trusted for the user, and launchd's sockets on 443 and 80 across a logout and a reboot. On Linux, CI checks the
-tiers with `curl`.
+On a real Mac, `hallway setup --trust user` ran the No admin trust step itself — its plan, what will ask, one sudo
+password (migrating off an older System-wide install) and then macOS's Touch ID dialog for the user's own trust
+settings — and Safari and Chrome then loaded the dashboard and every app with no certificate warning; a user
+LaunchAgent's launchd socket on a privileged loopback port answered with no sudo and no prompt; and Vite's hot reload
+worked through launchd's sockets, the forwarders and Caddy. CI's macOS runners also run setup for real with launchd's
+sockets on 443 and 80. Still to check on a desktop Mac: Firefox with a root trusted for the user; launchd's sockets
+and the trust settings across a logout and a reboot; a managed (MDM) Mac; and Docker Desktop or similar already
+holding 443. On Linux, CI checks the tiers with `curl`.
 :::
 
 ## Ports 80 and 443 may already be taken

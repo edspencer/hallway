@@ -641,9 +641,49 @@ Vite binds what it resolves to). Hallway checked 127.0.0.1 only, everywhere. Exp
   (`autoSelectFamily`, on by default since Node 20, tries every resolved address); so thumbnails use `localhost`.
 - **`hallway run`** with a `::1`-only server (fake-systemctl, `test/cli-services.test.ts`) comes up at once and prints
   `(listening on [::1]:<port>)`; `status --json` reports `health.address: "::1"`.
-- **Unverified on macOS:** Caddy's resolver on a Mac (release builds are CGO-free; Go on darwin resolves through the
-  system's libSystem calls). CI's macOS fronted-mode job now checks a `::1`-only app at `https://hmr.localhost`
-  (`scripts/fronted-real.mjs`), which covers it on a runner; a real Mac with Vite is still to do.
+- **Verified on a real Mac, 2026-10-17/18** (below, "Fronted mode, HMR and the upgrade restart on a real desktop
+  Mac"): Vite 8.3.4 bound to `[::1]` only was the exact case that broke on 0.7.0, and 0.7.1's fix reached it through
+  Caddy's `localhost` dial, launchd's sockets and the Node forwarders, with a real hot update and no reload.
+
+### Fronted mode, HMR and the upgrade restart on a real desktop Mac (2026-10-17/18)
+
+Run by the author on his own Mac (Apple silicon, current macOS, not MDM-managed; nothing here on a managed Mac).
+*Verified on a real Mac* unless marked:
+
+- **0.6.0 → 0.7.0 System-wide migrated to No admin by `hallway setup --trust user`.** The plan and `Continue? [y/N]`
+  prompt (D67) were shown before anything changed; it then asked for exactly **one** sudo password (removing the old
+  pf LaunchDaemon, its anchor and the System-keychain root) and, separately, macOS's own Touch ID prompt for the
+  user-domain trust settings (D65's "not an administrator prompt" wording held). Afterwards `/etc/pf.anchors/hallway`
+  and `/Library/LaunchDaemons/hallway.pf.plist` were gone, the four `hallway.forward.*` LaunchAgents were installed,
+  `hallway doctor` reported 18 ok and 0 problems, `/usr/bin/curl https://hallway.localhost/api/health` returned 200,
+  and the HTTP→HTTPS redirect worked. **This settles the No admin trust step run *by setup itself*** (D65's "still
+  unverified" list), distinct from the hand-run `security` command in the 2026-10-17 note above.
+- **Safari and Chrome load `https://hallway.localhost` and app subdomains** through launchd's sockets and the Node
+  forwarders, with no certificate warning (the user-domain trust from the step above). **Resolves
+  Q-SAFARI-LOCALHOST** for both browsers; Firefox still wasn't tried.
+- **Vite HMR through launchd → forwarder → Caddy, closing D68's real-Mac gap.** Vite 8.3.4 bound to `[::1]` only (its
+  default: it binds whatever `localhost` resolves to, and macOS resolves it to `::1` first): on 0.7.0 Hallway missed
+  it entirely (the D68 bug, reproduced for real); on 0.7.1, `hallway run hmr6 -- npx vite --port '$PORT' --strictPort`
+  printed "hmr6 is up: https://hmr6.localhost (listening on [::1]:5101)", the page loaded over HTTPS, and **Vite HMR
+  updates applied through launchd → forwarder → Caddy** with no reload. The same fix was also checked with Vite given
+  `--host 127.0.0.1` on 0.7.0.
+- **D69 (the stale-daemon-after-upgrade bug) reproduced and fixed for real.** `npm i -g hallway@latest && hallway
+  service install` on 0.7.0 left the 0.5.2 daemon answering (the bug D69 describes, found on an earlier real-Mac run);
+  with 0.7.1 (CLI and daemon both upgraded), the same upgrade step restarted the daemon onto the new version, as D69
+  specifies.
+- Also from this run (2026-10-17, earlier the same session): pf's `set skip on lo0`, set by a boot-time third-party
+  `pfd` (D64), broke the old pf redirect — moot now that D65 retired it on macOS; Caddy 2.11.7 via Homebrew;
+  `sudo security add-trusted-cert` into the **System** keychain triggers its own Touch ID/trust-settings dialog even
+  run under sudo, distinct from the user-domain dialog above.
+- **Copy-paste UX**, for anyone writing setup instructions: oh-my-zsh's `url-quote-magic` escapes `;`, `>` and `(`
+  right after a URL when a multi-line command is pasted (D65 already warns about this); separately, an interactive
+  prompt (`npm create …`) swallows whatever was pasted after it in the same paste, so docs that chain an interactive
+  command with further steps should put the interactive command on its own line, run on its own.
+
+**Still unverified on a real Mac:** logout/login and a reboot (the forwarders, the daemon, "Lost at last reboot", v1
+criterion 5's reboot half); the dashboard's **Turn on** dialog when setup is triggered by the LaunchAgent daemon
+rather than a terminal; Firefox; a managed (MDM) Mac; Docker Desktop or similar holding 443; `hallway teardown` on a
+real Mac.
 
 ## Windows (D58), GitHub's hosted runners, 2026-10-16
 

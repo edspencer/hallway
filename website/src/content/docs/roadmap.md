@@ -8,8 +8,10 @@ not by reading the code.
 
 :::note[Where things stand]
 **v0 and v1 have shipped, and so has all of v2's software**, for macOS and Linux. What is left is v2's last
-criterion: running everything on a real Mac. Fronted mode has run for real on Linux and on CI's macOS runners, but no
-browser has been driven on a Mac yet, and nothing has been checked across a real reboot or a macOS update.
+criterion: running everything on a real Mac. Fronted mode has run for real on Linux, on CI's macOS runners, and —
+2026-10-17/18 — on the author's own Mac: Safari and Chrome loaded the dashboard and apps with a trusted certificate,
+and Vite's hot reload worked through it. Still unchecked there: Firefox, and anything across a real reboot or a
+macOS update.
 
 **Windows** is supported where feasible, best effort, since 0.4.0 and 0.5.0: everything but fronted mode. It has run
 only on GitHub's hosted Windows runners, not yet on a real Windows desktop. See [Windows](#windows) below. The
@@ -76,8 +78,10 @@ no administrator (No admin and No prompts), and on macOS launchd holds ports 443
 
 **How it was checked:** criteria 1–4 and 7–11 run for real on Linux and on CI's macOS runners (setup with real
 `sudo`, a squatter on 443, a custom domain, teardown leaving nothing behind), with `curl` and the system trust store
-standing in for a browser. "Lost at last reboot" was checked on Linux with a simulated reboot. **Not yet checked:**
-Chrome, Safari and Firefox on a real Mac (criterion 2), and anything across a real reboot (criterion 5's reboot half).
+standing in for a browser. "Lost at last reboot" was checked on Linux with a simulated reboot. On a real Mac
+(2026-10-17/18), Safari and Chrome loaded the dashboard and apps with a trusted certificate (criterion 2), and Vite's
+hot reload worked through the proxy (criterion 4). **Not yet checked:** Firefox, and anything across a real reboot
+(criterion 5's reboot half).
 
 Done when:
 
@@ -142,9 +146,10 @@ third. Hallway runs natively there (not through WSL) and never asks for administ
 ## What is left
 
 - **A run on a real Mac** (v2 criterion 5). Safari, Chrome and Apple's `curl` have accepted a root trusted for the
-  user only (the No admin tier's way); still unverified there: Firefox, and Safari resolving `*.localhost`; services,
-  the daemon and launchd's sockets on 443 and 80 coming back after a logout or a reboot (`RunAtLoad`), and "Lost at
-  last reboot" after a real one. On Linux, a real reboot (with lingering on) hasn't been run either.
+  user only (the No admin tier's way), and both browsers resolved and loaded `*.localhost` through it; still
+  unverified there: Firefox; services, the daemon and launchd's sockets on 443 and 80 coming back after a logout or a
+  reboot (`RunAtLoad`); "Lost at last reboot" after a real one; a managed (MDM) Mac; Docker Desktop or similar
+  holding port 443; and `hallway teardown`. On Linux, a real reboot (with lingering on) hasn't been run either.
 - **A run on a real Windows desktop**, for the [Windows](#windows) items above.
 - **Service controls in the dashboard.** The detail drawer doesn't yet have start, stop and restart buttons or a live
   log tail; the CLI and the [HTTP API](/reference/http-api/) do.
