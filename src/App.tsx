@@ -17,6 +17,8 @@ import { ObservedTray, listenerName } from './components/Observed';
 import { ProblemBanner } from './components/Problems';
 import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
+import { LabDialog, LabPanel, LabSwitcher, labVariant, useLab } from './lab/tiers/Lab';
+import { LAB_TIER_LABEL } from './lab/tiers/model';
 import { TIER_LABEL, type TurnOnState, checksSummary, domainsView, hostOfUrl } from './lib/domains';
 import { matchScore } from './lib/filter';
 import { displayUrl, homeDir, hostOf } from './lib/format';
@@ -167,12 +169,16 @@ export function App() {
     },
     [toasts],
   );
+  // design exploration (tiers-design): `?lab=a…e` swaps the Local domains panel and dialog for a variant
+  const labId = useMemo(() => labVariant(), []);
+  const lab = useLab(labId, (t, w) => void copy(t, w), (t) => toasts.push(t, 'ok'));
 
   const actions = useMemo<KeyboardActions>(
     () => ({
       focusFilter: () => filterRef.current?.focus(),
       escape: () => {
         if (help) return setHelp(false), true;
+        if (lab?.dialogOpen) return lab.props.closeDialog(), true;
         if (domainsOpen) return setDomainsOpen(false), true;
         if (drawer) return setDrawer(null), true;
         if (filter) return setFilter(''), filterRef.current?.blur(), true;
@@ -181,9 +187,9 @@ export function App() {
       toggleHelp: () => setHelp((h) => !h),
       copy: (url) => void copy(url),
       details: (slug) => setDrawer(slug),
-      modal: () => help || domainsOpen || !!drawer,
+      modal: () => help || domainsOpen || !!lab?.dialogOpen || !!drawer,
     }),
-    [help, domainsOpen, drawer, filter, copy],
+    [help, domainsOpen, drawer, filter, copy, lab],
   );
   useKeyboard(actions);
 
@@ -233,8 +239,12 @@ export function App() {
   const openApp = drawer ? state.apps.find((a) => a.slug === drawer) : undefined;
   const matches = found ? found.hits.filter((h) => h.url).length : null;
   const sum = checksSummary(checks?.checks ?? null, domains?.fronting?.pushError ?? null);
-  const headerDomains =
-    domains?.header === 'off' ? ({ state: 'off' } as const) : domains?.header === 'on' && domains.fronting ? ({ state: 'on', host: hostOfUrl(domains.fronting.dashboardUrl), tier: domains.fronting.trust ? TIER_LABEL[domains.fronting.trust] : null, tone: sum.tone, text: sum.text } as const) : null;
+  const labRun = lab?.props.run;
+  const headerDomains = lab
+    ? labRun?.phase === 'done'
+      ? ({ state: 'on', host: 'hallway.localhost', tier: LAB_TIER_LABEL[labRun.trust], tone: 'ok', text: 'Working' } as const)
+      : ({ state: 'off' } as const)
+    : domains?.header === 'off' ? ({ state: 'off' } as const) : domains?.header === 'on' && domains.fronting ? ({ state: 'on', host: hostOfUrl(domains.fronting.dashboardUrl), tier: domains.fronting.trust ? TIER_LABEL[domains.fronting.trust] : null, tone: sum.tone, text: sum.text } as const) : null;
 
   // with no apps yet, the tray leads: that's where the first doors come from
   let order: DashboardSection[] = cfg.dashboard.sections;
@@ -280,11 +290,12 @@ export function App() {
         matches={matches}
         onHelp={() => setHelp(true)}
         domains={headerDomains}
-        onDomains={() => setDomainsOpen(true)}
+        onDomains={() => (lab ? lab.props.openDialog() : setDomainsOpen(true))}
       />
       <main className="hw-main">
         <ProblemBanner problems={banner} />
-        {domains?.panel && domains.fronting && !found ? <LocalDomainsPanel fronting={domains.fronting} macos={state.daemon.platform === 'darwin'} turnOn={turnOn} onCopy={(t, w) => void copy(t, w)} onDismiss={() => setPanel(false)} /> : null}
+        {lab && !found ? <LabPanel lab={lab} /> : null}
+        {!lab && domains?.panel && domains.fronting && !found ? <LocalDomainsPanel fronting={domains.fronting} macos={state.daemon.platform === 'darwin'} turnOn={turnOn} onCopy={(t, w) => void copy(t, w)} onDismiss={() => setPanel(false)} /> : null}
         {state.lost?.items.length ? <LostBanner lost={state.lost} home={home} notify={toasts.push} /> : null}
         {nothing && !found ? <FirstRun state={state} /> : null}
         {order.map((s) => sections[s]?.())}
@@ -311,7 +322,9 @@ export function App() {
       </footer>
       {openApp && <Drawer app={openApp} state={state} home={home} onClose={() => setDrawer(null)} onCopy={(t, w) => void copy(t, w)} onSaved={live.putApp} />}
       {help && <Help onClose={() => setHelp(false)} />}
-      {domainsOpen && domains?.fronting && domains.header !== 'hidden' && (
+      {lab && <LabDialog lab={lab} />}
+      {lab && <LabSwitcher lab={lab} />}
+      {!lab && domainsOpen && domains?.fronting && domains.header !== 'hidden' && (
         <LocalDomainsDialog
           fronting={domains.fronting}
           macos={state.daemon.platform === 'darwin'}

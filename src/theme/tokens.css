@@ -95,6 +95,12 @@
   --hw-radius: 12px;
   --hw-radius-small: 7px;
   --hw-radius-pill: 999px;
+  /* sheets and hero cards (tiers-design exploration) */
+  --hw-radius-large: 16px;
+  /* a segmented control's track and its raised thumb */
+  --hw-seg-track: rgba(255, 240, 220, 0.06);
+  --hw-seg-thumb: #3a3029;
+  --hw-seg-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 240, 220, 0.08);
 }
 
 :root[data-theme='light'] {
@@ -148,4 +154,7 @@
   --hw-shadow: 0 1px 2px rgba(60, 40, 20, 0.06), 0 10px 24px -16px rgba(60, 40, 20, 0.3);
   --hw-shadow-lifted: 0 2px 4px rgba(60, 40, 20, 0.07), 0 20px 36px -18px rgba(60, 40, 20, 0.4);
   --hw-overlay: rgba(42, 33, 27, 0.3);
+  --hw-seg-track: rgba(60, 40, 20, 0.07);
+  --hw-seg-thumb: #fffdf9;
+  --hw-seg-shadow: 0 1px 2px rgba(60, 40, 20, 0.16), 0 0 0 0.5px rgba(60, 40, 20, 0.1);
 }
