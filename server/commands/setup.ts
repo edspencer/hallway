@@ -59,7 +59,7 @@ export async function setup(ctx: Ctx, args: string[], flags: Record<string, stri
   try {
     const code = await runSetup(deps(ctx, flags), { domain, print: !!flags.print, trust: trust as Trust | undefined });
     // the daemon pushes Caddy's config from now on: one left running an older version after an upgrade would push that
-    // version's (D69). Only once setup has run: never before the plan was agreed to, or when it was refused (D67).
+    // version's (D70). Only once setup has run: never before the plan was agreed to, or when it was refused (D67).
     if (code === 0 && !flags.print) await restartStaleDaemon(ctx).catch((e) => ctx.err(`hallway: couldn't restart the daemon: ${(e as Error).message}\n`));
     return code;
   } catch (e) {

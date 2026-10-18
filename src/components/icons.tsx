@@ -54,3 +54,31 @@ export const GlobeIcon = () =>
       <path d="M1.8 8h12.4M8 1.8c1.7 1.8 2.6 3.8 2.6 6.2S9.7 12.4 8 14.2C6.3 12.4 5.4 10.4 5.4 8S6.3 3.6 8 1.8z" />
     </>,
   );
+/** A padlock, closed (HTTPS) or open (plain HTTP), for an address. */
+export const LockIcon = ({ open = false }: { open?: boolean }) =>
+  svg(
+    <>
+      <rect x="3.5" y="7" width="9" height="6.5" rx="1.6" />
+      <path d={open ? 'M5.5 7V5a2.5 2.5 0 0 1 4.9-.7' : 'M5.5 7V5a2.5 2.5 0 0 1 5 0v2'} />
+    </>,
+  );
+export const CheckIcon = () => svg(<path d="M3.5 8.4l3 3 6-6.6" />);
+export const TerminalIcon = () =>
+  svg(
+    <>
+      <rect x="2" y="3" width="12" height="10" rx="1.8" />
+      <path d="M5 6.5l2 1.5-2 1.5M8.5 10H11" />
+    </>,
+  );
+/** Touch ID's fingerprint: what macOS will ask for. */
+export const FingerprintIcon = () =>
+  svg(
+    <>
+      <path d="M4.2 3.6A5.3 5.3 0 0 1 13.3 7.5v1" />
+      <path d="M2.7 6.2a5.3 5.3 0 0 0-.1 1.3v1.6" />
+      <path d="M5 13.2c.6-1 .9-2.3.9-3.7V7.6a2.1 2.1 0 0 1 4.2 0v1.9" />
+      <path d="M8 7.8v1.7c0 1.8-.5 3.4-1.3 4.6" />
+      <path d="M10.1 11.6c-.2.9-.5 1.7-.9 2.4" />
+      <path d="M13.2 10.6c-.1.9-.3 1.8-.6 2.6" />
+    </>,
+  );

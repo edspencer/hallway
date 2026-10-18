@@ -456,7 +456,7 @@ describe("the dashboard's Turn on (D65)", () => {
   const until = async (f: () => Promise<boolean>) => {
     for (let i = 0; i < 100 && !(await f()); i++) await new Promise((r) => setTimeout(r, 20));
   };
-  test('tiers in /api/state at once, User certificate first and recommended (D69); System-wide certificate never turned on here', async () => {
+  test('tiers in /api/state at once, User certificate first and recommended (D70); System-wide certificate never turned on here', async () => {
     const { req, providers, store } = await setup();
     let answer!: (m: { admin: boolean }) => void;
     providers.register(frontingProvider({ store, platform: { id: 'darwin', fronting: darwinFronting }, machine: () => new Promise((r) => (answer = r)), checks: async () => [] }));
@@ -465,7 +465,7 @@ describe("the dashboard's Turn on (D65)", () => {
     assert.equal(f.suggested, 'user');
     assert.equal(f.admin, null);
     assert.equal(f.tiers!.length, 3);
-    // an administrator: still User certificate (D69)
+    // an administrator: still User certificate (D70)
     answer({ admin: true });
     await until(async () => (f = ((await (await req('/api/state')).json()) as StateResponse).fronting!).admin === true);
     assert.equal(f.suggested, 'user');

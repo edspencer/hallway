@@ -1,5 +1,5 @@
-// Fronted mode's three tiers (D65, D69): what each costs on this platform, what config.yaml says for each, and what
-// they're called. User certificate is always the one recommended (D69). Pure, except `machineFacts`, which asks the OS
+// Fronted mode's three tiers (D65, D70): what each costs on this platform, what config.yaml says for each, and what
+// they're called. User certificate is always the one recommended (D70). Pure, except `machineFacts`, which asks the OS
 // (read-only, no privilege) whether this user is an administrator, for System-wide certificate's wording.
 //
 //              User certificate (user)      System-wide certificate         No HTTPS (none)
@@ -19,7 +19,7 @@ export function currentTier(cfg: Pick<HallwayConfig, 'proxy'>): Trust {
   return cfg.proxy.trust ?? (cfg.proxy.scheme === 'http' ? 'none' : 'system');
 }
 
-/** Who the user is, for System-wide certificate's wording (D69: it no longer decides the recommendation). */
+/** Who the user is, for System-wide certificate's wording (D70: it no longer decides the recommendation). */
 export interface MachineFacts {
   /** In the `admin` group (macOS), or `sudo`/`wheel`/`admin` (Linux), or root. */
   admin: boolean;
@@ -33,7 +33,7 @@ export async function machineFacts(platform: Pick<Platform, 'id'>, run: Runner, 
   return { admin: uid === 0 || names.some((g) => (platform.id === 'darwin' ? g === 'admin' : ['sudo', 'wheel', 'admin'].includes(g))) };
 }
 
-/** The tier to recommend, on every platform and for every user (D69): User certificate. It never needs an
+/** The tier to recommend, on every platform and for every user (D70): User certificate. It never needs an
  *  administrator, and the dashboard can turn it on. System-wide certificate is the choice for custom domains, other
  *  accounts and tools with their own CA list (and, on Linux, for links without a port); it's never the default. */
 export const RECOMMENDED_TIER: Trust = 'user';
@@ -53,7 +53,7 @@ export function tierProxy(platformId: Platform['id'], tier: Trust, proxy: Pick<H
   return { trust: tier, scheme, publicPort };
 }
 
-/** The tiers' names, as every command, check and page says them (D69). */
+/** The tiers' names, as every command, check and page says them (D70). */
 export const TIER_NAME: Record<Trust, string> = { user: 'User certificate', system: 'System-wide certificate', none: 'No HTTPS' };
 
 /** Each tier for people: its name, a one-line summary (the dashboard's collapsed row), what it asks for, and a line on
@@ -66,16 +66,16 @@ export function tierText(platformId: Platform['id'], tier: Trust, admin: boolean
       return {
         name,
         summary: mac ? 'HTTPS, trusted for your account' : 'HTTPS for Chrome and Chromium, no password',
-        asks: mac ? "macOS asks for your Touch ID or password once, to trust Hallway's certificate for your account. It isn't an administrator prompt." : 'Nothing: the certificate goes into your own NSS database, which Chrome and Chromium read.',
-        note: mac ? 'Safari, Chrome and Apple’s curl trust it; tools that bring their own certificate list (Node, Python) need to be told about it.' : 'Only Chrome and Chromium trust it, and links carry the port.',
+        asks: mac ? "macOS asks for your Touch ID or password once, to trust Hallway's certificate for your account. It isn't an administrator prompt." : 'Nothing will ask for a password: the certificate goes into your own NSS database, which Chrome and Chromium read.',
+        note: mac ? 'Safari, Chrome and Apple\'s curl trust it; tools that bring their own certificate list (Node, Python) need to be told about it.' : 'Only Chrome and Chromium trust it, and links carry the port.',
       };
     case 'system': {
-      const who = admin === false ? (mac ? 'an administrator (this account isn’t one)' : 'sudo, which this account doesn’t have') : mac ? 'an administrator’s password' : 'sudo';
+      const who = admin === false ? (mac ? 'an administrator (this account isn\'t one)' : 'sudo, which this account doesn\'t have') : mac ? 'an administrator\'s password' : 'sudo';
       return {
         name,
         summary: 'For custom domains and every account; needs an administrator',
         asks: mac ? `Needs ${who}, so it runs in a terminal: it trusts the certificate for every account on this Mac.` : `Needs ${who}, so it runs in a terminal: it redirects ports 443 and 80 and trusts the certificate system-wide.`,
-        note: 'Custom domains (--domain) need it, and so do other accounts and tools that read only the system’s certificates.',
+        note: 'Custom domains (--domain) need it, and so do other accounts and tools that read only the system\'s certificates.',
       };
     }
     case 'none':
@@ -88,13 +88,13 @@ export function tierText(platformId: Platform['id'], tier: Trust, admin: boolean
   }
 }
 
-/** The tiers as the dashboard offers them (D65, D69): User certificate first and recommended, each with its URL, what it
+/** The tiers as the dashboard offers them (D65, D70): User certificate first and recommended, each with its URL, what it
  *  asks for and its command; the dashboard can turn on only the two that need no administrator. */
 export function tierOptions(platformId: Platform['id'], cfg: Pick<HallwayConfig, 'proxy' | 'domain'>, admin: boolean | null = null): TierOption[] {
-  return TIERS.map((t) => ({ trust: t, ...tierText(platformId, t, admin), url: tierUrls(platformId, t, cfg).app, command: `hallway setup --trust ${t}`, recommended: t === RECOMMENDED_TIER, canTurnOn: t !== 'system' }));
+  return TIERS.map((t) => ({ trust: t, ...tierText(platformId, t, admin), url: tierUrls(platformId, t, cfg).app, dashboardUrl: tierUrls(platformId, t, cfg).dashboard, command: `hallway setup --trust ${t}`, recommended: t === RECOMMENDED_TIER, canTurnOn: t !== 'system' }));
 }
 
-/** The question `hallway setup` asks on a terminal when no --trust is given (D65, D69). Numbers are fixed (1 user, 2
+/** The question `hallway setup` asks on a terminal when no --trust is given (D65, D70). Numbers are fixed (1 user, 2
  *  system, 3 none); the default is the current tier if there is one, else User certificate. */
 export function tierQuestion(platformId: Platform['id'], cfg: Pick<HallwayConfig, 'proxy' | 'domain'>, current: Trust | null, admin: boolean | null = null): { text: string; prompt: string; byAnswer: (a: string) => Trust | null } {
   const def = current ?? RECOMMENDED_TIER;

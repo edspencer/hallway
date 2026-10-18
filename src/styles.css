@@ -2415,29 +2415,49 @@ kbd {
 
 .hw-domains {
   margin: 0 0 28px;
-  padding: 14px 16px 16px;
-  border-radius: var(--hw-radius);
-  border: 1px solid var(--hw-line-strong);
-  border-left: 3px solid var(--hw-accent);
+  padding: 16px 18px 14px;
+  border-radius: var(--hw-radius-large);
+  border: 1px solid var(--hw-line);
   background: var(--hw-bg-raised);
+  box-shadow: var(--hw-shadow);
 }
+/* the icon tile and the title, shared by the panel and the dialog */
 .hw-domains-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 6px;
+  margin-bottom: 14px;
 }
-.hw-domains-title {
+.hw-domains-tile {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--hw-radius-tile);
+  background: var(--hw-plate);
+  color: var(--hw-plate-text);
+  box-shadow: 0 0 0 1px var(--hw-plate-edge) inset, var(--hw-shadow);
+}
+.hw-domains-tile svg {
+  width: 20px;
+  height: 20px;
+}
+.hw-domains-titles {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
-.hw-domains-title svg {
-  color: var(--hw-accent-text);
+.hw-domains-titles h2 {
+  margin: 0;
+  font-family: var(--hw-font-ui);
+  font-size: 15px;
+  font-weight: 650;
+}
+.hw-domains-titles > span {
+  font-size: 13px;
+  color: var(--hw-text-muted);
 }
 .hw-domains-text {
   margin: 0 0 8px;
@@ -2445,10 +2465,8 @@ kbd {
   font-size: 13.5px;
   line-height: 1.55;
 }
-.hw-domains-quiet {
-  color: var(--hw-text-muted);
-}
 .hw-domains-text code,
+.hw-domains-titles code,
 .hw-domains-check code {
   font-size: 0.92em;
   overflow-wrap: anywhere;
@@ -2462,7 +2480,7 @@ kbd {
   margin-top: 10px;
 }
 .hw-domains-cmds {
-  /* command | copy | what it does, in columns, so the rows line up */
+  /* an older daemon's two commands: command | copy | what it does, in columns, so the rows line up */
   display: grid;
   grid-template-columns: max-content max-content minmax(0, 1fr);
   align-items: center;
@@ -2494,126 +2512,314 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 13px;
+  font-size: 12.5px;
+}
+.hw-domains-actions--tiers {
+  /* a block, not the wrapping flex row: the list takes the full width */
+  display: block;
+  margin-top: 0;
 }
 
-/* the tiers (D65): one row each, the recommended one marked, with its command and (no admin, no prompts) Turn on */
-.hw-domains-actions--tiers {
-  /* a block, not the wrapping flex row: a wrapping column would size the grid at its narrowest */
-  display: block;
-}
-.hw-domains-actions--tiers .hw-domains-docs {
-  margin-top: 10px;
-}
+/* the tiers (D70): an inset list, one radio each; the chosen one open, with its address, what asks, and its action */
 .hw-tiers {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
-  margin: 0;
+  margin: 0 0 12px;
   padding: 0;
   list-style: none;
-}
-.hw-tier {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px 12px;
-  border-radius: var(--hw-radius-small);
+  border-radius: var(--hw-radius);
   border: 1px solid var(--hw-line);
   background: var(--hw-bg);
+  overflow: hidden;
 }
-.hw-tier--recommended {
-  border-color: var(--hw-accent);
+.hw-tier + .hw-tier {
+  border-top: 1px solid var(--hw-line);
 }
-.hw-tier-head {
+.hw-tier.is-on {
+  background: var(--hw-tier-chosen);
+}
+.hw-tier-pick {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.hw-tier-pick:hover:not(:disabled) {
+  background: var(--hw-bg-hover);
+}
+.hw-tier.is-on .hw-tier-pick {
+  cursor: default;
+}
+.hw-tier.is-on .hw-tier-pick:hover {
+  background: transparent;
+}
+.hw-tier-pick:disabled {
+  cursor: default;
+}
+.hw-tier:not(.is-on) .hw-tier-pick:disabled {
+  opacity: 0.55;
+}
+.hw-radio {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--hw-line-strong);
+  background: var(--hw-bg);
+}
+[aria-checked='true'] > .hw-radio {
+  border: 5px solid var(--hw-accent);
+  background: var(--hw-ink);
+}
+:root[data-theme='light'] [aria-checked='true'] > .hw-radio {
+  border-color: var(--hw-accent-text);
+  background: var(--hw-bg-raised);
 }
 .hw-tier-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13.5px;
   font-weight: 600;
+  white-space: nowrap;
 }
 .hw-tier-badge {
   padding: 0 7px;
   border-radius: var(--hw-radius-pill);
-  background: var(--hw-accent);
-  color: var(--hw-ink);
+  background: var(--hw-accent-soft);
+  color: var(--hw-accent-text);
   font-size: 11px;
   font-weight: 600;
   line-height: 18px;
 }
-.hw-tier-url {
-  flex-basis: 100%;
+.hw-tier-summary {
+  margin-left: auto;
   font-size: 12.5px;
-  color: var(--hw-accent-text);
-  overflow-wrap: anywhere;
+  color: var(--hw-text-subtle);
+  text-align: right;
 }
-.hw-tier-asks,
+.hw-tier-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 14px 14px 42px;
+}
+.hw-tier-asks {
+  display: flex;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.hw-tier-asks svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--hw-accent-text);
+}
 .hw-tier-note {
   margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
-}
-.hw-tier-note {
   color: var(--hw-text-subtle);
 }
 .hw-tier-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
-  margin-top: auto;
-  padding-top: 6px;
+  justify-content: flex-end;
+  gap: 8px 14px;
+  align-self: stretch;
+  margin-top: 4px;
 }
-.hw-tier-actions .hw-domains-cmd {
+.hw-tier-actions--terminal {
+  justify-content: flex-start;
+}
+.hw-tier-or {
   font-size: 12px;
+  color: var(--hw-text-subtle);
 }
-.hw-tier-on {
-  height: 26px;
-  padding: 0 10px;
-  font-size: 12px;
-  margin-left: auto;
-}
-.hw-tier-terminal {
+.hw-tier-or code {
   font-size: 11.5px;
-  color: var(--hw-text-faint);
 }
-.hw-tier-confirm,
-.hw-tier-run {
-  margin-top: 6px;
-  padding: 8px 10px;
+
+/* an address as a browser shows it, and a command with its copy button */
+.hw-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: var(--hw-radius-pill);
+  background: var(--hw-bg-sunken);
+  border: 1px solid var(--hw-line);
+  font-family: var(--hw-font-mono);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.hw-address svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--hw-healthy);
+}
+.hw-address--plain svg {
+  color: var(--hw-text-subtle);
+}
+.hw-address-scheme {
+  color: var(--hw-text-subtle);
+}
+.hw-copycmd {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
   border-radius: var(--hw-radius-small);
   background: var(--hw-bg-sunken);
+  border: 1px solid var(--hw-line);
+}
+.hw-copycmd code {
+  padding: 4px 4px 4px 10px;
   font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.hw-copycmd-copy {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  align-self: stretch;
+  width: 30px;
+  border: 0;
+  border-left: 1px solid var(--hw-line);
+  border-radius: 0 var(--hw-radius-small) var(--hw-radius-small) 0;
+  background: transparent;
+  color: var(--hw-text-muted);
+  cursor: pointer;
+}
+.hw-copycmd-copy:hover {
+  color: var(--hw-text);
+  background: var(--hw-bg-hover);
+}
+.hw-copycmd-copy svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* a Turn on: waiting (Touch ID on a Mac), stopped, or done (in the dialog) */
+.hw-run {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  align-self: stretch;
+  padding: 12px 14px;
+  border-radius: var(--hw-radius-small);
+  background: var(--hw-bg-sunken);
+}
+.hw-run--done {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: var(--hw-radius);
+  border: 1px solid var(--hw-line);
+  background: var(--hw-bg);
+}
+.hw-run-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-weight: 700;
+}
+.hw-run-mark svg {
+  width: 20px;
+  height: 20px;
+}
+.hw-run-mark--wait {
+  color: var(--hw-accent-text);
+  background: var(--hw-accent-soft);
+  animation: hw-breathe 1.8s ease-in-out infinite;
+}
+.hw-run-mark--ok {
+  color: var(--hw-bg);
+  background: var(--hw-healthy);
+}
+.hw-run-mark--fail {
+  /* not a circle: state is never colour alone (docs/05-ui.md) */
+  border-radius: var(--hw-radius-tile);
+  color: var(--hw-bg);
+  background: var(--hw-down);
+}
+.hw-run-words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
   line-height: 1.5;
-}
-.hw-tier-confirm p,
-.hw-tier-run p {
-  margin: 0 0 6px;
-}
-.hw-tier-confirm-asks {
   color: var(--hw-text-muted);
 }
-.hw-tier-confirm-buttons {
-  display: flex;
-  gap: 8px;
+.hw-run-words strong {
+  font-size: 14px;
+  color: var(--hw-text);
 }
-.hw-tier-run-line {
+.hw-run-buttons {
   display: flex;
-  align-items: center;
-  gap: 7px;
-  font-weight: 600;
+  gap: 6px;
 }
-.hw-tier-log {
-  margin: 0 0 6px;
+.hw-run-go {
+  margin-left: auto;
+  align-self: center;
+  flex: none;
+}
+.hw-run-details summary {
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.hw-run-error {
+  color: var(--hw-text);
+}
+.hw-run-error code {
+  overflow-wrap: anywhere;
+}
+.hw-run-details .hw-run-log {
+  margin-top: 6px;
+}
+.hw-run-log {
+  margin: 0;
   max-height: 9em;
   overflow: auto;
   font-size: 11.5px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--hw-text-muted);
+}
+.hw-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--hw-line-strong);
+  border-top-color: var(--hw-accent);
+  animation: hw-spin 0.9s linear infinite;
+}
+@keyframes hw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes hw-breathe {
+  50% {
+    box-shadow: 0 0 0 8px var(--hw-glow);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hw-run-mark--wait,
+  .hw-spinner {
+    animation: none;
+  }
 }
 
 .hw-domains-btn {
@@ -2663,6 +2869,30 @@ kbd {
   width: min(620px, 100%);
   max-height: calc(100vh - 40px);
   overflow: auto;
+  border-radius: var(--hw-radius-large);
+}
+@media (max-width: 640px) {
+  /* narrow: the summaries give way to the names, and Turn on goes full width above its terminal line */
+  .hw-tier-summary {
+    display: none;
+  }
+  .hw-tier-detail {
+    padding-left: 14px;
+  }
+  .hw-tier-actions .hw-btn--primary {
+    order: -1;
+    width: 100%;
+    justify-content: center;
+  }
+  .hw-tier-actions {
+    justify-content: flex-start;
+  }
+  .hw-run--done {
+    flex-wrap: wrap;
+  }
+  .hw-run-go {
+    margin-left: 48px;
+  }
 }
 .hw-domains-sum {
   display: flex;

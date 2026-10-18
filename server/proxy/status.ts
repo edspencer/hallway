@@ -23,7 +23,7 @@ export function tildifyText(text: string | null, home = os.homedir()): string | 
 
 /** Pure: config.yaml, the platform's fronting (for `unsupported`), the proxy's last push error, and who the user is
  *  (for System-wide certificate's wording; null until the OS has been asked). User certificate is always the one
- *  recommended (D69), so the tiers don't wait for the OS. */
+ *  recommended (D70), so the tiers don't wait for the OS. */
 export function frontingInfo(cfg: HallwayConfig, platform: Pick<Platform, 'fronting'> & { id?: Platform['id'] }, pushError: string | null = null, machine: MachineFacts | null = null): FrontingInfo {
   const offered = !!platform.id && !platform.fronting.unsupported;
   const admin = machine ? machine.admin : null;

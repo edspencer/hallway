@@ -1,39 +1,17 @@
-// Local domains (fronted mode, D47; D63, D65). Off: a panel on the page offers setup's three tiers (D65), the
-// recommended one first, each with its address, what it asks for and its command to copy, dismissible into
-// config.yaml; the header's control brings it back as a dialog. No admin and No prompts also have a Turn on button: the
-// daemon runs setup for them (`POST /api/fronting/setup`), never for System-wide, whose steps need sudo in a terminal.
+// Local domains (fronted mode, D47; D63, D65, D70). Off: a panel on the page, styled like a settings pane: the three
+// tiers as an inset list with one radio each, User certificate chosen and open (its address, what will ask, Turn on),
+// the other two one line each until chosen. Dismissible into config.yaml; the header's control brings it back as a
+// dialog. User certificate and No HTTPS have Turn on (the daemon runs setup for them, `POST /api/fronting/setup`);
+// System-wide certificate never does: its steps need sudo, so it shows its command for a terminal. A Turn on's progress
+// and failure show in its row; when it's done the page switches to fronted mode and the dialog says so.
 // On: the header shows the dashboard's host and the tier, and the dialog lists doctor's checks with their fixes.
 // `SetupActions` is the one place the panel's actions live.
 import { useEffect, useRef, useState } from 'react';
 import type { FrontingCheck, FrontingInfo, FrontingResponse, TierOption, Trust } from '../../shared/api';
-import { FRONTED_DOCS, SETUP_COMMANDS, TIER_LABEL, type TurnOnState, checksSummary, hostOfUrl, logTail, tierChoices, turnOnWords } from '../lib/domains';
-import { CloseIcon, CopyIcon, ExternalIcon, GlobeIcon } from './icons';
+import { FRONTED_DOCS, SETUP_COMMANDS, TIER_LABEL, type TurnOnState, checksSummary, failedWords, hostOfUrl, initialTier, logTail, runningWords, tierChoices, turnOnPhase } from '../lib/domains';
+import { CheckIcon, CloseIcon, CopyIcon, ExternalIcon, FingerprintIcon, GlobeIcon, LockIcon, TerminalIcon } from './icons';
 
 type Copy = (text: string, what?: string) => void;
-
-/** What local domains give, in two sentences, with this machine's real addresses. */
-function Pitch({ f }: { f: FrontingInfo }) {
-  if (tierChoices(f).length)
-    return (
-      <p className="hw-domains-text">
-        Open this dashboard and each app by name, such as <code>{f.dashboardUrl.replace(/^https?:\/\//, '')}</code>, instead of by port. Pick how: each
-        way runs Caddy as you, and <code>hallway teardown</code> undoes it.
-      </p>
-    );
-  return (
-    <>
-      <p className="hw-domains-text">
-        Reach this dashboard at <code>{f.dashboardUrl}</code> and each app at <code>{f.appUrl}</code> instead of a port number, over HTTPS with a
-        certificate your machine trusts. You can use a domain of your own instead, such as <code>myname.internal</code>.
-      </p>
-      <p className="hw-domains-text hw-domains-quiet">
-        It takes one run of <code>hallway setup</code> in a terminal. Hallway runs Caddy as you; the steps that need your password (redirecting ports
-        443 and 80 to it, trusting its certificate authority) go through <code>sudo</code> and are printed before they run. <code>hallway teardown</code>{' '}
-        undoes it.
-      </p>
-    </>
-  );
-}
 
 /** A Turn on in progress, or how the last one went, for the panel and the dialog. */
 export interface TurnOn {
@@ -42,59 +20,166 @@ export interface TurnOn {
   reset(): void;
 }
 
-/** The tiers as choices (D65): the recommended one first. Turn on asks once more, then runs and follows the daemon. */
-function TierChoices({ tiers, macos, onCopy, turnOn }: { tiers: TierOption[]; macos: boolean; onCopy: Copy; turnOn?: TurnOn }) {
-  const [confirm, setConfirm] = useState<Trust | null>(null);
-  const run = turnOn?.state;
-  const busy = run?.job?.state === 'running' || (!!run && !run.job && !run.error);
+/** A command, with a button to copy it. */
+function Cmd({ command, onCopy }: { command: string; onCopy: Copy }) {
   return (
-    <ul className="hw-tiers">
+    <span className="hw-copycmd">
+      <code>{command}</code>
+      <button type="button" className="hw-copycmd-copy" onClick={() => onCopy(command, 'command')} aria-label={`Copy ${command}`} title="Copy">
+        <CopyIcon />
+      </button>
+    </span>
+  );
+}
+
+/** An address as a browser shows it: a lock (open for plain HTTP), the scheme quiet, the host plain. */
+function Address({ url }: { url: string }) {
+  const m = /^(https?:\/\/)(.*)$/.exec(url);
+  const plain = url.startsWith('http:');
+  return (
+    <span className={`hw-address${plain ? ' hw-address--plain' : ''}`}>
+      <LockIcon open={plain} />
+      <span>
+        <span className="hw-address-scheme">{m?.[1] ?? ''}</span>
+        {m?.[2] ?? url}
+      </span>
+    </span>
+  );
+}
+
+/** The icon tile and the title the panel and the dialog share. */
+function DomainsHead({ id, title, sub, children }: { id: string; title: string; sub: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <header className="hw-domains-head">
+      <span className="hw-domains-tile" aria-hidden="true">
+        <GlobeIcon />
+      </span>
+      <span className="hw-domains-titles">
+        <h2 id={id}>{title}</h2>
+        <span>{sub}</span>
+      </span>
+      {children}
+    </header>
+  );
+}
+
+/** A Turn on that's running or stopped, in its tier's row. */
+function RunStatus({ run, tier, macos, onCopy, onReset }: { run: TurnOnState; tier: TierOption; macos: boolean; onCopy: Copy; onReset(): void }) {
+  const phase = turnOnPhase(run);
+  const tail = logTail(run.job?.log ?? '');
+  if (phase === 'failed') {
+    const w = failedWords(tier.trust, macos);
+    return (
+      <div className="hw-run hw-run--failed" role="alert">
+        <span className="hw-run-mark hw-run-mark--fail" aria-hidden="true">
+          !
+        </span>
+        <span className="hw-run-words">
+          <strong>{w.title}</strong>
+          <span className="hw-run-error">
+            <Words text={sentence(run.error ?? run.job?.error ?? 'It failed.')} />
+          </span>
+          <span>{w.detail}</span>
+          <Cmd command={tier.command} onCopy={onCopy} />
+          {tail && (
+            <details className="hw-run-details">
+              <summary>What setup printed</summary>
+              <pre className="hw-run-log">{tail}</pre>
+            </details>
+          )}
+          <span className="hw-run-buttons">
+            <button type="button" className="hw-btn hw-btn--small" onClick={onReset}>
+              OK
+            </button>
+          </span>
+        </span>
+      </div>
+    );
+  }
+  const w = runningWords(tier.trust, macos);
+  return (
+    <div className="hw-run hw-run--running" role="status" aria-live="polite">
+      <span className="hw-run-mark hw-run-mark--wait" aria-hidden="true">
+        {tier.trust === 'user' && macos ? <FingerprintIcon /> : <span className="hw-spinner" />}
+      </span>
+      <span className="hw-run-words">
+        <strong>{w.title}</strong>
+        <span>{w.detail}</span>
+        {tail && !(tier.trust === 'user' && macos) && <pre className="hw-run-log">{tail}</pre>}
+      </span>
+    </div>
+  );
+}
+
+/** Turned on from this page: where the dashboard is now, and the way there. */
+function TurnedOn({ url, appUrl }: { url: string; appUrl: string }) {
+  return (
+    <div className="hw-run hw-run--done" role="status">
+      <span className="hw-run-mark hw-run-mark--ok" aria-hidden="true">
+        <CheckIcon />
+      </span>
+      <span className="hw-run-words">
+        <strong>Local domains are on</strong>
+        <span>
+          This dashboard is now at {hostOfUrl(url)}, and each app at its own name, like <code>{appUrl}</code>.
+        </span>
+      </span>
+      <a className="hw-btn hw-btn--primary hw-run-go" href={url}>
+        Open {hostOfUrl(url)}
+      </a>
+    </div>
+  );
+}
+
+/** The tiers as a settings list (D70): one radio each, the chosen one open. Turn on runs at once: what will ask is
+ *  already on the row, and on a Mac the Touch ID dialog is itself the confirmation. */
+function TierList({ tiers, macos, onCopy, turnOn }: { tiers: TierOption[]; macos: boolean; onCopy: Copy; turnOn?: TurnOn }) {
+  const run = turnOn?.state ?? null;
+  const [chosen, setChosen] = useState<Trust | null>(() => run?.trust ?? initialTier(tiers));
+  const busy = turnOnPhase(run) === 'running';
+  const selected = run?.trust ?? chosen;
+  return (
+    <ul className="hw-tiers" role="radiogroup" aria-label="How to turn them on">
       {tiers.map((t) => {
-        const mine = run?.trust === t.trust ? run : null;
-        const words = turnOnWords(t, macos);
+        const on = selected === t.trust;
+        const mine = run?.trust === t.trust && turnOnPhase(run) !== 'done' ? run : null;
         return (
-          <li key={t.trust} className={`hw-tier${t.recommended ? ' hw-tier--recommended' : ''}`}>
-            <div className="hw-tier-head">
-              <span className="hw-tier-name">{t.name}</span>
-              {t.recommended && <span className="hw-tier-badge">Recommended</span>}
-              <code className="hw-tier-url">{t.url}</code>
-            </div>
-            <p className="hw-tier-asks">{t.asks}</p>
-            <p className="hw-tier-note">{t.note}</p>
-            <div className="hw-tier-actions">
-              <code className="hw-domains-cmd">{t.command}</code>
-              <button type="button" className="hw-btn hw-btn--quiet hw-domains-copy" onClick={() => onCopy(t.command, 'command')} aria-label={`Copy ${t.command}`}>
-                <CopyIcon /> Copy
-              </button>
-              {t.canTurnOn && turnOn && confirm !== t.trust && !mine && (
-                <button type="button" className="hw-btn hw-btn--primary hw-tier-on" disabled={busy} onClick={() => setConfirm(t.trust)}>
-                  Turn on
-                </button>
-              )}
-              {!t.canTurnOn && <span className="hw-tier-terminal">In a terminal: it needs an administrator</span>}
-            </div>
-            {confirm === t.trust && !mine && (
-              <div className="hw-tier-confirm" role="group" aria-label={`Turn on ${t.name}`}>
-                <p>{words.will}</p>
-                <p className="hw-tier-confirm-asks">{words.asks}</p>
-                <div className="hw-tier-confirm-buttons">
-                  <button
-                    type="button"
-                    className="hw-btn hw-btn--primary"
-                    onClick={() => {
-                      setConfirm(null);
-                      turnOn!.start(t.trust as 'user' | 'none');
-                    }}
-                  >
-                    Turn on {t.name}
-                  </button>
-                  <button type="button" className="hw-btn hw-btn--quiet" onClick={() => setConfirm(null)}>
-                    Cancel
-                  </button>
-                </div>
+          <li key={t.trust} className={`hw-tier${on ? ' is-on' : ''}`}>
+            <button type="button" role="radio" aria-checked={on} className="hw-tier-pick" disabled={busy || (!!run && !on)} onClick={() => setChosen(t.trust)}>
+              <span className="hw-radio" aria-hidden="true" />
+              <span className="hw-tier-name">
+                {t.name}
+                {t.recommended && <span className="hw-tier-badge">Recommended</span>}
+              </span>
+              {!on && t.summary && <span className="hw-tier-summary">{t.summary}</span>}
+            </button>
+            {on && (
+              <div className="hw-tier-detail">
+                <Address url={t.url} />
+                <p className="hw-tier-asks">
+                  {t.trust === 'user' && macos ? <FingerprintIcon /> : t.trust === 'system' ? <TerminalIcon /> : null}
+                  <span>{t.asks}</span>
+                </p>
+                <p className="hw-tier-note">{t.note}</p>
+                {mine ? (
+                  <RunStatus run={mine} tier={t} macos={macos} onCopy={onCopy} onReset={turnOn!.reset} />
+                ) : t.canTurnOn && turnOn ? (
+                  <div className="hw-tier-actions">
+                    <span className="hw-tier-or">
+                      or in a terminal: <code>{t.command}</code>
+                    </span>
+                    <button type="button" className="hw-btn hw-btn--primary" onClick={() => turnOn.start(t.trust as 'user' | 'none')}>
+                      Turn on
+                    </button>
+                  </div>
+                ) : (
+                  <div className="hw-tier-actions hw-tier-actions--terminal">
+                    <span className="hw-tier-or">In a terminal:</span>
+                    <Cmd command={t.command} onCopy={onCopy} />
+                  </div>
+                )}
               </div>
             )}
-            {mine && <TurnOnProgress run={mine} command={t.command} onDismiss={turnOn!.reset} />}
           </li>
         );
       })}
@@ -102,40 +187,17 @@ function TierChoices({ tiers, macos, onCopy, turnOn }: { tiers: TierOption[]; ma
   );
 }
 
-function TurnOnProgress({ run, command, onDismiss }: { run: TurnOnState; command: string; onDismiss(): void }) {
-  const state = run.error ? 'failed' : (run.job?.state ?? 'running');
-  const tail = logTail(run.job?.log ?? '');
-  return (
-    <div className={`hw-tier-run hw-tier-run--${state}`} role="status" aria-live="polite">
-      <p className="hw-tier-run-line">
-        <span className={`hw-domains-dot hw-domains-dot--${state === 'failed' ? 'fail' : state === 'done' ? 'ok' : 'checking'}`} aria-hidden="true" />
-        {state === 'failed' ? 'Setup stopped' : state === 'done' ? 'Done' : 'Setting up…'}
-      </p>
-      {tail && <pre className="hw-tier-log">{tail}</pre>}
-      {state === 'failed' && (
-        <>
-          <p className="hw-form-error">
-            <Words text={run.error ?? run.job?.error ?? 'It failed.'} />
-          </p>
-          <p className="hw-tier-note">
-            Run it in a terminal instead to see every step: <code>{command}</code>.{' '}
-            <button type="button" className="hw-link" onClick={onDismiss}>
-              Dismiss
-            </button>
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
 /** The tiers (or, from an older daemon, the commands) to copy, and the docs. */
 export function SetupActions({ fronting, macos, onCopy, turnOn }: { fronting?: FrontingInfo; macos?: boolean; onCopy: Copy; turnOn?: TurnOn }) {
   const tiers = fronting ? tierChoices(fronting) : [];
+  // done, and the page hasn't heard yet that the mode changed: say so rather than offer Turn on again
+  const run = turnOn?.state ?? null;
+  const done = turnOnPhase(run) === 'done' ? tiers.find((t) => t.trust === run!.trust) : undefined;
+  if (done && fronting) return <TurnedOn url={done.dashboardUrl ?? fronting.dashboardUrl} appUrl={done.url} />;
   if (tiers.length)
     return (
       <div className="hw-domains-actions hw-domains-actions--tiers">
-        <TierChoices tiers={tiers} macos={!!macos} onCopy={onCopy} turnOn={turnOn} />
+        <TierList tiers={tiers} macos={!!macos} onCopy={onCopy} turnOn={turnOn} />
         <a className="hw-link hw-domains-docs" href={FRONTED_DOCS} target="_blank" rel="noreferrer">
           How local domains work <ExternalIcon />
         </a>
@@ -161,20 +223,27 @@ export function SetupActions({ fronting, macos, onCopy, turnOn }: { fronting?: F
   );
 }
 
+/** One line under the title: what local domains give. An older daemon (no tiers) gets the fuller story. */
+function pitch(f: FrontingInfo): React.ReactNode {
+  if (tierChoices(f).length) return 'Open this dashboard and your apps by name, instead of by port.';
+  return (
+    <>
+      Reach this dashboard at <code>{f.dashboardUrl}</code> and each app at <code>{f.appUrl}</code> instead of a port number. It takes one run of{' '}
+      <code>hallway setup</code> in a terminal; <code>hallway teardown</code> undoes it.
+    </>
+  );
+}
+
 /** The panel on the page, in direct mode until it's dismissed. */
 export function LocalDomainsPanel({ fronting, macos, onCopy, onDismiss, turnOn }: { fronting: FrontingInfo; macos: boolean; onCopy: Copy; onDismiss(): Promise<void>; turnOn?: TurnOn }) {
   const [busy, setBusy] = useState(false);
   return (
     <section className="hw-domains" aria-labelledby="hw-domains-title">
-      <div className="hw-domains-head">
-        <h2 id="hw-domains-title" className="hw-domains-title">
-          <GlobeIcon />
-          <span>Local domains are off</span>
-        </h2>
+      <DomainsHead id="hw-domains-title" title="Local domains" sub={pitch(fronting)}>
         <button
           type="button"
-          className="hw-btn hw-btn--quiet"
-          disabled={busy}
+          className="hw-btn hw-btn--quiet hw-btn--small"
+          disabled={busy || turnOnPhase(turnOn?.state ?? null) === 'running'}
           onClick={async () => {
             setBusy(true);
             await onDismiss();
@@ -182,14 +251,16 @@ export function LocalDomainsPanel({ fronting, macos, onCopy, onDismiss, turnOn }
           }}
           title="Hide this. The Local domains button at the top brings it back."
         >
-          Dismiss
+          Not now
         </button>
-      </div>
-      <Pitch f={fronting} />
+      </DomainsHead>
       <SetupActions fronting={fronting} macos={macos} onCopy={onCopy} turnOn={turnOn} />
     </section>
   );
 }
+
+/** Setup's errors start lower case (they follow `hallway: ` in a terminal); on the page they're sentences. */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Doctor's words, with its `backticked` commands as code. */
 function Words({ text }: { text: string }) {
@@ -232,24 +303,30 @@ export function LocalDomainsDialog({
   const on = fronting.mode === 'fronted';
   const sum = checksSummary(result?.checks ?? null, fronting.pushError);
   const shown = (result?.checks ?? []).filter((c) => c.status !== 'skip');
+  const tierName = fronting.trust ? (tierChoices(fronting).find((t) => t.trust === fronting.trust)?.name ?? TIER_LABEL[fronting.trust]) : null;
+  // turned on from this page a moment ago: say so, with the way to the new address
+  const justOn = on && turnOnPhase(turnOn?.state ?? null) === 'done';
   return (
     <div className="hw-help-wrap" onClick={onClose}>
       <div className="hw-help hw-domains-dialog" role="dialog" aria-modal="true" aria-labelledby="hw-domains-dialog-title" tabIndex={-1} ref={ref} onClick={(e) => e.stopPropagation()}>
-        <header>
-          <h2 id="hw-domains-dialog-title">Local domains</h2>
+        <DomainsHead id="hw-domains-dialog-title" title="Local domains" sub={on ? `On${tierName ? `, ${tierName}` : ''}` : pitch(fronting)}>
           <button type="button" className="hw-icon-btn" onClick={onClose} aria-label="Close (Esc)">
             <CloseIcon />
           </button>
-        </header>
+        </DomainsHead>
         {on ? (
           <>
-            <p className="hw-domains-text">
-              Turned on{fronting.trust ? `, ${tierChoices(fronting).find((t) => t.trust === fronting.trust)?.name ?? TIER_LABEL[fronting.trust]}` : ''} (<code>mode: fronted</code>): this dashboard is at{' '}
-              <a className="hw-link" href={fronting.dashboardUrl}>
-                {hostOfUrl(fronting.dashboardUrl)}
-              </a>{' '}
-              and each app at <code>{fronting.appUrl}</code>.
-            </p>
+            {justOn ? (
+              <TurnedOn url={fronting.dashboardUrl} appUrl={fronting.appUrl} />
+            ) : (
+              <p className="hw-domains-text">
+                This dashboard is at{' '}
+                <a className="hw-link" href={fronting.dashboardUrl}>
+                  {hostOfUrl(fronting.dashboardUrl)}
+                </a>{' '}
+                and each app at <code>{fronting.appUrl}</code> (<code>mode: fronted</code>).
+              </p>
+            )}
             <p className={`hw-domains-sum hw-domains-sum--${sum.tone}`} role="status">
               <span className={`hw-domains-dot hw-domains-dot--${sum.tone}`} aria-hidden="true" />
               {sum.tone === 'checking' ? 'Running hallway doctor’s checks…' : sum.text}
@@ -285,7 +362,6 @@ export function LocalDomainsDialog({
           </>
         ) : (
           <>
-            <Pitch f={fronting} />
             <SetupActions fronting={fronting} macos={macos} onCopy={onCopy} turnOn={turnOn} />
             {dismissed && (
               <p className="hw-help-foot">

@@ -61,7 +61,7 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
   if (daemon) {
     add({ id: 'daemon', status: 'pass', message: `the daemon is answering on ${daemon.url} (version ${daemon.version})` });
     // an upgrade replaces the files, not the process: the daemon keeps serving the old dashboard and API until it's
-    // restarted (D69)
+    // restarted (D70)
     if (daemon.version !== VERSION)
       add({ id: 'daemon-version', status: 'fail', message: `the daemon is running version ${daemon.version}, but this CLI is ${VERSION}: it's still running the code it started with`, fix: '`hallway service restart` (or restart the `hallway serve` it runs in)' });
   } else if (await isListening(cfg.port))
@@ -135,7 +135,7 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
           message: `${label} runs Hallway from ${transient.where}, which ${transient.owner} can delete at any time (the job would then fail to start)`,
           fix: '`npm i -g hallway && hallway service regenerate`',
         });
-      // a forwarder runs `hallway forward` until it's killed: one started before an upgrade still runs the old code (D69)
+      // a forwarder runs `hallway forward` until it's killed: one started before an upgrade still runs the old code (D70)
       const stale = isForwardLabel(label) ? services.staleVersion(label) : null;
       if (stale && (await services.status(label).catch(() => null))?.running)
         add({ id: 'job-version', status: 'warn', message: `${label} is still running Hallway ${stale}'s code (this CLI is ${VERSION})`, fix: '`hallway service regenerate` restarts it' });

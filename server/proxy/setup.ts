@@ -7,7 +7,7 @@
 //   sudo      the privileged recipes from the platform layer (server/platform/fronting*.ts): trusting the local CA
 //             system-wide, the custom-domain resolver, Linux's 443/80 redirect, and removing what another tier (or an
 //             older Hallway: macOS's pf redirect) installed. Each command is printed, then run through sudo.
-// The tier (D65, D69) decides which: User certificate (`user`) has no sudo step at all, No HTTPS (`none`) nothing that
+// The tier (D65, D70) decides which: User certificate (`user`) has no sudo step at all, No HTTPS (`none`) nothing that
 // asks for anything, System-wide certificate (`system`) is the old setup without the pf redirect. Switching tier removes what the old one
 // added. Everything is idempotent: a part that's already in place (checked by asking the real thing where possible) is
 // skipped, so re-running setup only fixes what's missing. `--print` gathers the same facts and prints the plan, running
@@ -160,7 +160,7 @@ export function lowPortsFor(platform: Pick<Platform, 'fronting'>, tier: Trust, c
 export interface SetupOptions {
   domain?: string;
   print?: boolean;
-  /** The tier; without one, setup asks on a terminal, or else keeps the current tier, or else User certificate (D69). */
+  /** The tier; without one, setup asks on a terminal, or else keeps the current tier, or else User certificate (D70). */
   trust?: Trust;
 }
 
@@ -719,7 +719,7 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
 }
 
 /** Which tier: `--trust`, else the answer to the question on a terminal (D65), else the current one, else the
- *  recommended one, User certificate (D69). `--domain` means System-wide certificate. */
+ *  recommended one, User certificate (D70). `--domain` means System-wide certificate. */
 export async function chooseTier(deps: SetupDeps, opts: SetupOptions): Promise<Trust> {
   if (opts.trust) return opts.trust;
   const cfg = deps.store.currentConfig();

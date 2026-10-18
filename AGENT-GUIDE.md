@@ -292,7 +292,7 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `proxy.httpsPort` | number 1–65535 | `4443` | The loopback port Caddy serves HTTPS on. |
 | `proxy.httpPort` | number 1–65535 | `4480` | The loopback port Caddy serves HTTP on: a redirect to HTTPS, or the apps themselves with `scheme: http`. |
 | `proxy.publicPort` | number 1–65535 | `443` | The port in links: 443 (or 80 with `scheme: http`), which `hallway setup` hands to Caddy's ports. Set it to `httpsPort` to use fronted mode with nothing on 443 (links then carry the port); setup does that itself on Linux for the `user` and `none` tiers. |
-| `proxy.trust` | `user` \| `system` \| `none` | none chosen (a setup from before the tiers counts as `system`) | The tier `hallway setup` set up (D65, D69), written by setup: `user` is User certificate (the default: Hallway's certificate trusted for your account only, no admin), `system` is System-wide certificate (every account; admin; custom domains need it), `none` is No HTTPS (plain HTTP, no certificate, no prompt). |
+| `proxy.trust` | `user` \| `system` \| `none` | none chosen (a setup from before the tiers counts as `system`) | The tier `hallway setup` set up (D65, D70), written by setup: `user` is User certificate (the default: Hallway's certificate trusted for your account only, no admin), `system` is System-wide certificate (every account; admin; custom domains need it), `none` is No HTTPS (plain HTTP, no certificate, no prompt). |
 | `proxy.scheme` | `https` \| `http` | `https` | The scheme in links. `http` is the `none` tier: Caddy serves plain HTTP and redirects nothing. |
 | `probe` | mapping |  | Health checks. |
 | `probe.intervalSeconds` | number ≥ 5 | `60` | Seconds between checks. |

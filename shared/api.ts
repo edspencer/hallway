@@ -121,7 +121,7 @@ export interface IgnoreConfig {
 export type DashboardSection = 'apps' | 'observed' | 'bookmarks';
 
 /**
- * Fronted mode's tiers (D65), by the names people see (D69): `user` is User certificate (Hallway's certificate trusted
+ * Fronted mode's tiers (D65), by the names people see (D70): `user` is User certificate (Hallway's certificate trusted
  * for your account only, no admin rights; always the recommended one), `system` is System-wide certificate (every
  * account; needs an administrator; custom domains need it too), `none` is No HTTPS (plain HTTP, nothing to trust).
  */
@@ -471,7 +471,7 @@ export interface FrontingInfo {
   base: string;
   /** Fronted mode: why the daemon's last push to Caddy failed (Caddy isn't running?), else null. */
   pushError: string | null;
-  /** The tier to recommend: `user` wherever fronted mode can work (D69), else null (and from an older daemon, which
+  /** The tier to recommend: `user` wherever fronted mode can work (D70), else null (and from an older daemon, which
    *  decided it from the machine, possibly null until it had asked the OS). */
   suggested?: Trust | null;
   /** Whether the user is an administrator (only System-wide certificate's wording uses it); null until the daemon has
@@ -484,10 +484,12 @@ export interface FrontingInfo {
 /** One of setup's tiers, as the dashboard offers it (D65). */
 export interface TierOption {
   trust: Trust;
-  /** `User certificate`, `System-wide certificate`, `No HTTPS` (D69). */
+  /** `User certificate`, `System-wide certificate`, `No HTTPS` (D70). */
   name: string;
   /** An app's address in this tier: `https://review.localhost`. */
   url: string;
+  /** The dashboard's address in this tier: `https://hallway.localhost` (absent from an older daemon). */
+  dashboardUrl?: string;
   /** One line, for the dashboard's collapsed row: `HTTPS, trusted for your account`. Absent from an older daemon. */
   summary?: string;
   /** What it will ask for, on this platform. */

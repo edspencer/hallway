@@ -5,29 +5,43 @@ import type { FrontingCheck, FrontingInfo, FrontingSetupJob, StateResponse, Tier
 /** The website's page on fronted mode: what it is, what setup does, and how to undo it. */
 export const FRONTED_DOCS = 'https://hallway.edspencer.net/networking/fronted-mode/';
 
-/** The tier as the header names it (D65): `Local domains · no admin`. */
-export const TIER_LABEL: Record<Trust, string> = { user: 'no admin', system: 'system-wide', none: 'no prompts' };
+/** The tier as the header names it (D65, D70): `Local domains · user certificate`. */
+export const TIER_LABEL: Record<Trust, string> = { user: 'user certificate', system: 'system-wide certificate', none: 'no HTTPS' };
 
-/** The tiers to offer, recommended first (from the daemon); an older daemon sends none, and the panel falls back to
- *  the two plain commands. */
+/** The tiers to offer, User certificate first (from the daemon); an older daemon sends none, and the panel falls back
+ *  to the two plain commands. */
 export function tierChoices(f: FrontingInfo): TierOption[] {
   return f.tiers ?? [];
 }
 
-/** What the Turn on dialog says before it runs: what will happen, and what (if anything) will ask. */
-export function turnOnWords(t: TierOption, macos: boolean): { will: string; asks: string } {
-  const will = `Hallway runs Caddy as you${macos ? ', has launchd hold ports ' + (t.trust === 'none' ? '80' : '443 and 80') + ' for it,' : ''} and switches this dashboard to ${t.url.replace('review.', 'hallway.')}.`;
-  if (t.trust === 'none') return { will, asks: 'Nothing will ask for a password. Pages are served over plain HTTP.' };
-  return {
-    will,
-    asks: macos
-      ? 'macOS will ask for your Touch ID or password, on this screen, to change your own certificate trust settings. It isn’t an administrator prompt.'
-      : 'Nothing will ask for a password: the certificate goes into your own NSS database, which Chrome and Chromium read.',
-  };
+/** The tier the panel opens with: the recommended one (User certificate, D70), else the first. */
+export function initialTier(tiers: TierOption[]): Trust | null {
+  return (tiers.find((t) => t.recommended) ?? tiers[0])?.trust ?? null;
 }
 
 /** A Turn on, as the dashboard follows it. */
 export type TurnOnState = { trust: Trust; job: FrontingSetupJob | null; error: string | null };
+
+/** Where a Turn on is: running (until the daemon says otherwise, including before its first answer), done or failed. */
+export function turnOnPhase(run: TurnOnState | null): 'running' | 'done' | 'failed' | null {
+  if (!run) return null;
+  if (run.error || run.job?.state === 'failed') return 'failed';
+  if (run.job?.state === 'done') return 'done';
+  return 'running';
+}
+
+/** What the panel says while a Turn on runs: on a Mac, User certificate waits on the Touch ID dialog. */
+export function runningWords(trust: Trust, macos: boolean): { title: string; detail: string } {
+  if (trust === 'user' && macos) return { title: 'Waiting for Touch ID…', detail: 'macOS is asking on your screen to trust Hallway’s certificate for your account.' };
+  return { title: 'Turning on…', detail: trust === 'none' ? 'Starting Caddy for plain HTTP.' : 'Starting Caddy and trusting its certificate in your NSS database.' };
+}
+
+/** What the panel says when a Turn on stopped, before the command to run instead. A cancelled or unanswered Touch ID
+ *  dialog looks like any other failure from here, so on a Mac it's named as the likely cause, not asserted. */
+export function failedWords(trust: Trust, macos: boolean): { title: string; detail: string } {
+  if (trust === 'user' && macos) return { title: 'Setup stopped', detail: 'If the Touch ID prompt was cancelled or went unanswered, run it in a terminal instead:' };
+  return { title: 'Setup stopped', detail: 'Run it in a terminal instead to see every step:' };
+}
 
 /** The last lines of setup's output, for the dialog while it runs. */
 export function logTail(log: string, lines = 6): string {

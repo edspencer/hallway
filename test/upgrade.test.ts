@@ -1,4 +1,4 @@
-// After `npm i -g hallway@latest` (D69): the daemon's job file is usually unchanged, so a daemon started by the old
+// After `npm i -g hallway@latest` (D70): the daemon's job file is usually unchanged, so a daemon started by the old
 // version keeps running the old code. `service install`, `service regenerate` and `setup` restart it when the daemon
 // answering isn't this CLI's version, and say so; doctor flags it; forwarders another version started are restarted
 // too. A stand-in daemon answers /api/health with whatever version the test says, and "restarting" its job (the mocked
@@ -84,7 +84,7 @@ async function linuxHarness({ version = OLD as string | null, running = true, re
 
 const restarts = (calls: string[]) => calls.filter((c) => /systemctl --user restart hallway-daemon\.service/.test(c));
 
-describe('service install after an upgrade (D69)', { skip: onWindows('systemd mocked, POSIX paths') }, () => {
+describe('service install after an upgrade (D70)', { skip: onWindows('systemd mocked, POSIX paths') }, () => {
   test('the daemon answering as the old version is restarted, and says so; then it answers as this one', async () => {
     const h = await linuxHarness();
     assert.equal(await service(h.ctx, ['install'], {}, undefined), 0, h.errors());
@@ -155,7 +155,7 @@ describe('service install after an upgrade (D69)', { skip: onWindows('systemd mo
   });
 });
 
-describe('forwarders another version started (D69)', { skip: onWindows('launchd mocked, POSIX paths') }, () => {
+describe('forwarders another version started (D70)', { skip: onWindows('launchd mocked, POSIX paths') }, () => {
   async function harness(running: boolean) {
     const t = await tmpStore();
     const root = tmpDir('hw-test-upgrade-fwd-');

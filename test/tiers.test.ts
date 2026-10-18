@@ -1,4 +1,4 @@
-// Fronted mode's tiers (server/proxy/tiers.ts, D65, D69): the names and the recommendation, what config.yaml says for each, the question
+// Fronted mode's tiers (server/proxy/tiers.ts, D65, D70): the names and the recommendation, what config.yaml says for each, the question
 // setup asks, and how `--trust` and `--domain` combine. Pure, plus the CLI's argument checks.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,7 @@ import { type SetupDeps, chooseTier } from '../server/proxy/setup.ts';
 
 const cfg = defaultConfig();
 
-describe('which tier to recommend (D69)', () => {
+describe('which tier to recommend (D70)', () => {
   test('User certificate, always: first and the only one marked, on macOS and Linux, admin or not', () => {
     assert.equal(RECOMMENDED_TIER, 'user');
     for (const p of ['darwin', 'linux'] as const)
@@ -30,9 +30,9 @@ describe('which tier to recommend (D69)', () => {
     ]);
   });
   test("being an administrator only changes how System-wide certificate says it needs one", () => {
-    assert.match(tierText('darwin', 'system', true).asks, /^Needs an administrator’s password, so it runs in a terminal/);
-    assert.match(tierText('darwin', 'system', false).asks, /^Needs an administrator \(this account isn’t one\)/);
-    assert.match(tierText('linux', 'system', false).asks, /^Needs sudo, which this account doesn’t have/);
+    assert.match(tierText('darwin', 'system', true).asks, /^Needs an administrator's password, so it runs in a terminal/);
+    assert.match(tierText('darwin', 'system', false).asks, /^Needs an administrator \(this account isn't one\)/);
+    assert.match(tierText('linux', 'system', false).asks, /^Needs sudo, which this account doesn't have/);
     assert.equal(tierText('darwin', 'user', true).asks, tierText('darwin', 'user', false).asks);
   });
   test('asked of the OS with no privilege: `id -Gn` only', async () => {
@@ -73,7 +73,7 @@ describe('the question', () => {
   test('three numbered choices with their URLs, the recommended one marked and the default', () => {
     const q = tierQuestion('darwin', cfg, null, true);
     assert.match(q.text, /^Local domains: open your apps by name instead of by port\.\n\n {2}1\) User certificate {9}https:\/\/review\.localhost {3}\(recommended\)\n {5}macOS asks for your Touch ID or password once/);
-    assert.match(q.text, /2\) System-wide certificate {2}https:\/\/review\.localhost\n {5}Needs an administrator’s password/);
+    assert.match(q.text, /2\) System-wide certificate {2}https:\/\/review\.localhost\n {5}Needs an administrator's password/);
     assert.match(q.text, /3\) No HTTPS {17}http:\/\/review\.localhost\n {5}Nothing will ask for a password\./);
     assert.doesNotMatch(q.text, /2\) .*recommended/);
     assert.equal(q.prompt, 'Which? [1] ');
@@ -87,7 +87,7 @@ describe('the question', () => {
     const q = tierQuestion('linux', cfg, 'none');
     assert.equal(q.prompt, 'Which? [3] ');
     assert.match(q.text, /3\) No HTTPS {17}http:\/\/review\.localhost:4480 {3}\(current\)/);
-    assert.match(q.text, /1\) User certificate {9}https:\/\/review\.localhost:4443 {3}\(recommended\)\n {5}Nothing: the certificate goes into your own NSS database/);
+    assert.match(q.text, /1\) User certificate {9}https:\/\/review\.localhost:4443 {3}\(recommended\)\n {5}Nothing will ask for a password: the certificate goes into your own NSS database/);
   });
 });
 
