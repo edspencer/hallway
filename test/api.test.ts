@@ -456,13 +456,20 @@ describe("the dashboard's Turn on (D65)", () => {
   const until = async (f: () => Promise<boolean>) => {
     for (let i = 0; i < 100 && !(await f()); i++) await new Promise((r) => setTimeout(r, 20));
   };
-  test('tiers in /api/state once the OS has been asked: the recommended first, System-wide never turned on here', async () => {
+  test('tiers in /api/state at once, User certificate first and recommended (D69); System-wide certificate never turned on here', async () => {
     const { req, providers, store } = await setup();
-    providers.register(frontingProvider({ store, platform: { id: 'darwin', fronting: darwinFronting }, machine: async () => ({ admin: false, managed: true }), checks: async () => [] }));
+    let answer!: (m: { admin: boolean }) => void;
+    providers.register(frontingProvider({ store, platform: { id: 'darwin', fronting: darwinFronting }, machine: () => new Promise((r) => (answer = r)), checks: async () => [] }));
     let f = ((await (await req('/api/state')).json()) as StateResponse).fronting!;
-    await until(async () => !!(f = ((await (await req('/api/state')).json()) as StateResponse).fronting!).suggested);
+    // before the OS has answered: the tiers are there, and the admin question is open
     assert.equal(f.suggested, 'user');
-    assert.equal(f.admin, false);
+    assert.equal(f.admin, null);
+    assert.equal(f.tiers!.length, 3);
+    // an administrator: still User certificate (D69)
+    answer({ admin: true });
+    await until(async () => (f = ((await (await req('/api/state')).json()) as StateResponse).fronting!).admin === true);
+    assert.equal(f.suggested, 'user');
+    assert.deepEqual(f.tiers!.map((t) => t.name), ['User certificate', 'System-wide certificate', 'No HTTPS']);
     assert.deepEqual(f.tiers!.map((t) => [t.trust, t.url, t.command, t.recommended, t.canTurnOn]), [
       ['user', 'https://review.localhost', 'hallway setup --trust user', true, true],
       ['system', 'https://review.localhost', 'hallway setup --trust system', false, false],

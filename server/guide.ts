@@ -25,7 +25,7 @@ export interface LiveFacts {
   home: string;
   mode: string;
   base: string;
-  /** Fronted mode: what an app's address looks like (`https://<slug>.localhost`, `http://…` in the No prompts tier). */
+  /** Fronted mode: what an app's address looks like (`https://<slug>.localhost`, `http://…` in the No HTTPS tier). */
   appsAt?: string;
   apps: { slug: string; name: string; port: number | null; url: string | null; expected: string | null; error: boolean }[];
   groups: { group: string; title: string; links: number }[];

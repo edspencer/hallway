@@ -11,7 +11,7 @@
 4. [you] Trust Hallway's local certificate authority for your account only (your login keychain): no administrator needed, macOS asks for your own Touch ID or password
      $ security add-trusted-cert -r trustRoot -k /home/me/Library/Keychains/login.keychain-db /home/me/.hallway/state/caddy/data/pki/authorities/local/root.crt
      (asks: macOS, for your Touch ID or password, to change *your* certificate trust settings. This is not an administrator prompt)
-5. [Hallway] Switch config.yaml to fronted mode, No admin: links become https://<app>.localhost
+5. [Hallway] Switch config.yaml to fronted mode, User certificate: links become https://<app>.localhost
 6. [Hallway] Check https://hallway.localhost answers through launchd's socket, with Hallway's certificate
 
 Nothing was run. `hallway setup` runs these.

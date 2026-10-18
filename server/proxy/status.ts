@@ -1,7 +1,7 @@
 // Local domains as the dashboard and the startup banner see them (D63): whether fronted mode can work on this platform,
 // whether it's on, and the addresses it gives, with the three tiers to choose from (D65). The daemon runs setup itself
-// only for the dashboard's Turn on, and only in the two tiers that need no administrator (No admin, No prompts): a plan
-// with any sudo step is refused, and System-wide is `hallway setup` in a terminal (AGENTS.md: never root in the
+// only for the dashboard's Turn on, and only in the two tiers that need no administrator (User certificate, No HTTPS): a
+// plan with any sudo step is refused, and System-wide certificate is `hallway setup` in a terminal (AGENTS.md: never root in the
 // daemon). In fronted mode, `GET /api/fronting` also runs doctor's
 // networking checks (server/proxy/doctor.ts): read-only, but they probe Caddy, the redirect and the resolver, so they're
 // run on request and cached for a few seconds, never on every `/api/state`.
@@ -12,7 +12,7 @@ import type { Platform } from '../platform/index.js';
 import type { StateProvider } from '../providers.js';
 import type { Store } from '../store/index.js';
 import { publicUrl } from './names.js';
-import { type MachineFacts, currentTier, suggestedTier, tierOptions } from './tiers.js';
+import { type MachineFacts, RECOMMENDED_TIER, currentTier, tierOptions } from './tiers.js';
 
 /** Every path under the home directory in `text`, as `~/…` (either separator: on Windows a message may use both). */
 export function tildifyText(text: string | null, home = os.homedir()): string | null {
@@ -22,13 +22,15 @@ export function tildifyText(text: string | null, home = os.homedir()): string | 
 }
 
 /** Pure: config.yaml, the platform's fronting (for `unsupported`), the proxy's last push error, and who the user is
- *  (for the tier to recommend; null until the OS has been asked). */
+ *  (for System-wide certificate's wording; null until the OS has been asked). User certificate is always the one
+ *  recommended (D69), so the tiers don't wait for the OS. */
 export function frontingInfo(cfg: HallwayConfig, platform: Pick<Platform, 'fronting'> & { id?: Platform['id'] }, pushError: string | null = null, machine: MachineFacts | null = null): FrontingInfo {
-  const suggested = machine && platform.id && !platform.fronting.unsupported ? suggestedTier(platform.id, machine) : null;
+  const offered = !!platform.id && !platform.fronting.unsupported;
+  const admin = machine ? machine.admin : null;
   return {
-    suggested,
-    admin: machine ? machine.admin : null,
-    tiers: suggested && platform.id ? tierOptions(platform.id, cfg, suggested) : [],
+    suggested: offered ? RECOMMENDED_TIER : null,
+    admin,
+    tiers: offered ? tierOptions(platform.id!, cfg, admin) : [],
     unsupported: platform.fronting.unsupported ?? null,
     mode: cfg.mode,
     trust: cfg.mode === 'fronted' ? currentTier(cfg) : null,
@@ -42,7 +44,7 @@ export function frontingInfo(cfg: HallwayConfig, platform: Pick<Platform, 'front
 export interface FrontingProviderOptions {
   store: Store;
   platform: Pick<Platform, 'fronting'> & { id?: Platform['id'] };
-  /** Who the user is, for the tier to recommend (asked of the OS once, at start). */
+  /** Who the user is, for System-wide certificate's wording (asked of the OS once, at start). */
   machine?: () => Promise<MachineFacts>;
   /** Run setup, unattended, in a tier that needs no administrator (server/proxy/setup.ts `setupUnattended`), writing
    *  what it prints to `out`. Absent: the dashboard can't turn local domains on (an older or a test daemon). */
@@ -72,7 +74,7 @@ export function frontingProvider({ store, platform, machine, runSetup, proxyStat
     frontingSetup: () => ({ ...job, log: tildifyText(job.log) ?? '' }),
     turnOnFronting: (trust) => {
       if (platform.fronting.unsupported) return { refused: platform.fronting.unsupported, status: 400 };
-      if (trust === 'system') return { refused: 'System-wide needs an administrator, so it runs in a terminal: `hallway setup --trust system`', status: 400 };
+      if (trust === 'system') return { refused: 'System-wide certificate needs an administrator, so it runs in a terminal: `hallway setup --trust system`', status: 400 };
       if (!runSetup) return { refused: "this daemon can't run setup; run `hallway setup` in a terminal", status: 503 };
       if (job.state === 'running') return { refused: `setup is already running (${job.trust})`, status: 409 };
       job = { state: 'running', trust, log: '', error: null };

@@ -3,7 +3,7 @@
 //   443, 80    no redirect: launchd binds loopback 443 and 80 for LaunchAgents (`Sockets`), in every tier, so nothing
 //              here is root (server/services/spec.ts, `forwards`). The pf redirect an install from before the tiers
 //              has (a pf anchor, com.apple/hallway, loaded at boot by the hallway.pf LaunchDaemon) is only removed.
-//   trust      System-wide: the System keychain (`security add-trusted-cert -d`, sudo). No admin: the login keychain,
+//   trust      System-wide certificate: the System keychain (`security add-trusted-cert -d`, sudo). User certificate: the login keychain,
 //              with the user's trust settings, which ask for the user's own password or Touch ID, never an admin's.
 //   resolver   /etc/resolver/<base>, `nameserver 127.0.0.1` with a `port` line (resolver(5)).
 // POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too

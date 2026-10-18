@@ -6,7 +6,7 @@
 3. [Hallway] Have launchd hold loopback port 80 (to Caddy's 4480) for you, on 127.0.0.1 and ::1: a LaunchAgent for each, which launchd starts on the first connection to pass it on. No sudo: launchd binds them
      hallway.forward.http  127.0.0.1:80 → 127.0.0.1:4480
      hallway.forward.http6  [::1]:80 → 127.0.0.1:4480
-4. [Hallway] Switch config.yaml to fronted mode, No prompts: links become http://<app>.localhost
+4. [Hallway] Switch config.yaml to fronted mode, No HTTPS: links become http://<app>.localhost
 5. [Hallway] Check http://hallway.localhost answers through launchd's socket
 
 Nothing was run. `hallway setup` runs these.

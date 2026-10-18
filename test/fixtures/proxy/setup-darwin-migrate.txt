@@ -1,4 +1,4 @@
-! Moving from System-wide to No admin: what the old tier added is removed (that needs sudo, this once).
+! Moving from System-wide certificate to User certificate: what the old tier added is removed (that needs sudo, this once).
 
 1. [Hallway] Write Caddy's configuration, routing *.localhost to your apps and https://hallway.localhost to the dashboard, and check it with `caddy validate`
      /home/me/.hallway/generated/caddy.json
@@ -17,9 +17,9 @@
      $ sudo launchctl bootout system/hallway.pf   (may fail harmlessly)
      $ sudo pfctl -a com.apple/hallway -F all   (may fail harmlessly)
      $ sudo rm -f /Library/LaunchDaemons/hallway.pf.plist /etc/pf.anchors/hallway
-6. [sudo] Remove Hallway's local certificate authority from the System keychain (No admin doesn't trust it system-wide)
+6. [sudo] Remove Hallway's local certificate authority from the System keychain (User certificate doesn't trust it system-wide)
      $ sudo security delete-certificate -c 'Hallway Local CA' /Library/Keychains/System.keychain   (may fail harmlessly)
-7. [Hallway] Switch config.yaml to fronted mode, No admin: links become https://<app>.localhost
+7. [Hallway] Switch config.yaml to fronted mode, User certificate: links become https://<app>.localhost
 8. [Hallway] Check https://hallway.localhost answers through launchd's socket, with Hallway's certificate
 
 Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

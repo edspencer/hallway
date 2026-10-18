@@ -5,7 +5,7 @@
 //   https://<slug>.<base>, aliases → the app, with Host rewritten to the upstream (D9) unless proxy.preserveHost
 //   http://<anything>             → a redirect to https:// on the public port
 //   an upstream that doesn't answer → generated/fallback.html, with the upstream's error status
-// With `proxy.scheme: http` (the No prompts tier, D65) there's no HTTPS at all: the same routes are served as plain
+// With `proxy.scheme: http` (the No HTTPS tier, D65) there's no HTTPS at all: the same routes are served as plain
 // HTTP on httpPort, and nothing is redirected.
 //
 // Caddy runs as the user, on loopback ports above 1024 (proxy.httpsPort/httpPort), and never binds 443 or 80 itself:

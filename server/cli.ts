@@ -50,9 +50,10 @@ Bookmarks
 
 Fronted mode (https://<app>.localhost, or your own domain)
   setup [--trust user|system|none] [--domain BASE] [--print] [--yes]
-                                    Run Caddy for your apps on https://<app>.localhost. Asks which tier: user
-                                    trusts its certificate for your account only (no admin), system for every
-                                    account (admin; needed for --domain), none is plain HTTP (no prompts at all).
+                                    Run Caddy for your apps on https://<app>.localhost. Asks which tier:
+                                    user = User certificate (recommended): trusted for your account only, no admin;
+                                    system = System-wide certificate: every account, needs admin (and --domain);
+                                    none = No HTTPS: plain HTTP, nothing asks for anything.
                                     Shows the plan and asks before it runs anything. --print shows the plan and
                                     runs nothing; --yes doesn't ask (needed without a terminal). Run it again
                                     with another --trust to switch tier.
@@ -135,7 +136,7 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
         const [{ machineFacts }, { defaultRunner }] = await Promise.all([import('./proxy/tiers.js'), import('./platform/index.js')]);
         return machineFacts(platform, defaultRunner);
       },
-      // the dashboard's Turn on (D65): No admin or No prompts only, refused if the plan has a sudo step
+      // the dashboard's Turn on (D65): User certificate or No HTTPS only, refused if the plan has a sudo step
       runSetup: async (trust, out) => {
         const [{ setupUnattended, captureExec }, { Services }, { defaultRunner }, os] = await Promise.all([import('./proxy/setup.js'), import('./services/index.js'), import('./platform/index.js'), import('node:os')]);
         await setupUnattended(

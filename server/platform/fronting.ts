@@ -1,10 +1,10 @@
 // The OS-specific half of fronted mode (D47, D65), per platform: what `hallway setup` runs outside Hallway's own files
 // and jobs, and `hallway teardown` undoes. The root parts are fixed jobs that take no configuration from anything a
 // user-level process can write later:
-//   redirect   Linux, System-wide tier only: loopback 443 → proxy.httpsPort and 80 → proxy.httpPort (nftables). macOS
+//   redirect   Linux, System-wide certificate tier only: loopback 443 → proxy.httpsPort and 80 → proxy.httpPort (nftables). macOS
 //              needs none in any tier: launchd binds loopback 443 and 80 for a LaunchAgent (`lowPorts: 'sockets'`,
 //              D65). Its old pf redirect is only ever removed (`unredirect`), from an install made before the tiers.
-//   trust      Hallway's local CA root in the system trust store (System-wide), or for this user only (No admin: the
+//   trust      Hallway's local CA root in the system trust store (System-wide certificate), or for this user only (User certificate: the
 //              login keychain on macOS, which asks for the user's own password; the user's NSS database on Linux)
 //   resolver   custom domains only: `<base>` and everything under it → Hallway's dnsmasq on 127.0.0.1:<dnsPort>
 // Pure: each recipe is the files Hallway writes (into generated/setup/, as the user) and the commands that install
@@ -65,17 +65,17 @@ export interface Fronting {
   /** Set where fronted mode can't work at all (Windows, D58): why, for `hallway setup` to refuse with up front. */
   unsupported?: string;
   /** How loopback 443 and 80 reach Caddy's ports: `sockets`, launchd's, for user-level jobs, in every tier (macOS,
-   *  D65); `redirect`, a root redirect, in the System-wide tier only (Linux). */
+   *  D65); `redirect`, a root redirect, in the System-wide certificate tier only (Linux). */
   lowPorts: 'sockets' | 'redirect';
   /** The redirect from 443/80 to Caddy's ports (`lowPorts: 'redirect'`). Throws FrontingUnsupported with what to
    *  install when it can't. */
   redirect?(env: FrontingEnv): Recipe;
   /** Remove the redirect; on macOS, the pf redirect an install from before the tiers has. */
   unredirect(env: FrontingEnv): Recipe;
-  /** Trust Hallway's root system-wide (the System-wide tier), and remove it again. */
+  /** Trust Hallway's root system-wide (the System-wide certificate tier), and remove it again. */
   trust(env: FrontingEnv): Recipe;
   untrust(env: FrontingEnv): Recipe;
-  /** Trust it for this user only (the No admin tier), with no admin rights, and remove it again. */
+  /** Trust it for this user only (the User certificate tier), with no admin rights, and remove it again. */
   userTrust?(env: FrontingEnv): Recipe;
   userUntrust?(env: FrontingEnv): Recipe;
   /** Is it trusted for this user (the user-only kind, not the system-wide one)? */

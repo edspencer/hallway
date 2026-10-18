@@ -52,7 +52,7 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
         id: 'networking',
         status: 'info',
         message: `local domains are off (mode: direct), so nothing answers at ${f.dashboardUrl} or ${f.appUrl} (a browser says the connection was refused); apps are linked as http://localhost:<port>`,
-        fix: '`hallway setup` turns them on (it prints each step first; `hallway setup --print` shows the plan and runs nothing)',
+        fix: '`hallway setup` turns them on, as User certificate unless you pick another tier: no administrator needed (it prints each step first; `hallway setup --print` shows the plan and runs nothing)',
       });
     return out;
   }
@@ -185,7 +185,7 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
     if (root && firefoxInstalled(platform, deps.env))
       add({ id: 'firefox', status: 'warn', message: 'Firefox keeps its own certificate store', fix: 'in about:config, set security.enterprise_roots.enabled to true (or import the root from ' + show(paths.rootCert) + ')' });
   }
-  if (systemTrusted && tier !== 'system') add({ id: 'leftover-trust', status: 'warn', message: `Hallway's root is still trusted system-wide, which ${tier === 'none' ? 'plain HTTP' : 'the No admin tier'} doesn't use`, fix: `\`hallway setup --trust ${tier}\` removes it (it needs admin, this once)` });
+  if (systemTrusted && tier !== 'system') add({ id: 'leftover-trust', status: 'warn', message: `Hallway's root is still trusted system-wide, which ${tier === 'none' ? 'No HTTPS' : 'User certificate'} doesn't use`, fix: `\`hallway setup --trust ${tier}\` removes it (it needs admin, this once)` });
 
   // ---------------- names ----------------
   if (!custom) {

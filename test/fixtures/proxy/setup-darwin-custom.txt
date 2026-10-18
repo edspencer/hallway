@@ -27,7 +27,7 @@
      $ sudo install -d -m 0755 /etc/resolver
      $ sudo install -m 0644 -o root -g wheel /home/me/.hallway/generated/setup/resolver /etc/resolver/myname.internal
      $ sudo killall -HUP mDNSResponder   (may fail harmlessly)
-10. [Hallway] Switch config.yaml to fronted mode, System-wide on myname.internal: links become https://<app>.myname.internal
+10. [Hallway] Switch config.yaml to fronted mode, System-wide certificate on myname.internal: links become https://<app>.myname.internal
 11. [Hallway] Check https://myname.internal answers through launchd's socket, with Hallway's certificate
 
 Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

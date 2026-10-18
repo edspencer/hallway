@@ -7,8 +7,8 @@
 //   sudo      the privileged recipes from the platform layer (server/platform/fronting*.ts): trusting the local CA
 //             system-wide, the custom-domain resolver, Linux's 443/80 redirect, and removing what another tier (or an
 //             older Hallway: macOS's pf redirect) installed. Each command is printed, then run through sudo.
-// The tier (D65) decides which: No admin (`user`) has no sudo step at all, No prompts (`none`) nothing that asks for
-// anything, System-wide (`system`) is the old setup without the pf redirect. Switching tier removes what the old one
+// The tier (D65, D69) decides which: User certificate (`user`) has no sudo step at all, No HTTPS (`none`) nothing that
+// asks for anything, System-wide certificate (`system`) is the old setup without the pf redirect. Switching tier removes what the old one
 // added. Everything is idempotent: a part that's already in place (checked by asking the real thing where possible) is
 // skipped, so re-running setup only fixes what's missing. `--print` gathers the same facts and prints the plan, running
 // nothing. Gathering facts is read-only; planning is a pure function of the facts (tested with fixtures).
@@ -31,7 +31,7 @@ import { fallbackHtml } from './fallback.js';
 import { ipv6Loopback, proxyApps } from './index.js';
 import { publicUrl } from './names.js';
 import { httpProbe, httpsStatus, readRoot, tlsProbe } from './probe.js';
-import { type MachineFacts, currentTier, machineFacts, suggestedTier, tierProxy, tierQuestion, tierText, atTheScreen } from './tiers.js';
+import { type MachineFacts, RECOMMENDED_TIER, currentTier, machineFacts, tierProxy, tierQuestion, tierText, atTheScreen } from './tiers.js';
 import { type TldVerdict, delegatedTlds, tldVerdict } from './tld.js';
 
 /** The oldest Caddy that understands the config (2.6 ignores the admin socket's `|0600` mode: research notes). */
@@ -150,7 +150,7 @@ export async function portConflicts(
 export const isOurForwarder = (command: string) => /[/\\]cli\.js forward \d+(\s|$)/.test(command);
 
 /** How loopback 443/80 reach Caddy for a tier on this platform. A hand-set `publicPort: httpsPort` from before the
- *  tiers (fronted mode with nothing on 443, D47) is kept for System-wide, the only tier that had it. */
+ *  tiers (fronted mode with nothing on 443, D47) is kept for System-wide certificate, the only tier that had it. */
 export function lowPortsFor(platform: Pick<Platform, 'fronting'>, tier: Trust, cfg: Pick<HallwayConfig, 'proxy'>): LowPorts {
   if (tier === 'system' && cfg.proxy.trust === null && cfg.proxy.publicPort === cfg.proxy.httpsPort) return 'none';
   if (platform.fronting.lowPorts === 'sockets') return 'sockets';
@@ -160,7 +160,7 @@ export function lowPortsFor(platform: Pick<Platform, 'fronting'>, tier: Trust, c
 export interface SetupOptions {
   domain?: string;
   print?: boolean;
-  /** The tier; without one, setup asks on a terminal, or else keeps the current tier, or else the recommended one. */
+  /** The tier; without one, setup asks on a terminal, or else keeps the current tier, or else User certificate (D69). */
   trust?: Trust;
 }
 
@@ -175,7 +175,7 @@ export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust:
   // custom domains need the resolver, which is root: System-wide only. Another tier goes back to *.localhost
   const wanted = (opts.domain ?? cfg.domain.base).toLowerCase().replace(/\.$/, '');
   const base = tier === 'system' ? wanted : 'localhost';
-  if (wanted !== base) warnings.push(`${wanted} is a custom domain, and those need System-wide (--trust system): the system resolver has to be pointed at it, which needs an administrator. ${tierText(platform.id, tier).name} uses *.localhost${cfg.domain.base !== 'localhost' && cfg.mode === 'fronted' ? `, and ${wanted}'s resolver and dnsmasq are removed` : ''}.`);
+  if (wanted !== base) warnings.push(`${wanted} is a custom domain, and those need System-wide certificate (--trust system): the system resolver has to be pointed at it, which needs an administrator. ${tierText(platform.id, tier).name} uses *.localhost${cfg.domain.base !== 'localhost' && cfg.mode === 'fronted' ? `, and ${wanted}'s resolver and dnsmasq are removed` : ''}.`);
   const custom = base !== 'localhost';
   // a new domain gets that domain's default dashboard (its apex); otherwise whatever config.yaml says
   const dashboard = base !== cfg.domain.base ? (custom ? base : 'hallway.localhost') : cfg.domain.dashboard;
@@ -719,20 +719,20 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
 }
 
 /** Which tier: `--trust`, else the answer to the question on a terminal (D65), else the current one, else the
- *  recommended one. `--domain` means System-wide. */
+ *  recommended one, User certificate (D69). `--domain` means System-wide certificate. */
 export async function chooseTier(deps: SetupDeps, opts: SetupOptions): Promise<Trust> {
   if (opts.trust) return opts.trust;
   const cfg = deps.store.currentConfig();
   const current = cfg.mode === 'fronted' ? currentTier(cfg) : null;
   if (opts.domain && opts.domain !== 'localhost') {
-    deps.out('A custom domain needs System-wide (--trust system): the system resolver is pointed at it, which needs an administrator.\n\n');
+    deps.out('A custom domain needs System-wide certificate (--trust system): the system resolver is pointed at it, which needs an administrator.\n\n');
     return 'system';
   }
-  const machine = deps.machine ?? (await machineFacts(deps.platform, deps.query, process.getuid?.(), deps.env));
-  const suggested = suggestedTier(deps.platform.id, machine);
   const ask = deps.confirm?.ask;
   if (ask && !deps.confirm?.yes && !opts.print) {
-    const q = tierQuestion(deps.platform.id, cfg, suggested, current);
+    // who the user is only changes how System-wide certificate says it needs an administrator
+    const machine = deps.machine ?? (await machineFacts(deps.platform, deps.query, process.getuid?.()));
+    const q = tierQuestion(deps.platform.id, cfg, current, machine.admin);
     deps.out(q.text);
     for (;;) {
       const t = q.byAnswer(await ask(q.prompt));
@@ -743,7 +743,7 @@ export async function chooseTier(deps: SetupDeps, opts: SetupOptions): Promise<T
       deps.out('Answer 1, 2 or 3 (or Enter for the default).\n');
     }
   }
-  const t = current ?? suggested;
+  const t = current ?? RECOMMENDED_TIER;
   deps.out(`Tier: ${tierText(deps.platform.id, t).name} (--trust ${t}), ${current ? 'as set up now' : 'recommended here'}. Choose another with --trust user, --trust system or --trust none.\n\n`);
   return t;
 }
@@ -885,13 +885,13 @@ export const captureExec =
     });
 
 /**
- * Setup with nobody at a terminal: what the dashboard's Turn on runs in the daemon. Only No admin and No prompts, and
- * only when the plan has no sudo step (moving off System-wide has some: that's for a terminal). macOS may still show
- * its own trust dialog (No admin): that one is the user's, on their screen. Throws SetupError with why not.
+ * Setup with nobody at a terminal: what the dashboard's Turn on runs in the daemon. Only User certificate and No HTTPS,
+ * and only when the plan has no sudo step (moving off System-wide certificate has some: that's for a terminal). macOS
+ * may still show its own trust dialog (User certificate): that one is the user's, on their screen. Throws SetupError with why not.
  */
 export async function setupUnattended(deps: SetupDeps, trust: Trust): Promise<void> {
   if (deps.platform.fronting.unsupported) throw new SetupError(deps.platform.fronting.unsupported);
-  if (trust === 'system') throw new SetupError('System-wide needs an administrator: run `hallway setup --trust system` in a terminal');
+  if (trust === 'system') throw new SetupError('System-wide certificate needs an administrator: run `hallway setup --trust system` in a terminal');
   const facts = await gatherFacts(deps, { trust });
   const plan = planSetup(facts, deps.platform, deps.store.home, setupActions(deps, facts));
   if (plan.refusals.length) throw new SetupError(plan.refusals.join(' '));

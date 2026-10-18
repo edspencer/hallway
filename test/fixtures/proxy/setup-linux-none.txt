@@ -1,13 +1,13 @@
-! Moving from No admin to No prompts: what the old tier added is removed.
+! Moving from User certificate to No HTTPS: what the old tier added is removed.
 
 1. [Hallway] Write Caddy's configuration, routing *.localhost to your apps and http://hallway.localhost:4480 to the dashboard (plain HTTP: no certificates), and check it with `caddy validate`
      /home/me/.hallway/generated/caddy.json
      /home/me/.hallway/generated/fallback.html
 2. [Hallway] Run Caddy as you, on 127.0.0.1:4480, as a systemd user unit (hallway.caddy), with its admin API on a private socket
      /home/me/.hallway/state/caddy/admin.sock
-3. [you] Remove Hallway's local certificate authority from your NSS database, as you, no sudo (No prompts doesn't use it)
+3. [you] Remove Hallway's local certificate authority from your NSS database, as you, no sudo (No HTTPS doesn't use it)
      $ /usr/bin/certutil -d sql:/home/me/.pki/nssdb -D -n 'Hallway Local CA'   (may fail harmlessly)
-4. [Hallway] Switch config.yaml to fronted mode, No prompts: links become http://<app>.localhost:4480
+4. [Hallway] Switch config.yaml to fronted mode, No HTTPS: links become http://<app>.localhost:4480
 5. [Hallway] Check http://hallway.localhost:4480 answers
 
 Nothing was run. `hallway setup` runs these.

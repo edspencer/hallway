@@ -36,7 +36,7 @@ describe('startup banner', () => {
         '',
         'Local domains are off. Run hallway setup to reach this dashboard at',
         'https://hallway.localhost and each app at https://<app>.localhost',
-        '(setup prints each step before it runs; the dashboard explains more).',
+        '(by default with no admin needed; setup prints each step before it runs).',
         '',
       ].join('\n'),
     );

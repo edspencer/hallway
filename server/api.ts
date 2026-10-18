@@ -196,7 +196,7 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
     try {
       const body = await jsonBody(c);
       const trust = (body as { trust?: unknown } | null)?.trust;
-      if (trust !== 'user' && trust !== 'none') throw new ValidationError(trust === 'system' ? 'System-wide needs an administrator, so it runs in a terminal: `hallway setup --trust system`' : 'trust must be "user" or "none"');
+      if (trust !== 'user' && trust !== 'none') throw new ValidationError(trust === 'system' ? 'System-wide certificate needs an administrator, so it runs in a terminal: `hallway setup --trust system`' : 'trust must be "user" or "none"');
       if (!providers.first('fronting')) return fail(c, 503, { error: 'local domains are not available in this daemon' });
       const job = providers.first('turnOnFronting', trust);
       if (!job) return fail(c, 503, { error: "this daemon can't run setup; run `hallway setup` in a terminal" });
