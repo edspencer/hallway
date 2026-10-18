@@ -312,6 +312,7 @@ export async function startLive({ store, bus, providers, selfPorts = [], platfor
         httpStatus: h.lastProbe?.httpStatus ?? null,
         latencyMs: h.lastProbe?.latencyMs ?? null,
         detail: probeDetail(h),
+        address: h.lastProbe?.address ?? null,
         uptime24h: s.uptime,
         latencyP50: s.latencyP50,
       };

@@ -318,7 +318,7 @@ describe('the thumbnailer with every tier', () => {
     await t.store.patchConfig({ thumbnails: { mode: 'screenshot' } });
     t.bus.emit({ type: 'config' });
     await t.thumbs.shots.settle();
-    assert.deepEqual(t.f.log.filter((l) => l.startsWith('shot')), ['shot http://127.0.0.1:5173/']);
+    assert.deepEqual(t.f.log.filter((l) => l.startsWith('shot')), ['shot http://localhost:5173/']);
     const v = await view(t, 'web');
     assert.equal(v.thumbKind, 'screenshot');
     assert.ok(t.events.some((e) => e.type === 'thumb' && e.slug === 'web'));

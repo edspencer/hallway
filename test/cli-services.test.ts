@@ -8,9 +8,11 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ipv6Loopback } from '../server/proxy/index.ts';
 import { exitWatchdog, ROOT, tmpDir, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
+const v6 = await ipv6Loopback();
 
 const linux = process.platform === 'linux';
 const FAKE = path.join(ROOT, 'test', 'fixtures', 'fake-systemctl');
@@ -58,7 +60,7 @@ describe('hallway run & co. (fake systemctl, real processes)', { skip: !linux &&
 
   after(async () => {
     // whatever happened, leave nothing running
-    for (const s of ['demo', 'crash', 'kept']) await hallway(['service', 'rm', s]);
+    for (const s of ['demo', 'crash', 'kept', 'hmr']) await hallway(['service', 'rm', s]);
     const state = path.join(HOME, '.fake-systemd');
     for (const f of fs.existsSync(state) ? fs.readdirSync(state) : [])
       if (/\.(pid|supervisor)$/.test(f)) {
@@ -163,6 +165,22 @@ describe('hallway run & co. (fake systemctl, real processes)', { skip: !linux &&
     assert.match(unit, /^Restart=always$/m);
     assert.match(unit, /^WantedBy=default.target$/m);
     assert.match(yaml('kept'), /^expected: running$/m);
+  });
+
+  // D68: Vite 8 on a Mac logs "Local: http://localhost:5100/" and listens on [::1] only; run used to wait out its 30 s
+  // on 127.0.0.1 and say nothing was listening
+  test('a server that listens on [::1] only comes up, and run says where; status finds it healthy there', { skip: !v6 && 'no IPv6 loopback' }, async () => {
+    const t0 = Date.now();
+    const r = await hallway(['run', 'hmr', '--cwd', PROJ, '--', 'node', '-e', "require('http').createServer((q, s) => s.end('v6')).listen(Number(process.env.PORT), '::1')"]);
+    assert.equal(r.code, 0, r.stderr);
+    assert.ok(Date.now() - t0 < 20_000, 'no 30 s wait');
+    const m = /hmr is up: http:\/\/localhost:(\d+) \(listening on \[::1\]:(\d+)\)/.exec(r.stdout);
+    assert.ok(m && m[1] === m[2], r.stdout);
+    const v = JSON.parse((await hallway(['status', 'hmr', '--json'])).stdout);
+    assert.equal(v.health.state, 'healthy');
+    assert.equal(v.health.address, '::1');
+    assert.equal(await (await fetch(`http://[::1]:${m![1]}/`)).text(), 'v6');
+    assert.equal((await hallway(['service', 'rm', 'hmr'])).code, 0);
   });
 
   test('usage errors exit 2', async () => {

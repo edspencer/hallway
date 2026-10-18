@@ -60,7 +60,7 @@
                   "handler": "reverse_proxy",
                   "upstreams": [
                     {
-                      "dial": "127.0.0.1:8000"
+                      "dial": "localhost:8000"
                     }
                   ]
                 }
@@ -81,7 +81,7 @@
                   "handler": "reverse_proxy",
                   "upstreams": [
                     {
-                      "dial": "127.0.0.1:5622"
+                      "dial": "localhost:5622"
                     }
                   ],
                   "headers": {
@@ -111,7 +111,7 @@
                   "handler": "reverse_proxy",
                   "upstreams": [
                     {
-                      "dial": "127.0.0.1:5622"
+                      "dial": "localhost:5622"
                     }
                   ],
                   "headers": {
@@ -141,7 +141,7 @@
                   "handler": "reverse_proxy",
                   "upstreams": [
                     {
-                      "dial": "[::1]:4321"
+                      "dial": "localhost:4321"
                     }
                   ],
                   "headers": {

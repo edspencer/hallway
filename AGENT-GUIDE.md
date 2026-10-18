@@ -223,7 +223,7 @@ One app per file: `apps/<slug>.yaml`. The slug is the file name. The slug: lower
 | `name` | text | the slug | Display name. |
 | `description` | text | `null` | One line about it. |
 | `port` | number 1–65535 | **required** | The port the app actually listens on. Never changed by Hallway. |
-| `host` | text | `127.0.0.1` | Where the app listens (the probe and proxy target). |
+| `host` | text | `127.0.0.1` | Where the app listens (the probe and proxy target). A loopback or wildcard address (`127.0.0.1`, `::1`, `localhost`, `0.0.0.0`) means this machine in either family: Hallway finds the app on 127.0.0.1 or ::1, whichever answers. |
 | `expected` | `running` \| `stopped` \| `adhoc` | `running` | `running`: should always be up (not responding is `down`). `stopped`: off on purpose. `adhoc`: up sometimes (not responding is `stopped`, not `down`). |
 | `health` | mapping | absent | How to check it. Leave out to probe `GET /` (any status below 500 is healthy). |
 | `health.path` | text | **required** | The path to `GET`, e.g. `/api/health`. |

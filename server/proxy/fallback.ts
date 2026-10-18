@@ -9,7 +9,8 @@ import path from 'node:path';
 import type { HallwayConfig } from '../../shared/api.js';
 import { ROOT, WEB_DIST } from '../config.js';
 import type { ProxyAppInput } from './caddy.js';
-import { appHosts, dialAddress, publicUrl } from './names.js';
+import { lookedAt } from '../loopback.js';
+import { appHosts, publicUrl } from './names.js';
 
 /** The design tokens: the copy Vite puts in the built dashboard (the npm package), else the source (a checkout). */
 export const TOKENS_CSS = [path.join(WEB_DIST, 'tokens.css'), path.join(ROOT, 'src', 'theme', 'tokens.css')];
@@ -34,7 +35,7 @@ export function fallbackHtml({ config, apps, restart, directUrl, now = new Date(
   const data = {
     dashboard: config.domain.dashboard.toLowerCase(),
     apps: Object.fromEntries(
-      sorted.flatMap(({ slug, config: a }) => appHosts(slug, a.proxy.aliases, config.domain.base).map((h) => [h, { slug, name: a.name, dial: dialAddress(a.host, a.port), expected: a.expected, managed: !!a.service }])),
+      sorted.flatMap(({ slug, config: a }) => appHosts(slug, a.proxy.aliases, config.domain.base).map((h) => [h, { slug, name: a.name, where: lookedAt(a.host, a.port), expected: a.expected, managed: !!a.service }])),
     ),
   };
   const rows = sorted
@@ -101,7 +102,7 @@ footer { margin-top: 2rem; font-size: .85rem; }
   } else if (d.apps[h]) {
     var a = d.apps[h];
     t.textContent = a.name + " isn't answering";
-    w.textContent = 'Nothing answered at ' + a.dial + (a.expected === 'running' ? ', and it should be running.' : '.');
+    w.textContent = 'Nothing answered on ' + a.where + (a.expected === 'running' ? ', and it should be running.' : '.');
     f.textContent = '';
     var p = document.createElement('p');
     if (a.managed) { p.append('Hallway manages it; start it with '); p.append(code('hallway start ' + a.slug)); p.append(', and see why it stopped with '); p.append(code('hallway logs ' + a.slug)); p.append('.'); }

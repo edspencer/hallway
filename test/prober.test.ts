@@ -8,6 +8,9 @@ import net from 'node:net';
 import { type ProbeResult, type ProbeTarget, probe, statusIsHealthy } from '../server/prober/probe.ts';
 import { classify, initialHealth, step } from '../server/prober/state.ts';
 import { DEFAULT_PROBE, createProber } from '../server/prober/index.ts';
+import { ipv6Loopback } from '../server/proxy/index.ts';
+import { answeringAt, waitForPort } from '../server/services/ports.ts';
+import { loopbackCandidates, lookedAt } from '../server/loopback.ts';
 import { exitWatchdog } from './fixture.ts';
 
 await exitWatchdog();
@@ -85,6 +88,95 @@ describe('the probe ladder', () => {
       assert.match(r.error!, /no response in 200 ms/);
     } finally {
       await hang.close();
+    }
+  });
+});
+
+// D68 (Q-IPV6): on a Mac, a server that binds `localhost` is often on [::1] only. Real listeners in each family.
+const v6 = await ipv6Loopback();
+const NO_V6 = v6 ? false : 'no IPv6 loopback on this machine';
+
+/** One HTTP server per address, all on the same port (the first picks it). */
+async function onAddresses(addresses: string[]) {
+  const servers: http.Server[] = [];
+  const seen: { address: string; host?: string }[] = [];
+  let port = 0;
+  for (const address of addresses) {
+    const s = http.createServer((req, res) => {
+      seen.push({ address, host: req.headers.host });
+      res.end(address);
+    });
+    await new Promise<void>((r, j) => s.once('error', j).listen(port, address, () => r()));
+    port = (s.address() as net.AddressInfo).port;
+    servers.push(s);
+  }
+  return { port, seen, close: () => Promise.all(servers.map((s) => new Promise<void>((r) => (s.close(() => r()), s.closeAllConnections())))) };
+}
+
+describe('IPv4 and IPv6 loopback (D68)', () => {
+  test('which addresses a host means', () => {
+    for (const h of ['127.0.0.1', 'localhost', '0.0.0.0', '*', '', undefined]) assert.deepEqual(loopbackCandidates(h), ['127.0.0.1', '::1'], String(h));
+    for (const h of ['::1', '[::1]', '::']) assert.deepEqual(loopbackCandidates(h), ['::1', '127.0.0.1'], h);
+    assert.equal(loopbackCandidates('192.168.1.20'), null);
+    assert.equal(loopbackCandidates('127.0.0.2'), null, 'another loopback address is taken as given');
+    assert.equal(lookedAt('127.0.0.1', 5100), 'port 5100 (127.0.0.1 or ::1)');
+    assert.equal(lookedAt('fd00::5', 5100), '[fd00::5]:5100');
+  });
+
+  test('a server on [::1] only (Vite on a Mac): healthy at the default host, on ::1, with its own Host', { skip: NO_V6, timeout: 10_000 }, async () => {
+    const s = await onAddresses(['::1']);
+    try {
+      const r = await probe({ slug: 'hmr', port: s.port, expected: 'running' });
+      assert.deepEqual([r.outcome, r.httpStatus, r.address], ['healthy', 200, '::1']);
+      assert.deepEqual(s.seen, [{ address: '::1', host: `[::1]:${s.port}` }]);
+      assert.equal(await answeringAt(s.port), '::1');
+      assert.equal(await answeringAt(s.port, '0.0.0.0'), '::1');
+      assert.deepEqual(await waitForPort(s.port, '127.0.0.1', { timeoutMs: 1000 }), { ok: true, address: '::1' });
+    } finally {
+      await s.close();
+    }
+  });
+
+  test('a server on 127.0.0.1 only, with `host: ::1` in its file: found on 127.0.0.1', { timeout: 10_000 }, async () => {
+    const s = await onAddresses(['127.0.0.1']);
+    try {
+      const r = await probe({ slug: 'a', port: s.port, host: '::1', expected: 'running' });
+      assert.deepEqual([r.outcome, r.address], ['healthy', '127.0.0.1']);
+      assert.equal(await answeringAt(s.port, '::1'), '127.0.0.1');
+    } finally {
+      await s.close();
+    }
+  });
+
+  test('a server on both: the configured family is tried first', { skip: NO_V6, timeout: 10_000 }, async () => {
+    const s = await onAddresses(['127.0.0.1', '::1']);
+    try {
+      assert.equal((await probe({ slug: 'a', port: s.port, expected: 'running' })).address, '127.0.0.1');
+      assert.equal((await probe({ slug: 'a', port: s.port, host: '::1', expected: 'running' })).address, '::1');
+      assert.deepEqual(s.seen.map((x) => x.address), ['127.0.0.1', '::1']);
+    } finally {
+      await s.close();
+    }
+  });
+
+  test("nothing in either family: not listening, and the message doesn't name only one", { timeout: 10_000 }, async () => {
+    const port = await freePort();
+    const r = await probe({ slug: 'a', port, expected: 'running' });
+    assert.deepEqual([r.outcome, r.address, r.error], ['not-listening', undefined, 'ECONNREFUSED']);
+    assert.equal(await answeringAt(port), null);
+    const w = await waitForPort(port, '127.0.0.1', { timeoutMs: 300, intervalMs: 50 });
+    assert.equal(w.ok, false);
+    assert.match((w as { reason: string }).reason, new RegExp(`^nothing was listening on port ${port} \\(127\\.0\\.0\\.1 or ::1\\) after 0 s$`));
+  });
+
+  test('a host that is not loopback is only ever tried as given', { timeout: 10_000 }, async () => {
+    const s = await onAddresses(['127.0.0.1']);
+    try {
+      // 127.0.0.2 is loopback on Linux but nothing listens there; it must not fall back to 127.0.0.1
+      const r = await probe({ slug: 'a', port: s.port, host: '127.0.0.2', expected: 'running' }, { connectTimeoutMs: 300 });
+      assert.equal(r.outcome, 'not-listening');
+    } finally {
+      await s.close();
     }
   });
 });

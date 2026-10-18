@@ -128,7 +128,7 @@ const appLink = z.object({ label: z.string(), path: z.string().optional(), url: 
 const appFields = {
   name: z.string().optional(),
   description: z.string().nullable().optional(),
-  host: z.string().optional().describe('Where it listens (default 127.0.0.1).'),
+  host: z.string().optional().describe('Where it listens (default 127.0.0.1; any loopback address means 127.0.0.1 or ::1, whichever answers).'),
   expected: expected.optional().describe('running: should always be up. stopped: off on purpose. adhoc: up sometimes (default running).'),
   health: healthCheck.nullable().optional().describe('How to check it; leave out to probe GET / (any status below 500 is healthy).'),
   tags: z.array(z.string()).optional(),

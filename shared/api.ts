@@ -174,6 +174,8 @@ export interface AppHealth {
   latencyMs: number | null;
   /** A short explanation for people: "connection refused", "HTTP 502", "timed out after 5000 ms". */
   detail: string | null;
+  /** The address the last probe connected to: `127.0.0.1` or `::1` for an app on loopback (D68); null if nothing answered. */
+  address?: string | null;
   /** Uptime over the last 24 h, 0–1, excluding stopped time; null with no data. */
   uptime24h: number | null;
   /** Median latency over the last 24 h. */

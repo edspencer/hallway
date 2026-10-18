@@ -1,6 +1,7 @@
 // Fronted mode's names (docs/03-networking.md, "Hostname scheme"): an app is `<slug>.<base>` plus `<alias>.<base>` for
 // each of its `proxy.aliases`; the dashboard is `domain.dashboard`. Pure functions, shared by the Caddy config, the
 // fallback page, the links the API returns and `hallway setup`.
+import { isLoopbackHost } from '../loopback.js';
 
 /** `https://review.localhost`, or `https://review.localhost:4443` when links carry a port (`proxy.publicPort`). */
 export function httpsUrl(host: string, publicPort = 443): string {
@@ -24,11 +25,14 @@ export function appHosts(slug: string, aliases: readonly string[], base: string)
   return [...new Set([slug, ...aliases].map((l) => `${l}.${base}`.toLowerCase()))];
 }
 
-/** Where Caddy dials an app: `host:port`, with an IPv6 address in brackets and a wildcard bind reached on loopback. */
+/**
+ * Where Caddy dials an app: `localhost:<port>` for a loopback or wildcard host, so Caddy's resolver tries ::1 and
+ * 127.0.0.1 on every connection and reaches the server in whichever family it bound (D68); otherwise `host:port`, with
+ * an IPv6 address in brackets.
+ */
 export function dialAddress(host: string, port: number): string {
+  if (isLoopbackHost(host)) return `localhost:${port}`;
   const h = host.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === '0.0.0.0' || h === '*' || h === '' || h === 'localhost') return `127.0.0.1:${port}`;
-  if (h === '::') return `[::1]:${port}`;
   return h.includes(':') ? `[${h}]:${port}` : `${h}:${port}`;
 }
 

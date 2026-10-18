@@ -2,6 +2,7 @@
 // it, always. One that doesn't gets the first port in `ports.assignRange` that no app declares, nothing is listening
 // on, and isn't a well-known port, and keeps that one from then on: it's stored in the YAML.
 import net from 'node:net';
+import { candidates, lookedAt } from '../loopback.js';
 import type { Store } from '../store/index.js';
 
 /** Ports in or near the default range (5100–5999) that well-known software uses: never handed out. */
@@ -33,6 +34,15 @@ export function isListening(port: number, host = '127.0.0.1', timeoutMs = 300): 
   });
 }
 
+/**
+ * The address something answers on for an app's `host:` and port, or null: for a loopback or wildcard host, 127.0.0.1
+ * and ::1, the configured family first (a server that binds `localhost` on a Mac is often on ::1 only; D68).
+ */
+export async function answeringAt(port: number, host = '127.0.0.1', timeoutMs = 300): Promise<string | null> {
+  for (const a of candidates(host)) if (await isListening(port, a, timeoutMs)) return a;
+  return null;
+}
+
 /** Can we bind 127.0.0.1:port? (Catches a listener a connect missed, e.g. one that accepts nothing.) */
 function canBind(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -43,7 +53,7 @@ function canBind(port: number): Promise<boolean> {
 }
 
 export async function portFree(port: number): Promise<boolean> {
-  if ((await isListening(port, '127.0.0.1')) || (await isListening(port, '::1'))) return false;
+  if (await answeringAt(port)) return false;
   return canBind(port);
 }
 
@@ -61,18 +71,21 @@ export async function assignPort(store: Store, { isFree = portFree, extraTaken =
   throw new NoFreePortError(`no free port in ports.assignRange [${lo}, ${hi}]; widen it in config.yaml or pass --port`);
 }
 
-/** Wait until host:port accepts connections, or `timeoutMs` passes. `abort` is asked between tries. */
+/**
+ * Wait until the app's host:port accepts connections (for a loopback host, on 127.0.0.1 or ::1: `address` says which),
+ * or `timeoutMs` passes. `abort` is asked between tries.
+ */
 export async function waitForPort(
   port: number,
   host: string,
   { timeoutMs = 30_000, intervalMs = 250, abort }: { timeoutMs?: number; intervalMs?: number; abort?: () => Promise<string | null> } = {},
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; address: string } | { ok: false; reason: string }> {
   const deadline = Date.now() + timeoutMs;
-  const target = host === '0.0.0.0' || host === '*' ? '127.0.0.1' : host === '::' ? '::1' : host;
   let lastAbortCheck = 0;
   for (;;) {
-    if (await isListening(port, target)) return { ok: true };
-    if (Date.now() >= deadline) return { ok: false, reason: `nothing was listening on port ${port} after ${Math.round(timeoutMs / 1000)} s` };
+    const address = await answeringAt(port, host);
+    if (address) return { ok: true, address };
+    if (Date.now() >= deadline) return { ok: false, reason: `nothing was listening on ${lookedAt(host, port)} after ${Math.round(timeoutMs / 1000)} s` };
     if (abort && Date.now() - lastAbortCheck >= 1000) {
       lastAbortCheck = Date.now();
       const why = await abort();

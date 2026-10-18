@@ -10,6 +10,7 @@ import { SLUG } from '../store/schema.js';
 import { TIERS } from '../proxy/tiers.js';
 import type { Trust } from '../../shared/api.js';
 import type { Ctx } from './context.js';
+import { restartStaleDaemon } from './services.js';
 
 /** A host name: dot-separated DNS labels (the same rule config.yaml's domain.base has). */
 const HOSTNAME = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/;
@@ -56,7 +57,11 @@ export async function setup(ctx: Ctx, args: string[], flags: Record<string, stri
   if (domain !== undefined && !HOSTNAME.test(domain)) throw new UsageError(`--domain must be a host name such as myname.internal, not '${flags.domain}'`);
   if (domain && SLUG.test(domain) && domain !== 'localhost') throw new UsageError(`--domain needs at least two labels (e.g. ${domain}.internal), so that apps can live under it`);
   try {
-    return await runSetup(deps(ctx, flags), { domain, print: !!flags.print, trust: trust as Trust | undefined });
+    const code = await runSetup(deps(ctx, flags), { domain, print: !!flags.print, trust: trust as Trust | undefined });
+    // the daemon pushes Caddy's config from now on: one left running an older version after an upgrade would push that
+    // version's (D69). Only once setup has run: never before the plan was agreed to, or when it was refused (D67).
+    if (code === 0 && !flags.print) await restartStaleDaemon(ctx).catch((e) => ctx.err(`hallway: couldn't restart the daemon: ${(e as Error).message}\n`));
+    return code;
   } catch (e) {
     if (e instanceof SetupError) {
       ctx.err(`hallway: ${e.message}\n`);

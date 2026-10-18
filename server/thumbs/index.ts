@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AppConfig, ThumbKind } from '../../shared/api.js';
 import { VERSION, expandHome } from '../config.js';
+import { isLoopbackHost } from '../loopback.js';
 import { appUrl } from '../views.js';
 import { loadPlaywright, type PlaywrightLike } from './browser.js';
 import { type CardModel, cardEtag, cardSvg, svgToPng } from './card.js';
@@ -154,11 +155,14 @@ export class IconCache {
   }
 }
 
-/** Where to reach an app from the daemon: its own host and port, with wildcard binds mapped to loopback. */
+/**
+ * Where to reach an app from the daemon: `localhost:<port>` for a loopback or wildcard host (fetch and the browser try
+ * ::1 and 127.0.0.1, so an app on either family is found, D68), else its own host and port.
+ */
 export function appPageUrl(c: Pick<AppConfig, 'host' | 'port'>): string {
-  const h = c.host.toLowerCase();
-  const host = ['0.0.0.0', '*', ''].includes(h) ? '127.0.0.1' : h === '::' ? '[::1]' : h.includes(':') ? `[${h.replace(/^\[|\]$/g, '')}]` : h;
-  return `http://${host}:${c.port}/`;
+  if (isLoopbackHost(c.host)) return `http://localhost:${c.port}/`;
+  const h = c.host.toLowerCase().replace(/^\[|\]$/g, '');
+  return `http://${h.includes(':') ? `[${h}]` : h}:${c.port}/`;
 }
 
 /** How an `icon:` value is looked up: a site, an image URL, a file in the data home, or not an image at all. */

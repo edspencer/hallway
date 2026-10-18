@@ -63,7 +63,7 @@ icon: auto                      # auto (favicon) | an emoji | a path to an image
 | `name` | | Display name. |
 | `description` | | One line, shown in the detail drawer. |
 | `port` | **Yes** | The port the app listens on. Hallway [never changes it](/guarantees/ports/). |
-| `host` | | The upstream host, default `127.0.0.1`. |
+| `host` | | The upstream host, default `127.0.0.1`. Any loopback or wildcard address (`127.0.0.1`, `::1`, `localhost`, `0.0.0.0`) means this machine in either family: Hallway probes and proxies to `127.0.0.1` or `::1`, whichever the app listens on. |
 | `expected` | | `running`, `stopped` or `adhoc`: decides whether "not listening" is `down` or `stopped`. See [Health states](/concepts/health/#stopped-on-purpose-is-not-down). |
 | `health.path` | | Probe this path instead of `/`. |
 | `health.expectStatus` | | The status that means healthy; default any 2xx. |

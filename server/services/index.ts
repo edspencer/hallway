@@ -168,16 +168,31 @@ export class Services {
 
   /**
    * Write the job's definition and make it run. A running job is restarted if its definition changed (or `restart`
-   * asks for it), so it runs what the file now says. Returns whether the definition changed.
+   * asks for it), so it runs what the file now says. Returns whether the definition changed, and whether a running
+   * job was restarted.
    */
-  async up(spec: ServiceSpec, { restart = false } = {}): Promise<{ changed: boolean; file: string }> {
+  async up(spec: ServiceSpec, { restart = false } = {}): Promise<{ changed: boolean; restarted: boolean; file: string }> {
     const changed = await this.write(spec);
     this.writeManifest(spec);
     const st = await this.manager.status(spec.label);
-    if (st.running && (changed || restart)) await this.manager.restart(spec, { reload: changed });
-    else if (st.loaded && changed) await this.manager.restart(spec, { reload: true });
+    let restarted = false;
+    if (st.running && (changed || restart)) {
+      await this.manager.restart(spec, { reload: changed });
+      restarted = true;
+    } else if (st.loaded && changed) await this.manager.restart(spec, { reload: true });
     else await this.manager.start(spec);
-    return { changed, file: this.manager.file(spec.label) };
+    return { changed, restarted, file: this.manager.file(spec.label) };
+  }
+
+  /**
+   * The Hallway version a job that runs Hallway's own CLI (the daemon, a forwarder) was last generated or started by,
+   * when that isn't this CLI's: after `npm i -g hallway@latest` the file on disk is new, but a process started before
+   * keeps running the old code until it's restarted (D69). Null when it's this version, or unknown.
+   */
+  staleVersion(label: string): string | null {
+    if (label !== DAEMON_LABEL && !isForwardLabel(label)) return null;
+    const v = this.readManifest(label)?.hallwayVersion;
+    return v && v !== VERSION ? v : null;
   }
 
   status(label: string): Promise<ServiceStatus> {
@@ -241,14 +256,17 @@ export class Services {
   /**
    * Rewrite job definitions from the YAML and the current Node and PATH (`service regenerate`), e.g. after a Node
    * upgrade removed the one a job was pointing at. Running jobs are restarted onto the new definition; stopped ones
-   * stay stopped.
+   * stay stopped. A running job of Hallway's own (the daemon, a forwarder) started by another version of Hallway is
+   * restarted even if its definition is unchanged (D69): `daemonVersion` is what the running daemon says it is, which
+   * beats its manifest; `upgraded` says from which version.
    */
-  async regenerate(slug?: string): Promise<{ label: string; changed: boolean; restarted: boolean; error?: string }[]> {
+  async regenerate(slug?: string, { daemonVersion }: { daemonVersion?: string | null } = {}): Promise<{ label: string; changed: boolean; restarted: boolean; upgraded?: string; error?: string }[]> {
     const labels = slug ? [appLabel(slug)] : [...new Set([...this.managedSlugs().map(appLabel), ...this.manager.list()])];
     if (slug) this.managed(slug);
-    const out: { label: string; changed: boolean; restarted: boolean; error?: string }[] = [];
+    const out: { label: string; changed: boolean; restarted: boolean; upgraded?: string; error?: string }[] = [];
     for (const label of labels) {
       const s = slugOfLabel(label);
+      const stale = label === DAEMON_LABEL && daemonVersion ? (daemonVersion !== VERSION ? daemonVersion : null) : this.staleVersion(label);
       try {
         let spec: ServiceSpec;
         if (label === DAEMON_LABEL) spec = this.daemonSpec();
@@ -264,16 +282,14 @@ export class Services {
         this.writeManifest(spec);
         const st = await this.manager.status(label);
         let restarted = false;
-        if (changed && st.loaded) {
-          if (st.running) {
-            await this.manager.restart(spec, { reload: true });
-            restarted = true;
-          } else if (this.manager.kind === 'launchd') {
-            // a loaded launchd job keeps its old definition until it's booted out; leave it unloaded and stopped
-            await this.manager.stop(label);
-          }
+        if (st.running && (changed || stale)) {
+          await this.manager.restart(spec, { reload: changed });
+          restarted = true;
+        } else if (changed && st.loaded && this.manager.kind === 'launchd') {
+          // a loaded launchd job keeps its old definition until it's booted out; leave it unloaded and stopped
+          await this.manager.stop(label);
         }
-        out.push({ label, changed, restarted });
+        out.push({ label, changed, restarted, ...(restarted && stale ? { upgraded: stale } : {}) });
       } catch (e) {
         out.push({ label, changed: false, restarted: false, error: (e as Error).message });
       }
@@ -325,11 +341,25 @@ export class Services {
     return forwards(cfg.proxy, cfg.proxy.scheme).find((f) => f.label === label) ?? null;
   }
 
-  /** Load exactly these forwarders: each one's job written and loaded, any other `hallway.forward.*` removed. */
+  /** Load exactly these forwarders: each one's job written and loaded, any other `hallway.forward.*` removed. One
+   *  still running another version's code is restarted (D69). */
   async forwardersUp(want: readonly Forward[]): Promise<void> {
     const specs = want.map((f) => this.forwardSpec(f));
     for (const label of this.forwardersInstalled()) if (!want.some((f) => f.label === label)) await this.removeLabel(label);
-    for (const spec of specs) await this.up(spec);
+    for (const spec of specs) await this.up(spec, { restart: !!this.staleVersion(spec.label) });
+  }
+
+  /** Restart the running forwarders that another version of Hallway started (D69); returns their labels. Ones that
+   *  aren't running (launchd starts them on the next connection, with the CLI now on disk) are left alone. */
+  async restartStaleForwarders(): Promise<string[]> {
+    const done: string[] = [];
+    for (const label of this.forwardersInstalled()) {
+      const f = this.wantedForward(label);
+      if (!f || !this.staleVersion(label)) continue;
+      const r = await this.up(this.forwardSpec(f), { restart: true });
+      if (r.restarted) done.push(label);
+    }
+    return done;
   }
 
   /** The forwarders' jobs that exist. */
@@ -345,9 +375,10 @@ export class Services {
   // The daemon
   // ---------------------------------------------------------------------------------------------------------------
 
-  async installDaemon() {
+  /** Write the daemon's job and run it; `restart` restarts a running one even if the job is unchanged (an upgrade). */
+  async installDaemon({ restart = false } = {}) {
     const spec = this.daemonSpec();
-    const r = await this.up(spec);
+    const r = await this.up(spec, { restart });
     return { ...r, spec };
   }
 

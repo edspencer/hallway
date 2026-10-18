@@ -86,7 +86,7 @@ export const APP_SCHEMA: Field = {
     name: str('Display name.', { defaultDoc: 'the slug' }),
     description: str('One line about it.', { nullable: true, default: null }),
     port: port('The port the app actually listens on. Never changed by Hallway.', { required: true }),
-    host: str('Where the app listens (the probe and proxy target).', { default: '127.0.0.1' }),
+    host: str('Where the app listens (the probe and proxy target). A loopback or wildcard address (`127.0.0.1`, `::1`, `localhost`, `0.0.0.0`) means this machine in either family: Hallway finds the app on 127.0.0.1 or ::1, whichever answers.', { default: '127.0.0.1' }),
     expected: {
       t: 'enum',
       values: ['running', 'stopped', 'adhoc'],

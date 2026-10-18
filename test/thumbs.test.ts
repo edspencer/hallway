@@ -149,10 +149,13 @@ describe('icon sources', () => {
   });
 
   test("an app's page: its own host and port, wildcard binds on loopback", () => {
-    assert.equal(appPageUrl({ host: '127.0.0.1', port: 5173 }), 'http://127.0.0.1:5173/');
-    assert.equal(appPageUrl({ host: '0.0.0.0', port: 1 }), 'http://127.0.0.1:1/');
-    assert.equal(appPageUrl({ host: '::', port: 2 }), 'http://[::1]:2/');
-    assert.equal(appPageUrl({ host: '::1', port: 3 }), 'http://[::1]:3/');
+    // D68: loopback in either family is reached as localhost (fetch and the browser try ::1 and 127.0.0.1)
+    assert.equal(appPageUrl({ host: '127.0.0.1', port: 5173 }), 'http://localhost:5173/');
+    assert.equal(appPageUrl({ host: '0.0.0.0', port: 1 }), 'http://localhost:1/');
+    assert.equal(appPageUrl({ host: '::', port: 2 }), 'http://localhost:2/');
+    assert.equal(appPageUrl({ host: '::1', port: 3 }), 'http://localhost:3/');
+    assert.equal(appPageUrl({ host: '192.168.1.20', port: 4 }), 'http://192.168.1.20:4/');
+    assert.equal(appPageUrl({ host: 'fd00::5', port: 5 }), 'http://[fd00::5]:5/');
   });
 });
 
@@ -209,8 +212,8 @@ describe('the thumbnailer and its routes', () => {
 
   test("an app's favicon: found, announced, served with an ETag as an inert image", async () => {
     const t = await setup({
-      'http://127.0.0.1:5173/': [200, 'text/html', '<link rel="icon" href="/i.svg">'],
-      'http://127.0.0.1:5173/i.svg': [200, 'image/svg+xml', SVG],
+      'http://localhost:5173/': [200, 'text/html', '<link rel="icon" href="/i.svg">'],
+      'http://localhost:5173/i.svg': [200, 'image/svg+xml', SVG],
     });
     await t.store.putApp('demo', { name: 'Demo', port: 5173 });
     assert.equal((await t.req('/api/apps/demo/thumb')).status, 404, 'not found yet');
