@@ -16,6 +16,7 @@ export async function probeOnce(slug: string, app: AppConfig, timeoutMs = 3000):
     checkedAt: new Date().toISOString(),
     httpStatus: r.httpStatus,
     latencyMs: r.latencyMs,
+    address: r.address ?? null,
     detail: r.outcome === 'healthy' ? null : r.outcome === 'not-listening' ? `not listening${r.error ? ` (${r.error})` : ''}` : (r.error ?? (r.httpStatus !== null ? `HTTP ${r.httpStatus}` : null)),
   };
 }

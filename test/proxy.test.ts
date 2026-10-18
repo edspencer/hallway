@@ -3,16 +3,17 @@
 // is also checked by `caddy validate`.
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import type { AppConfig } from '../shared/api.ts';
 import { sameConfig } from '../server/proxy/admin.ts';
 import { caddyConfig, caddyPaths, caddyText, routeTable } from '../server/proxy/caddy.ts';
 import { fallbackHtml } from '../server/proxy/fallback.ts';
 import { networkChecks } from '../server/proxy/doctor.ts';
-import { restartCommands, startProxy } from '../server/proxy/index.ts';
+import { ipv6Loopback, restartCommands, startProxy } from '../server/proxy/index.ts';
 import { darwin } from '../server/platform/darwin.ts';
 import { linux } from '../server/platform/linux.ts';
 import { win32 } from '../server/platform/win32.ts';
@@ -21,6 +22,7 @@ import { defaultConfig, validateApp } from '../server/store/schema.ts';
 import { exitWatchdog, onWindows, ROOT, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
 await exitWatchdog();
+const v6 = await ipv6Loopback();
 
 const GOLDEN = path.join(ROOT, 'test', 'fixtures', 'proxy');
 // the goldens and the admin socket hold POSIX paths: fronted mode is unsupported on Windows (D58)
@@ -45,12 +47,12 @@ function golden(name: string, text: string) {
 describe('names', () => {
   test('hosts, dial addresses, links', () => {
     assert.deepEqual(appHosts('review', ['lr', 'review'], 'localhost'), ['review.localhost', 'lr.localhost']);
-    assert.equal(dialAddress('127.0.0.1', 1), '127.0.0.1:1');
-    assert.equal(dialAddress('0.0.0.0', 1), '127.0.0.1:1');
-    assert.equal(dialAddress('::', 1), '[::1]:1');
-    assert.equal(dialAddress('::1', 1), '[::1]:1');
-    assert.equal(dialAddress('[::1]', 1), '[::1]:1');
-    assert.equal(dialAddress('localhost', 1), '127.0.0.1:1');
+    // D68: any loopback or wildcard host is dialled as localhost, which Caddy tries on ::1 and 127.0.0.1 per connection
+    for (const h of ['127.0.0.1', '0.0.0.0', '*', '::', '::1', '[::1]', 'localhost', 'LOCALHOST', ''])
+      assert.equal(dialAddress(h, 1), 'localhost:1', h);
+    assert.equal(dialAddress('192.168.1.20', 1), '192.168.1.20:1');
+    assert.equal(dialAddress('fd00::5', 1), '[fd00::5]:1');
+    assert.equal(dialAddress('db.internal', 1), 'db.internal:1');
     assert.equal(httpsUrl('a.localhost'), 'https://a.localhost');
     assert.equal(httpsUrl('a.localhost', 4443), 'https://a.localhost:4443');
     assert.equal(tldOf('myname.internal'), 'internal');
@@ -103,10 +105,10 @@ describe('the Caddy config', () => {
     const routes = (json as any).apps.http.servers.hallway.routes as any[];
     const byHost = new Map(routes.map((r) => [r.match[0].host[0], r.handle[0]]));
     assert.deepEqual(byHost.get('review.localhost').headers.request.set.Host, ['{http.reverse_proxy.upstream.hostport}']);
-    assert.deepEqual(byHost.get('lr.localhost').upstreams, [{ dial: '127.0.0.1:5622' }]);
+    assert.deepEqual(byHost.get('lr.localhost').upstreams, [{ dial: 'localhost:5622' }]);
     assert.equal(byHost.get('legacy.localhost').headers, undefined);
-    assert.deepEqual(byHost.get('legacy.localhost').upstreams, [{ dial: '127.0.0.1:8000' }]);
-    assert.deepEqual(byHost.get('slides.localhost').upstreams, [{ dial: '[::1]:4321' }]);
+    assert.deepEqual(byHost.get('legacy.localhost').upstreams, [{ dial: 'localhost:8000' }]);
+    assert.deepEqual(byHost.get('slides.localhost').upstreams, [{ dial: 'localhost:4321' }]);
     assert.equal(byHost.get('hallway.localhost').headers, undefined);
     assert.deepEqual(byHost.get('hallway.localhost').upstreams, [{ dial: '127.0.0.1:4255' }]);
     assert.equal(routes[0].match[0].host[0], 'hallway.localhost', 'the dashboard comes first');
@@ -181,6 +183,69 @@ describe('the Caddy config', () => {
       rmTmp(dir);
     }
   });
+
+  // D68 (Q-IPV6): Caddy dials `localhost:<port>` and its resolver tries ::1 and 127.0.0.1 per connection, so an app is
+  // reached in whichever family it bound, with no config change when that changes (Vite on a Mac: [::1] only)
+  test(
+    'the real Caddy reaches an app on [::1] only, on 127.0.0.1 only, and on both; Host is localhost:<port>',
+    { skip: !caddy ? 'no caddy on PATH' : !v6 ? 'no IPv6 loopback' : process.platform === 'win32' ? 'fronted mode is unsupported on Windows' : false, timeout: 30_000 },
+    async () => {
+      const dir = tmpDir('hw-test-caddy6-');
+      const servers: http.Server[] = [];
+      let child: ReturnType<typeof spawn> | null = null;
+      const free = () => new Promise<number>((r) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => r(p)); }); });
+      const serve = async (name: string, addresses: string[]) => {
+        let port = 0;
+        for (const a of addresses) {
+          const s = http.createServer((req, res) => res.end(`${name} via ${a}, Host ${req.headers.host}`));
+          await new Promise<void>((r) => s.listen(port, a, () => r()));
+          port = (s.address() as net.AddressInfo).port;
+          servers.push(s);
+        }
+        return port;
+      };
+      try {
+        const [six, four, both] = [await serve('six', ['::1']), await serve('four', ['127.0.0.1']), await serve('both', ['::1', '127.0.0.1'])];
+        const [httpPort, httpsPort] = [await free(), await free()];
+        const apps = [app('six', { port: six }), app('four', { port: four }), app('both', { port: both }), app('gone', { port: await free() })];
+        const { json } = caddyConfig({ home: dir, config: fronted({ proxy: { scheme: 'http', httpPort, httpsPort } }), apps, daemonPort: 4255 });
+        fs.mkdirSync(path.join(dir, 'state', 'caddy'), { recursive: true });
+        fs.mkdirSync(path.join(dir, 'generated'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'generated', 'fallback.html'), 'fallback');
+        const file = path.join(dir, 'caddy.json');
+        fs.writeFileSync(file, caddyText(json));
+        const env = { PATH: process.env.PATH ?? '', HOME: dir, XDG_CONFIG_HOME: path.join(dir, 'c'), XDG_DATA_HOME: path.join(dir, 'd') };
+        child = spawn(caddy!, ['run', '--config', file], { env, stdio: 'ignore' });
+        const get = (host: string) =>
+          new Promise<{ status: number; body: string }>((resolve, reject) => {
+            const req = http.get({ host: '127.0.0.1', port: httpPort, path: '/', headers: { host }, agent: false }, (res) => {
+              let body = '';
+              res.on('data', (c) => (body += c));
+              res.on('end', () => resolve({ status: res.statusCode!, body }));
+            });
+            req.on('error', reject);
+          });
+        const end = Date.now() + 15_000;
+        for (;;) {
+          try {
+            await get('six.localhost');
+            break;
+          } catch (e) {
+            if (Date.now() > end) throw e;
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+        assert.deepEqual(await get('six.localhost'), { status: 200, body: `six via ::1, Host localhost:${six}` });
+        assert.deepEqual(await get('four.localhost'), { status: 200, body: `four via 127.0.0.1, Host localhost:${four}` });
+        assert.match((await get('both.localhost')).body, new RegExp(`^both via (::1|127\\.0\\.0\\.1), Host localhost:${both}$`));
+        assert.deepEqual(await get('gone.localhost'), { status: 502, body: 'fallback' }, 'nothing in either family: the fallback page');
+      } finally {
+        child?.kill();
+        await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
+        rmTmp(dir);
+      }
+    },
+  );
 });
 
 describe('the fallback page', () => {
@@ -202,6 +267,10 @@ describe('the fallback page', () => {
     assert.match(html, /hallway service restart/);
     assert.match(html, /"lr\.localhost":\{"slug":"review"/);
     assert.match(html, /"dashboard":"hallway\.localhost"/);
+    // D68: an app on loopback may be on either family; the page mustn't say only 127.0.0.1 was tried
+    assert.match(html, /"slides\.localhost":\{[^}]*"where":"port 4321 \(127\.0\.0\.1 or ::1\)"/);
+    assert.match(html, /'Nothing answered on ' \+ a\.where/);
+    assert.ok(!html.includes('"dial"'));
     assert.match(html, /--hw-bg: #000/, 'the tokens are inlined');
     assert.match(html, /2026-10-16T12:00:00Z/);
   });

@@ -65,6 +65,18 @@ hallway              # same as `hallway serve`; Ctrl-C to stop
 hallway open         # open the dashboard in your browser
 ```
 
+## Upgrading
+
+```sh
+npm i -g hallway@latest && hallway service install
+```
+
+`npm` replaces the files, but a daemon that's already running keeps the code it started with. `hallway service
+install` notices when the running daemon isn't the version of the CLI you just installed, restarts it onto the new
+one and says so (`Restarted the daemon: 0.5.2 → 0.7.0.`); it also restarts the forwarders `hallway setup` installed on
+macOS, if they're running. `hallway doctor` flags a daemon that's a different version from the CLI, and
+`hallway service restart` fixes it.
+
 ## Requirements
 
 | | |

@@ -1482,3 +1482,82 @@ and the second prompt (macOS's own dialog for the trust step) came as a surprise
   - default yes (`[Y/n]`): the point is that typing the command alone changes nothing;
   - treating no terminal as yes (as some installers do): a pipe or an agent's shell would then run sudo steps unasked;
   - `-y` as well: one spelling, and a short flag is easy to add later, hard to take back.
+
+### D68 — Loopback means both families: probe 127.0.0.1 and ::1, and Caddy dials `localhost` (2026-10-18; resolves Q-IPV6)
+
+Found on the author's real-Mac run of 0.7.0: `hallway run hmr -- npx vite --port '$PORT' --strictPort` waited 30 s and
+said "nothing was listening on port 5100", and `https://hmr.localhost` showed the fallback page ("Nothing answered at
+127.0.0.1:5100"). Vite was up, on `[::1]:5100` only: with modern Node on macOS, `localhost` resolves to ::1 first, and
+Vite, Astro, Next and most dev servers bind `localhost` by default. So this hits nearly every frontend user on a Mac.
+
+- **An app's `host:` that is loopback or a wildcard** (`127.0.0.1`, `::1`, `localhost`, `0.0.0.0`, `::`, `*`, or left
+  out) **means "this machine, either family"** (`server/loopback.ts`). Anything else (a LAN address, `127.0.0.2`, a
+  container's name) is used exactly as written.
+- **Whatever checks a port tries both**, the configured family first: the prober's TCP connect (then the HTTP request
+  goes to the address that accepted, with that address as `Host`), `hallway run`'s readiness wait and its "port already
+  in use" check, `start`/`restart`'s wait, `status` without a daemon. The address that answered is recorded:
+  `AppHealth.address` (`127.0.0.1` or `::1`) in the API, and `hallway run` prints it (`hmr is up: … (listening on
+  [::1]:5100)`).
+- **Caddy dials `localhost:<port>`** for such an app. Caddy's dialer (Go's) resolves `localhost` and, on a refused
+  connection, tries the next address at once, **per connection**: verified with Caddy 2.11.7 against servers on ::1
+  only, 127.0.0.1 only and both (`test/proxy.test.ts` runs the real Caddy where CI installs it; research notes,
+  2026-10-18). So the route follows the app when it moves between families (a Vite upgrade, a config change) with no
+  config push, and there's no window where Caddy holds a stale address. It also matches the app's own choice: a dev
+  server that binds `localhost` binds what the same resolver says `localhost` is.
+- **`Host` to the upstream** (D9) is now `localhost:<port>` rather than `127.0.0.1:<port>`. Every DNS-rebinding defence
+  we know of accepts `localhost` (Vite, Local Review, Django's and Rails' development defaults).
+- **Thumbnails** fetch the page at `http://localhost:<port>/` (Node's fetch tries both families; so does the screenshot
+  browser).
+- **Messages never name one family when both were tried**: run's timeout says "nothing was listening on port 5100
+  (127.0.0.1 or ::1)", and the fallback page "Nothing answered on port 5100 (127.0.0.1 or ::1)".
+- The core's claim still writes `host: ::1` for a listener on IPv6 loopback only (D38); harmless now (::1 is tried
+  first), and accurate.
+- **Rejected:**
+  - an explicit address from observation in Caddy's upstream, pushed again when the bound family changes: more moving
+    parts (the prober feeding the proxy, a push per change) for something Caddy's resolver already does per connection,
+    and a stale window after every change;
+  - two upstreams (`127.0.0.1` and `[::1]`) with `lb_try_duration` and passive health checks: a failed dial marks an
+    upstream down for a while, so a server that restarts on the other family is unreachable until then, and an app
+    that's down entirely waits out the try duration before the fallback page;
+  - asking users to pass `--host 127.0.0.1` to Vite (or Hallway rewriting the command to): every framework spells it
+    differently, and the hook (D51) already has enough to do;
+  - honouring an explicit `host: 127.0.0.1` as "IPv4 only": the default is indistinguishable from it in the parsed
+    config, and the case it would serve (a different server on each family, same port) is vanishingly rare.
+
+### D69 — An upgrade restarts what runs Hallway's own code: `service install`, `regenerate`, `setup`; doctor flags it (2026-10-18)
+
+Found on the author's real-Mac run: `npm i -g hallway@latest` (0.5.2 → 0.7.0), then `hallway service install` said
+"It's running", but doctor showed the daemon answering as 0.5.2, with the same pid. The job file was unchanged (the
+same global install path), so `up()` saw nothing to restart, and the process that had loaded 0.5.2's code kept serving
+the old dashboard and API while the new CLI drove setup.
+
+- **`hallway service install`** asks the running daemon its version (`/api/health`) and restarts it when that isn't the
+  CLI's, even with the job unchanged, then waits until the daemon **answers as the new version** (not merely until the
+  port answers: the old one may still be answering) and says "Restarted the daemon: 0.5.2 → 0.7.0." A daemon that
+  doesn't answer HTTP falls back to its manifest's `hallwayVersion`. If it still answers as the old version after 15 s,
+  install fails (exit 1) rather than say "It's running".
+- **`hallway service regenerate`** does the same for the daemon (its table says `restarted: 0.5.2 → 0.7.0`), and
+  **`service restart`** waits for the new version too and names both.
+- **Forwarders** (D65) run `hallway forward` until killed, so one started before an upgrade keeps the old code. Their
+  manifest's `hallwayVersion` is the version that last (re)started them; a running one whose manifest is another version
+  is restarted by `service install`, `regenerate` and setup's `forwardersUp`. One that isn't running is left alone:
+  launchd starts it on the next connection, from the CLI now on disk. Doctor warns about a running stale one
+  (`hallway service regenerate` restarts it). The forwarders are byte pipes, so a stale one still works; this keeps
+  them from drifting.
+- **`hallway setup`**, once its plan has run successfully (never before it's agreed to, or when refused, D67), restarts
+  a daemon that answers as another version: from then on the daemon pushes Caddy's config, and an old one would push
+  its version's. A daemon that isn't Hallway's service (a `hallway serve` in a terminal) gets a line saying to restart
+  it.
+- **doctor** fails `daemon-version` when the daemon answering isn't the CLI's version, with `hallway service restart`.
+- **App jobs are not restarted.** On macOS and Linux they don't run Hallway's code. On Windows each runs `hallway
+  supervise` (D60), but restarting them would restart the user's dev servers; the new supervisor arrives at their next
+  restart.
+- The upgrade instructions (README, the website's installation and quick start pages) say `npm i -g hallway@latest &&
+  hallway service install`, and that it restarts the daemon onto the new version.
+- **Rejected:**
+  - comparing the process's start time with `cli.js`'s mtime: needs `ps` parsing per platform, and the daemon can just
+    be asked;
+  - restarting the daemon on every `service install`: a needless dashboard blip (and SSE reconnects) when nothing
+    changed;
+  - an npm `postinstall` hook that restarts the daemon: install scripts don't run for everyone (`--ignore-scripts`,
+    pnpm's defaults), run as whoever ran npm, and would reach into the service manager from a package install.

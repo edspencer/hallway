@@ -59,7 +59,7 @@
                   "handler": "reverse_proxy",
                   "upstreams": [
                     {
-                      "dial": "127.0.0.1:5622"
+                      "dial": "localhost:5622"
                     }
                   ],
                   "headers": {
@@ -89,7 +89,7 @@
                   "handler": "reverse_proxy",
                   "upstreams": [
                     {
-                      "dial": "127.0.0.1:5622"
+                      "dial": "localhost:5622"
                     }
                   ],
                   "headers": {

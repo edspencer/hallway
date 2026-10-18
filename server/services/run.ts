@@ -3,7 +3,8 @@
 //   1. create or update apps/<slug>.yaml through the store: the command, its directory, a port (an existing app's
 //      is kept, D17; `--port` pins a new app's; otherwise one is assigned from ports.assignRange);
 //   2. generate the job and (re)start it, so the server belongs to launchd / systemd rather than the caller's session;
-//   3. wait for the port (30 s), then report the URL and the log files; or report why not, with the last log lines.
+//   3. wait for the port (30 s; on 127.0.0.1 or ::1, D68), then report the URL, the address it answered on and the log
+//      files; or report why not, with the last log lines.
 // Re-running with no command reuses the recorded one, and keeps the recorded --persist choice unless given again.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,7 +13,7 @@ import { SLUG } from '../store/index.js';
 import { appUrl } from '../views.js';
 import { DAEMON_SLUG_MESSAGE, RESERVED_SERVICE_SLUG, ServiceError, Services, appLabel, logFiles } from './index.js';
 import { appLogs, formatLogs } from './logs.js';
-import { assignPort, isListening, waitForPort } from './ports.js';
+import { answeringAt, assignPort, waitForPort } from './ports.js';
 
 export interface RunRequest {
   slug: string;
@@ -33,6 +34,8 @@ export interface RunOutcome {
   created: boolean;
   persist: boolean;
   logs: { out: string; err: string };
+  /** Where it answered (`127.0.0.1`, `::1`), when it came up. */
+  address?: string;
   /** Why it failed. */
   reason?: string;
   /** The last log lines, when it failed. */
@@ -88,7 +91,7 @@ export async function runApp(services: Services, req: RunRequest, opts: RunOptio
   const label = appLabel(slug);
   const host = existing?.host ?? '127.0.0.1';
   const before = await services.status(label);
-  if (!before.running && (await isListening(port, host === '0.0.0.0' ? '127.0.0.1' : host)))
+  if (!before.running && (await answeringAt(port, host)))
     throw new ServiceError(`port ${port} is already in use by something Hallway didn't start. Stop that first (\`hallway status\` may say what it is).`);
 
   if (existing) await store.patchApp(slug, { ...(req.name ? { name: req.name } : {}), expected, service });
@@ -120,7 +123,7 @@ export async function runApp(services: Services, req: RunRequest, opts: RunOptio
       return `it exited${st.lastExitCode !== null ? ` with status ${st.lastExitCode}` : ''} before listening on port ${port}`;
     },
   });
-  if (waited.ok) return { ok: true, ...base };
+  if (waited.ok) return { ok: true, ...base, address: waited.address };
   const st = await services.status(label);
   return { ok: false, ...base, reason: waited.reason, tail: formatLogs(appLogs(store.home, slug, opts.tailLines ?? 30)), stillRunning: st.running };
 }

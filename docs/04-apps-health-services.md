@@ -176,8 +176,9 @@ only on transitions.
 Probe ladder for each declared/discovered app, every `probe.intervalSeconds` (default 60 s, ±10 % jitter, at most
 `probe.concurrency` in flight):
 
-1. **TCP connect** to `host:port` (1 s timeout). Refused/timeout → *not listening* → `down`, `stopped` or `starting`
-   per the table above.
+1. **TCP connect** to `host:port` (1 s timeout). For a loopback or wildcard `host:` that's 127.0.0.1 and ::1, the
+   configured family first, and the rest of the ladder uses whichever accepted (recorded as `AppHealth.address`; D68).
+   Refused/timeout on every address → *not listening* → `down`, `stopped` or `starting` per the table above.
 2. If `health.path` is set: `GET <path>`. Status matches `expectStatus` (default: any 2xx) → `healthy`; otherwise
    `unhealthy`.
 3. Otherwise `GET /`: status < 500 → `healthy`. **3xx, 401 and 403 count as healthy** (an app behind a login
@@ -185,7 +186,7 @@ Probe ladder for each declared/discovered app, every `probe.intervalSeconds` (de
 
 Details:
 - Do not follow redirects. Abort the body once headers arrive; latency = time to response headers.
-- Send `Host: <host>:<port>` (the upstream, so apps with Host checks answer normally) and
+- Send `Host: <address>:<port>` (the address that accepted, so apps with Host checks answer normally) and
   `User-Agent: hallway/<version>`.
 - Use `GET`, not `HEAD` (some dev servers mishandle `HEAD`).
 - While at least one dashboard is connected over SSE, probe faster (default every 15 s) so the page feels live.

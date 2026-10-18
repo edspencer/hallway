@@ -119,7 +119,7 @@ For each app the daemon emits one route. It sends Caddy JSON; in Caddyfile notat
 }
 
 slides.localhost {
-    reverse_proxy 127.0.0.1:4321 {
+    reverse_proxy localhost:4321 {             # 127.0.0.1 or ::1, whichever answers
         header_up Host {upstream_hostport}     # rewrite Host by default
     }
 }
@@ -128,6 +128,10 @@ hallway.localhost {
     reverse_proxy 127.0.0.1:4255               # the dashboard keeps its Host
 }
 ```
+
+An app on loopback is dialled as `localhost:<port>`, so Caddy tries `::1` and `127.0.0.1` on every connection and
+reaches it in whichever one it listens on. That matters on a Mac, where Vite, Astro, Next and most dev servers listen
+on `[::1]` only by default (`localhost` resolves to `::1` first there).
 
 HTTP on port 80 is redirected to HTTPS by Hallway's own route, which knows the public port. In the No prompts tier
 the routes themselves are plain HTTP and nothing is redirected. HTTP/3 is off.
@@ -139,7 +143,7 @@ against DNS rebinding by **rejecting any `Host` that isn't localhost**: Local Re
 Vite has `server.allowedHosts`, and other dev servers have similar checks. Fronting them unmodified would break them
 on day one.
 
-So Hallway **rewrites `Host` to the upstream by default**: the app sees `127.0.0.1:4321`, exactly as if you had
+So Hallway **rewrites `Host` to the upstream by default**: the app sees `localhost:4321`, exactly as if you had
 visited it directly. Caddy still adds `X-Forwarded-Host`, `X-Forwarded-Proto` and `X-Forwarded-For`, so an app that
 needs its public name can read it.
 

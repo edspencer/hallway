@@ -2,13 +2,14 @@
 // (docs/07-cli.md, "Services and ad-hoc runs" and "Daemon"; the lifecycle is server/services/).
 import path from 'node:path';
 import { UsageError, check, need } from '../args.js';
-import { parsePort } from '../config.js';
+import { VERSION, parsePort } from '../config.js';
+import { hostPort } from '../loopback.js';
 import { DAEMON_LABEL, appLabel, logFiles } from '../services/index.js';
 import { appLogs, followFiles, formatLogs } from '../services/logs.js';
 import { isListening, waitForPort } from '../services/ports.js';
 import { runApp } from '../services/run.js';
 import { appUrl } from '../views.js';
-import { type Ctx, json, show, table } from './context.js';
+import { type Ctx, json, locateDaemon, show, table } from './context.js';
 
 const portFlag = (v: string | undefined) => {
   if (v === undefined) return undefined;
@@ -43,7 +44,7 @@ export async function run(ctx: Ctx, pos: string[], flags: Record<string, string>
   if (o.ok) {
     ctx.out(
       [
-        `${o.slug} is up: ${o.url}`,
+        `${o.slug} is up: ${o.url}${o.address ? ` (listening on ${hostPort(o.address, o.port)})` : ''}`,
         `  ${logsLine(ctx, o.slug)}`,
         o.persist
           ? '  It runs as a service: it starts at login and is restarted if it exits. `hallway stop ' + o.slug + '` to stop it.'
@@ -123,6 +124,49 @@ export async function logs(ctx: Ctx, pos: string[], flags: Record<string, string
 // hallway service …
 // ---------------------------------------------------------------------------------------------------------------
 
+/**
+ * After the daemon's job was (re)started: wait until the daemon answers as this CLI's version. Just waiting for the
+ * port isn't enough, because a daemon being replaced may still be answering, as the old version (D69).
+ */
+export async function waitForDaemon(ctx: Ctx, port: number, timeoutMs = 15_000): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const deadline = Date.now() + timeoutMs;
+  let seen: string | null = null;
+  for (;;) {
+    const d = await locateDaemon(ctx.home, port);
+    if (d?.version === VERSION) return { ok: true };
+    seen = d?.version ?? seen;
+    if (Date.now() >= deadline)
+      return { ok: false, reason: d ? `it still answers as version ${d.version}, not ${VERSION}` : `nothing answered on port ${port} after ${Math.round(timeoutMs / 1000)} s${seen ? ` (version ${seen} did, earlier)` : ''}` };
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+
+/**
+ * When the daemon answering is another version than this CLI (an upgrade that didn't restart it, D69): restart it if
+ * it runs as Hallway's service and say so; otherwise say how. For commands that change what the daemon serves
+ * (`hallway setup`). Says nothing when the versions match or no daemon answers.
+ */
+export async function restartStaleDaemon(ctx: Ctx): Promise<void> {
+  const d = await ctx.daemon();
+  if (!d || d.version === VERSION) return;
+  const svc = ctx.services();
+  const st = await svc.status(DAEMON_LABEL).catch(() => null);
+  if (!st?.running) {
+    ctx.err(`hallway: the daemon answering on ${d.url} is version ${d.version}, but this CLI is ${VERSION}; restart it (it isn't Hallway's service: a \`hallway serve\` in a terminal?) so the dashboard is this version's.\n`);
+    return;
+  }
+  await svc.restartDaemon();
+  forwarded(ctx, await svc.restartStaleForwarders());
+  const w = await waitForDaemon(ctx, svc.store.currentConfig().port);
+  if (w.ok) ctx.out(`Restarted the daemon: ${d.version} → ${VERSION}.\n`);
+  else ctx.err(`hallway: restarted the daemon (it was ${d.version}), but ${w.reason}.\n`);
+}
+
+const forwarded = (ctx: Ctx, labels: string[]) => labels.length && ctx.out(forwardersLine(labels));
+
+/** The forwarders `service install` and `regenerate` restarted, for people. */
+const forwardersLine = (labels: string[]) => `Restarted ${labels.length === 1 ? 'the forwarder' : `${labels.length} forwarders`} it left running (${labels.join(', ')}), onto ${VERSION}.\n`;
+
 const SERVICE_USAGE = 'service needs one of: install, uninstall, status, restart, add <slug>, rm <slug>, regenerate [slug]';
 
 export async function service(ctx: Ctx, pos: string[], flags: Record<string, string>, rest: string[] | undefined): Promise<number> {
@@ -137,9 +181,16 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
       const before = await svc.status(DAEMON_LABEL);
       if (!before.running && (await isListening(port)))
         throw new Error(`port ${port} is already in use (is \`hallway serve\` running in a terminal?). Stop that first, or set another port: in config.yaml.`);
-      const r = await svc.installDaemon();
-      const w = await waitForPort(port, '127.0.0.1', { timeoutMs: 15_000 });
+      // after `npm i -g hallway@latest` the job file is usually unchanged (same path), so the daemon started by the old
+      // version would keep running its code: restart it when it isn't this version (D69). What it says beats its manifest.
+      const running = before.running ? await ctx.daemon() : null;
+      const from = running ? (running.version !== VERSION ? running.version : null) : before.running ? svc.staleVersion(DAEMON_LABEL) : null;
+      const r = await svc.installDaemon({ restart: !!from });
+      const forwarders = await svc.restartStaleForwarders();
+      const w = await waitForDaemon(ctx, port);
       ctx.out(`Installed Hallway's daemon as a ${svc.manager.noun}: ${show(r.file)}\n`);
+      if (r.restarted) ctx.out(from ? `Restarted the daemon: ${from} → ${VERSION}.\n` : 'Restarted the daemon onto its new definition.\n');
+      forwarded(ctx, forwarders);
       if (w.ok) ctx.out(`It's running: http://localhost:${port}\n`);
       else {
         ctx.err(`hallway: the daemon was started, but ${w.reason}.\n`);
@@ -182,14 +233,15 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
     case 'restart': {
       check('service restart', flags, [], args, 0, rest);
       const svc = services();
+      const was = await ctx.daemon();
       await svc.restartDaemon();
       const port = svc.store.currentConfig().port;
-      const w = await waitForPort(port, '127.0.0.1', { timeoutMs: 15_000 });
+      const w = await waitForDaemon(ctx, port);
       if (!w.ok) {
         ctx.err(`hallway: restarted the daemon, but ${w.reason}.\n`);
         return 1;
       }
-      ctx.out(`Restarted Hallway's daemon: http://localhost:${port}\n`);
+      ctx.out(`Restarted Hallway's daemon${was && was.version !== VERSION ? ` (${was.version} → ${VERSION})` : ''}: http://localhost:${port}\n`);
       return 0;
     }
     case 'add': {
@@ -216,11 +268,19 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
     }
     case 'regenerate': {
       check('service regenerate', flags, ['json'], args, 1, rest);
-      const r = await services().regenerate(args[0]);
+      const svc = services();
+      const daemon = args[0] ? null : await ctx.daemon();
+      const r = await svc.regenerate(args[0], { daemonVersion: daemon?.version ?? null });
+      const port = svc.store.currentConfig().port;
+      const daemonRestarted = r.some((x) => x.label === DAEMON_LABEL && x.restarted);
+      const w = daemonRestarted ? await waitForDaemon(ctx, port) : ({ ok: true } as const);
+      const result = (x: (typeof r)[number]) =>
+        x.error ? `error: ${x.error}` : x.upgraded ? `${x.changed ? 'rewritten, ' : ''}restarted: ${x.upgraded} → ${VERSION}` : x.changed ? (x.restarted ? 'rewritten, restarted' : 'rewritten') : 'unchanged';
       if (flags.json) ctx.out(json(r));
       else if (!r.length) ctx.out('No managed services to regenerate.\n');
-      else ctx.out(table(['JOB', 'RESULT'], r.map((x) => [x.label, x.error ? `error: ${x.error}` : x.changed ? (x.restarted ? 'rewritten, restarted' : 'rewritten') : 'unchanged'])));
-      return r.some((x) => x.error) ? 1 : 0;
+      else ctx.out(table(['JOB', 'RESULT'], r.map((x) => [x.label, result(x)])));
+      if (!w.ok) ctx.err(`hallway: restarted the daemon, but ${w.reason}.\n`);
+      return r.some((x) => x.error) || !w.ok ? 1 : 0;
     }
     default:
       throw new UsageError(sub ? `unknown service command '${sub}'; ${SERVICE_USAGE}` : SERVICE_USAGE);

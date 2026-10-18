@@ -623,6 +623,28 @@ through launchd → forwarder → Caddy; the forwarders after logout/login and a
 LaunchAgent) runs it; Docker Desktop or similar already on `127.0.0.1:443`; MDM blocking user LaunchAgents with
 `Sockets`, and the "Background Items Added" notification.
 
+### Loopback in both families (D68), Linux, 2026-10-18
+
+The author's real-Mac run of 0.7.0: Vite 8 started by `hallway run hmr -- npx vite --port '$PORT' --strictPort` logged
+`Local: http://localhost:5100/` and listened on `[::1]:5100` only (Node on macOS resolves `localhost` to ::1 first, and
+Vite binds what it resolves to). Hallway checked 127.0.0.1 only, everywhere. Experiments here (Node 22.23, Caddy
+2.11.7 release binary, `/etc/hosts` with `127.0.0.1 localhost` and `::1 localhost`):
+
+- **Caddy, upstream `localhost:<port>`**, a plain HTTP route per app, with servers on `::1` only, `127.0.0.1` only and
+  both: all three answered 200 through Caddy in ~4 ms (no Happy Eyeballs delay: a refused connection on loopback fails
+  at once, and Go's dialer moves straight to the next address); `{http.reverse_proxy.upstream.hostport}` is
+  `localhost:<port>`, so that's the `Host` the app sees; the dual-stack server was reached on `::1` (the resolver's
+  order); a port with nothing on it in either family gave 502, so the fallback page still shows. Changing the upstream
+  back to `127.0.0.1:<port>` makes the `::1`-only route 502: `test/proxy.test.ts` pins both ways with the real Caddy
+  where CI installs one (the Linux fronted-mode job).
+- **Node's `fetch('http://localhost:<port>/')`** reached a `::1`-only and a `127.0.0.1`-only server alike
+  (`autoSelectFamily`, on by default since Node 20, tries every resolved address); so thumbnails use `localhost`.
+- **`hallway run`** with a `::1`-only server (fake-systemctl, `test/cli-services.test.ts`) comes up at once and prints
+  `(listening on [::1]:<port>)`; `status --json` reports `health.address: "::1"`.
+- **Unverified on macOS:** Caddy's resolver on a Mac (release builds are CGO-free; Go on darwin resolves through the
+  system's libSystem calls). CI's macOS fronted-mode job now checks a `::1`-only app at `https://hmr.localhost`
+  (`scripts/fronted-real.mjs`), which covers it on a runner; a real Mac with Vite is still to do.
+
 ## Windows (D58), GitHub's hosted runners, 2026-10-16
 
 Everything here was seen on `windows-latest` (Windows Server 2025, an administrator account, no interactive desktop),

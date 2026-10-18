@@ -74,12 +74,14 @@ const STRICT_APP = `
 const http = require('node:http');
 const s = http.createServer((req, res) => {
   const host = req.headers.host ?? '';
-  if (!/^(localhost|127\\.0\\.0\\.1)(:\\d+)?$/.test(host)) return res.writeHead(403).end('forbidden host\\n');
-  res.end(JSON.stringify({ host, forwardedHost: req.headers['x-forwarded-host'] ?? null }));
+  if (!/^(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?$/.test(host)) return res.writeHead(403).end('forbidden host\\n');
+  res.end(JSON.stringify({ host, forwardedHost: req.headers['x-forwarded-host'] ?? null, family: req.socket.localFamily }));
 });
-s.listen(0, '127.0.0.1', () => console.log(s.address().port));`;
-function strictApp() {
-  const child = spawn(process.execPath, ['-e', STRICT_APP], { stdio: ['ignore', 'pipe', 'inherit'] });
+s.on('error', () => console.log(0)); // no IPv6 loopback on this runner: port 0, and the [::1] checks are skipped
+s.listen(0, process.argv[1], () => console.log(s.address().port));`;
+/** The strict app on one address: 127.0.0.1, or ::1 only (what Vite does on a Mac, where localhost is ::1 first; D68). */
+function strictApp(address = '127.0.0.1') {
+  const child = spawn(process.execPath, ['-e', STRICT_APP, address], { stdio: ['ignore', 'pipe', 'inherit'] });
   return new Promise((r) => child.stdout.once('data', (d) => r({ child, port: Number(String(d).trim()) })));
 }
 
@@ -117,6 +119,7 @@ async function check(name, fn) {
 
 const review = await strictApp();
 const other = await strictApp();
+const six = await strictApp('::1');
 try {
   step('before: nothing of ours is installed');
   assert.deepEqual(leftovers(), []);
@@ -219,12 +222,29 @@ try {
   await check('https://review.localhost reaches the strict app (no 403)', async () => {
     const r = curl('https://review.localhost/');
     assert.equal(status(r), 200, r.out);
-    assert.match(r.out, new RegExp(`"host":"127\\.0\\.0\\.1:${review.port}"`));
+    assert.match(r.out, new RegExp(`"host":"localhost:${review.port}"`));
     assert.match(r.out, /"forwardedHost":"review\.localhost"/);
   });
   must('app', 'add', 'other', '--port', String(other.port));
   await check('https://other.localhost, declared just now', async () => {
     await until('other.localhost', async () => status(curl('https://other.localhost/')) === 200, 10000);
+  });
+
+  step('D68: an app listening on [::1] only (Vite on a Mac) is reached, probed healthy, and its address recorded');
+  if (!six.port) console.log('  - skipped: no IPv6 loopback on this runner');
+  else must('app', 'add', 'hmr', '--port', String(six.port));
+  if (six.port) await check('https://hmr.localhost reaches the [::1]-only app', async () => {
+    await until('hmr.localhost', async () => status(curl('https://hmr.localhost/')) === 200, 10000);
+    const r = curl('https://hmr.localhost/');
+    assert.match(r.out, new RegExp(`"host":"localhost:${six.port}"`));
+    assert.match(r.out, /"family":"IPv6"/);
+  });
+  if (six.port) await check('the daemon probes it healthy, on ::1', async () => {
+    await until('hmr healthy', async () => {
+      const r = curl('https://hallway.localhost/api/apps/hmr');
+      const v = status(r) === 200 ? JSON.parse(r.out.slice(0, r.out.lastIndexOf('\n'))) : null;
+      return v?.health?.state === 'healthy' && v.health.address === '::1';
+    }, 20000);
   });
 
   step('idempotent: setup again does only what is missing');
@@ -292,7 +312,7 @@ try {
       const x = curl('https://review.myname.internal/');
       return status(x) === 200 ? x : null;
     }, 20000);
-    assert.match(r.out, new RegExp(`127\\.0\\.0\\.1:${review.port}`));
+    assert.match(r.out, new RegExp(`"host":"localhost:${review.port}"`));
   });
   await check('other names still resolve (the resolver only takes myname.internal)', async () => {
     assert.equal(sh(darwin ? 'dscacheutil' : 'getent', darwin ? ['-q', 'host', '-a', 'name', 'github.com'] : ['hosts', 'github.com']).code, 0);
@@ -332,7 +352,7 @@ try {
       const x = curl(app);
       return status(x) === 200 ? x : null;
     }, 15000);
-    assert.match(r.out, new RegExp(`"host":"127\\.0\\.0\\.1:${review.port}"`));
+    assert.match(r.out, new RegExp(`"host":"localhost:${review.port}"`));
     assert.equal(systemTrusted(), false, 'no longer trusted system-wide');
     assert.ok(!fs.existsSync(darwin ? '/etc/resolver/myname.internal' : '/etc/systemd/resolved.conf.d/hallway.conf'), 'the resolver is gone');
     if (darwin) {
@@ -386,6 +406,7 @@ try {
   hw('service', 'uninstall');
   review.child.kill();
   other.child.kill();
+  six.child.kill();
   const left = leftovers();
   if (left.length) {
     console.log(`left behind: ${left.join(', ')}`);

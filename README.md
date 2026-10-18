@@ -48,6 +48,9 @@ it: `npm i -g hallway && hallway service install`. (Hallway won't install a serv
 cache at any time, which would break the service at the next login.) If the service is already running, `npx hallway`
 says where and exits.
 
+To upgrade: `npm i -g hallway@latest && hallway service install`. The second command restarts a daemon that's still
+running the old version (and says so); `hallway doctor` flags one that is.
+
 Local domains (`https://hallway.localhost`, `https://<app>.localhost`) are off until you run `hallway setup`; the
 startup banner, the dashboard's **Local domains** panel and `hallway doctor` all say so, and how.
 

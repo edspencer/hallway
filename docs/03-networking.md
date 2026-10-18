@@ -206,7 +206,10 @@ With `proxy.scheme: http` (No prompts) there's only the HTTP server, on 4480, wi
 automatic HTTPS off and nothing redirected; no certificate is ever made.
 
 - A name already taken (an alias that is another app's slug, or the dashboard's name) is skipped and reported.
-- `host: ::1` is dialled as `[::1]:port`; a wildcard bind is dialled on `127.0.0.1`.
+- An app whose `host:` is loopback or a wildcard (`127.0.0.1`, `::1`, `localhost`, `0.0.0.0`, `::`) is dialled as
+  `localhost:<port>`: Caddy's resolver tries `::1` and `127.0.0.1` per connection, so the app is reached in whichever
+  family it bound (D68; on a Mac, dev servers that bind `localhost` are on `[::1]` only). Any other host is dialled as
+  written, an IPv6 address in brackets.
 - IPv6 loopback is left out where it can't be bound (some containers), or Caddy would refuse the whole config.
 
 ### Host header rewriting (D9)
@@ -215,7 +218,8 @@ automatic HTTPS off and nothing redirected; no certificate is ever made.
 - Well-behaved local apps defend against DNS rebinding by rejecting any Host that is not localhost. Local Review does
   exactly this (`403 forbidden host`); Vite (`server.allowedHosts`) and other dev servers have similar checks.
   Fronting them with the original Host would break them on day one.
-- Therefore: **default `header_up Host {upstream_hostport}`** (the upstream sees `127.0.0.1:5622`). Verified: a
+- Therefore: **default `header_up Host {upstream_hostport}`** (the upstream sees `localhost:5622`, since D68 dials
+  loopback apps as `localhost`; before that, `127.0.0.1:5622`). Verified: a
   strict app answers 200 through Caddy with the rewrite and 403 with `proxy.preserveHost: true`.
 - Caddy still adds `X-Forwarded-Host`, `X-Forwarded-Proto` and `X-Forwarded-For`, so apps that need the public name
   can read it.

@@ -1,10 +1,12 @@
 // One probe of one app (docs/04-apps-health-services.md, "Probing"): TCP connect, then the health path if there is
 // one, else `GET /`. GET, never HEAD (some dev servers mishandle HEAD); no redirect-following; the body is abandoned
 // once the headers arrive, and latency is the time to them. `Host` is the upstream, so apps with Host checks answer
-// normally.
+// normally. A loopback host is tried on 127.0.0.1 and on ::1, the configured family first, and the HTTP request goes
+// to whichever accepted the connection (D68).
 import http from 'node:http';
 import net from 'node:net';
 import { VERSION } from '../config.js';
+import { candidates } from '../loopback.js';
 
 export type Expected = 'running' | 'stopped' | 'adhoc';
 
@@ -12,7 +14,7 @@ export type Expected = 'running' | 'stopped' | 'adhoc';
 export interface ProbeTarget {
   slug: string;
   port: number;
-  /** Default 127.0.0.1. */
+  /** Default 127.0.0.1. A loopback or wildcard host means 127.0.0.1 or ::1, whichever answers. */
   host?: string;
   expected: Expected;
   health?: { path: string; expectStatus?: number | number[] };
@@ -29,6 +31,8 @@ export interface ProbeResult {
   latencyMs: number | null;
   /** Why it was unhealthy or not listening, for the card's tooltip. */
   error?: string;
+  /** The address that accepted the connection (`127.0.0.1`, `::1`); absent if nothing did. */
+  address?: string;
 }
 
 export interface ProbeOptions {
@@ -89,17 +93,27 @@ export function statusIsHealthy(status: number, health?: ProbeTarget['health']):
 }
 
 export async function probe(t: ProbeTarget, { connectTimeoutMs = 1000, timeoutMs = 5000 }: ProbeOptions = {}): Promise<ProbeResult> {
-  const host = t.host ?? '127.0.0.1';
-  const tcp = await connect(host, t.port, connectTimeoutMs);
-  if (!tcp.ok) return { outcome: 'not-listening', httpStatus: null, latencyMs: null, error: tcp.error };
+  // the first address that accepts; if none does, the preferred one's error is the one people see
+  let host: string | null = null;
+  let error: string | undefined;
+  for (const a of candidates(t.host ?? '127.0.0.1')) {
+    const tcp = await connect(a, t.port, connectTimeoutMs);
+    if (tcp.ok) {
+      host = a;
+      break;
+    }
+    error ??= tcp.error;
+  }
+  if (!host) return { outcome: 'not-listening', httpStatus: null, latencyMs: null, error };
   const path = t.health?.path || '/';
   const res = await get(host, t.port, path.startsWith('/') ? path : `/${path}`, timeoutMs);
-  if (res.status === null) return { outcome: 'unhealthy', httpStatus: null, latencyMs: res.ms, error: res.error };
+  if (res.status === null) return { outcome: 'unhealthy', httpStatus: null, latencyMs: res.ms, error: res.error, address: host };
   const ok = statusIsHealthy(res.status, t.health);
   return {
     outcome: ok ? 'healthy' : 'unhealthy',
     httpStatus: res.status,
     latencyMs: res.ms,
     ...(ok ? {} : { error: `${path} answered ${res.status}` }),
+    address: host,
   };
 }
