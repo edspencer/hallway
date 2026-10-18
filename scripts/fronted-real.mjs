@@ -312,7 +312,7 @@ try {
       const x = curl('https://review.myname.internal/');
       return status(x) === 200 ? x : null;
     }, 20000);
-    assert.match(r.out, new RegExp(`127\\.0\\.0\\.1:${review.port}`));
+    assert.match(r.out, new RegExp(`"host":"localhost:${review.port}"`));
   });
   await check('other names still resolve (the resolver only takes myname.internal)', async () => {
     assert.equal(sh(darwin ? 'dscacheutil' : 'getent', darwin ? ['-q', 'host', '-a', 'name', 'github.com'] : ['hosts', 'github.com']).code, 0);
