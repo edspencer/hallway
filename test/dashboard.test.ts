@@ -9,7 +9,7 @@ import { BRAND_REGISTRY, explicitBrandSlug, matchBrand } from '../src/lib/brands
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, shorten, slugify, tildify } from '../src/lib/format.ts';
-import { TIER_LABEL, checksSummary, domainsView, hostOfUrl, logTail, tierChoices, turnOnWords } from '../src/lib/domains.ts';
+import { TIER_LABEL, checksSummary, domainsView, failedWords, hostOfUrl, initialTier, logTail, runningWords, tierChoices, turnOnPhase } from '../src/lib/domains.ts';
 import { bootLabel, lostCommand, lostCount, lostWhere } from '../src/lib/lost.ts';
 import { countStates, doorState, faviconMark, isScanning, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
@@ -324,20 +324,33 @@ describe('local domains (D63)', () => {
   });
 });
 
-describe('local domains: the tiers (D65)', () => {
-  const tier = (trust: 'user' | 'system' | 'none', url: string) => ({ trust, name: trust, url, asks: '', note: '', command: `hallway setup --trust ${trust}`, recommended: trust === 'user', canTurnOn: trust !== 'system' });
-  test('what Turn on says before it runs: the new address, and what will ask (macOS: your own Touch ID, not an admin)', () => {
-    const mac = turnOnWords(tier('user', 'https://review.localhost'), true);
-    assert.match(mac.will, /has launchd hold ports 443 and 80 .*switches this dashboard to https:\/\/hallway\.localhost\.$/);
-    assert.match(mac.asks, /macOS will ask for your Touch ID or password.*It isn’t an administrator prompt\./);
-    assert.match(turnOnWords(tier('user', 'https://review.localhost:4443'), false).asks, /^Nothing will ask/);
-    const none = turnOnWords(tier('none', 'http://review.localhost'), true);
-    assert.match(none.will, /ports 80 for it/);
-    assert.match(none.asks, /^Nothing will ask for a password/);
+describe('local domains: the tiers (D65, D70)', () => {
+  const tier = (trust: 'user' | 'system' | 'none', recommended = trust === 'user') => ({ trust, name: trust, url: '', asks: '', note: '', command: `hallway setup --trust ${trust}`, recommended, canTurnOn: trust !== 'system' });
+  test('the panel opens on the recommended tier, else the first', () => {
+    assert.equal(initialTier([tier('user'), tier('system'), tier('none')]), 'user');
+    assert.equal(initialTier([tier('system', false), tier('none', true)]), 'none');
+    assert.equal(initialTier([tier('system', false), tier('none', false)]), 'system');
+    assert.equal(initialTier([]), null);
   });
-  test('an older daemon sends no tiers (the panel falls back to the two commands); the log tail is the last lines', () => {
+  test('a Turn on: running until the daemon answers, then done or failed (a refusal is failed too)', () => {
+    const job = (state: 'running' | 'done' | 'failed') => ({ state, trust: 'user' as const, log: '', error: state === 'failed' ? 'that failed (exit 1)' : null });
+    assert.equal(turnOnPhase(null), null);
+    assert.equal(turnOnPhase({ trust: 'user', job: null, error: null }), 'running', 'before the first answer');
+    assert.equal(turnOnPhase({ trust: 'user', job: job('running'), error: null }), 'running');
+    assert.equal(turnOnPhase({ trust: 'user', job: job('done'), error: null }), 'done');
+    assert.equal(turnOnPhase({ trust: 'user', job: job('failed'), error: null }), 'failed');
+    assert.equal(turnOnPhase({ trust: 'none', job: null, error: 'this needs sudo once' }), 'failed');
+  });
+  test('the words: a Mac waits on Touch ID for User certificate; a stop names the likely cause without asserting it', () => {
+    assert.equal(runningWords('user', true).title, 'Waiting for Touch ID…');
+    assert.equal(runningWords('user', false).title, 'Turning on…');
+    assert.equal(runningWords('none', true).title, 'Turning on…');
+    assert.match(failedWords('user', true).detail, /^If the Touch ID prompt was cancelled or went unanswered, run it in a terminal instead:$/);
+    assert.match(failedWords('none', true).detail, /^Run it in a terminal instead/);
+  });
+  test('an older daemon sends no tiers (the panel falls back to the two commands); the log tail is the last lines; the header names', () => {
     assert.deepEqual(tierChoices({ unsupported: null, mode: 'direct', trust: null, dashboardUrl: '', appUrl: '', base: 'localhost', pushError: null }), []);
     assert.equal(logTail('a\nb\nc\nd\n', 2), 'c\nd');
-    assert.deepEqual(TIER_LABEL, { user: 'no admin', system: 'system-wide', none: 'no prompts' });
+    assert.deepEqual(TIER_LABEL, { user: 'user certificate', system: 'system-wide certificate', none: 'no HTTPS' });
   });
 });

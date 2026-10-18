@@ -74,7 +74,7 @@ user units on Linux); Caddy through its admin API; fronted mode on `*.localhost`
 fallback page; `hallway setup` and `teardown`; networking checks in `hallway doctor`; custom domains (dnsmasq, and
 `/etc/resolver` on macOS or a `systemd-resolved` drop-in on Linux); the "exposed" indicator; "lost at last reboot";
 log rotation. Since then, `hallway setup` has [three tiers](/networking/fronted-mode/#three-tiers), two of which need
-no administrator (No admin and No prompts), and on macOS launchd holds ports 443 and 80 instead of a pf redirect.
+no administrator (User certificate and No HTTPS), and on macOS launchd holds ports 443 and 80 instead of a pf redirect.
 
 **How it was checked:** criteria 1–4 and 7–11 run for real on Linux and on CI's macOS runners (setup with real
 `sudo`, a squatter on 443, a custom domain, teardown leaving nothing behind), with `curl` and the system trust store
@@ -146,7 +146,7 @@ third. Hallway runs natively there (not through WSL) and never asks for administ
 ## What is left
 
 - **A run on a real Mac** (v2 criterion 5). Safari, Chrome and Apple's `curl` have accepted a root trusted for the
-  user only (the No admin tier's way), and both browsers resolved and loaded `*.localhost` through it; still
+  user only (the User certificate tier's way), and both browsers resolved and loaded `*.localhost` through it; still
   unverified there: Firefox; services, the daemon and launchd's sockets on 443 and 80 coming back after a logout or a
   reboot (`RunAtLoad`); "Lost at last reboot" after a real one; a managed (MDM) Mac; Docker Desktop or similar
   holding port 443; and `hallway teardown`. On Linux, a real reboot (with lingering on) hasn't been run either.

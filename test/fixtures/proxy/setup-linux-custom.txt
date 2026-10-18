@@ -58,7 +58,7 @@
        | Domains=~myname.internal
      $ sudo install -D -m 0644 /home/me/.hallway/generated/setup/resolved.conf /etc/systemd/resolved.conf.d/hallway.conf
      $ sudo systemctl restart systemd-resolved.service
-8. [Hallway] Switch config.yaml to fronted mode, System-wide on myname.internal: links become https://<app>.myname.internal
+8. [Hallway] Switch config.yaml to fronted mode, System-wide certificate on myname.internal: links become https://<app>.myname.internal
 9. [Hallway] Check https://myname.internal answers through the redirect, with Hallway's certificate
 
 Nothing was run. `hallway setup` runs these, asking for your password through sudo where it says sudo.

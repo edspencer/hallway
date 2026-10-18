@@ -126,7 +126,7 @@ export async function logs(ctx: Ctx, pos: string[], flags: Record<string, string
 
 /**
  * After the daemon's job was (re)started: wait until the daemon answers as this CLI's version. Just waiting for the
- * port isn't enough, because a daemon being replaced may still be answering, as the old version (D69).
+ * port isn't enough, because a daemon being replaced may still be answering, as the old version (D70).
  */
 export async function waitForDaemon(ctx: Ctx, port: number, timeoutMs = 15_000): Promise<{ ok: true } | { ok: false; reason: string }> {
   const deadline = Date.now() + timeoutMs;
@@ -142,7 +142,7 @@ export async function waitForDaemon(ctx: Ctx, port: number, timeoutMs = 15_000):
 }
 
 /**
- * When the daemon answering is another version than this CLI (an upgrade that didn't restart it, D69): restart it if
+ * When the daemon answering is another version than this CLI (an upgrade that didn't restart it, D70): restart it if
  * it runs as Hallway's service and say so; otherwise say how. For commands that change what the daemon serves
  * (`hallway setup`). Says nothing when the versions match or no daemon answers.
  */
@@ -182,7 +182,7 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
       if (!before.running && (await isListening(port)))
         throw new Error(`port ${port} is already in use (is \`hallway serve\` running in a terminal?). Stop that first, or set another port: in config.yaml.`);
       // after `npm i -g hallway@latest` the job file is usually unchanged (same path), so the daemon started by the old
-      // version would keep running its code: restart it when it isn't this version (D69). What it says beats its manifest.
+      // version would keep running its code: restart it when it isn't this version (D70). What it says beats its manifest.
       const running = before.running ? await ctx.daemon() : null;
       const from = running ? (running.version !== VERSION ? running.version : null) : before.running ? svc.staleVersion(DAEMON_LABEL) : null;
       const r = await svc.installDaemon({ restart: !!from });

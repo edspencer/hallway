@@ -121,8 +121,9 @@ export interface IgnoreConfig {
 export type DashboardSection = 'apps' | 'observed' | 'bookmarks';
 
 /**
- * Fronted mode's tiers (D65): `user` trusts Hallway's certificate for your account only (no admin rights), `system` for
- * every account (needs an administrator; custom domains need it too), `none` is plain HTTP (nothing to trust).
+ * Fronted mode's tiers (D65), by the names people see (D70): `user` is User certificate (Hallway's certificate trusted
+ * for your account only, no admin rights; always the recommended one), `system` is System-wide certificate (every
+ * account; needs an administrator; custom domains need it too), `none` is No HTTPS (plain HTTP, nothing to trust).
  */
 export type Trust = 'user' | 'system' | 'none';
 
@@ -470,21 +471,27 @@ export interface FrontingInfo {
   base: string;
   /** Fronted mode: why the daemon's last push to Caddy failed (Caddy isn't running?), else null. */
   pushError: string | null;
-  /** The tier to recommend on this machine (D65), and whether the user is an administrator; null until the daemon has
-   *  asked the OS (or from an older daemon). */
+  /** The tier to recommend: `user` wherever fronted mode can work (D70), else null (and from an older daemon, which
+   *  decided it from the machine, possibly null until it had asked the OS). */
   suggested?: Trust | null;
+  /** Whether the user is an administrator (only System-wide certificate's wording uses it); null until the daemon has
+   *  asked the OS. */
   admin?: boolean | null;
-  /** The three tiers as choices, the recommended one first (empty where fronted mode can't work). */
+  /** The three tiers as choices, User certificate first (empty where fronted mode can't work). */
   tiers?: TierOption[];
 }
 
 /** One of setup's tiers, as the dashboard offers it (D65). */
 export interface TierOption {
   trust: Trust;
-  /** `No admin`, `System-wide`, `No prompts`. */
+  /** `User certificate`, `System-wide certificate`, `No HTTPS` (D70). */
   name: string;
   /** An app's address in this tier: `https://review.localhost`. */
   url: string;
+  /** The dashboard's address in this tier: `https://hallway.localhost` (absent from an older daemon). */
+  dashboardUrl?: string;
+  /** One line, for the dashboard's collapsed row: `HTTPS, trusted for your account`. Absent from an older daemon. */
+  summary?: string;
   /** What it will ask for, on this platform. */
   asks: string;
   /** What it gives up, or needs. */
@@ -492,7 +499,7 @@ export interface TierOption {
   /** The command to copy: `hallway setup --trust user`. */
   command: string;
   recommended: boolean;
-  /** The dashboard can turn it on itself (`POST /api/fronting/setup`): No admin and No prompts, never System-wide. */
+  /** The dashboard can turn it on itself (`POST /api/fronting/setup`): User certificate and No HTTPS, never System-wide certificate. */
   canTurnOn: boolean;
 }
 

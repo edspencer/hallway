@@ -80,10 +80,10 @@ const print = (f: Facts) => formatPlan(plan(f), { printOnly: true });
 const sudoSteps = (f: Facts) => plan(f).steps.filter((s) => s.kind === 'run' && s.recipe.cmds.some((c) => c.sudo));
 
 describe('setup --print, per tier (D65)', () => {
-  test('golden: macOS, No admin, fresh', POSIX_PATHS, () => golden('setup-darwin.txt', print(facts({ os: 'darwin' }))));
-  test('golden: macOS, No admin, moving from the System-wide setup of 0.6 (pf redirect, System keychain)', POSIX_PATHS, () =>
+  test('golden: macOS, User certificate, fresh', POSIX_PATHS, () => golden('setup-darwin.txt', print(facts({ os: 'darwin' }))));
+  test('golden: macOS, User certificate, moving from the System-wide setup of 0.6 (pf redirect, System keychain)', POSIX_PATHS, () =>
     golden('setup-darwin-migrate.txt', print(facts({ os: 'darwin', previous: 'system', found: { redirect: true, systemTrust: true } }))));
-  test('golden: macOS, No prompts', POSIX_PATHS, () => golden('setup-darwin-none.txt', print(facts({ os: 'darwin', tier: 'none' }))));
+  test('golden: macOS, No HTTPS', POSIX_PATHS, () => golden('setup-darwin-none.txt', print(facts({ os: 'darwin', tier: 'none' }))));
   test('golden: macOS, System-wide, a custom domain, Caddy and dnsmasq to install with Homebrew', POSIX_PATHS, () =>
     golden(
       'setup-darwin-custom.txt',
@@ -97,11 +97,11 @@ describe('setup --print, per tier (D65)', () => {
       ),
     ));
   test('golden: Linux, System-wide, a custom domain', POSIX_PATHS, () => golden('setup-linux-custom.txt', print(facts({ os: 'linux', base: 'myname.internal' }))));
-  test('golden: Linux, No admin, moving from System-wide', POSIX_PATHS, () =>
+  test('golden: Linux, User certificate, moving from System-wide certificate', POSIX_PATHS, () =>
     golden('setup-linux-user.txt', print(facts({ os: 'linux', tier: 'user', previous: 'system', found: { redirect: true, systemTrust: true } }))));
-  test('golden: Linux, No prompts, from No admin', POSIX_PATHS, () => golden('setup-linux-none.txt', print(facts({ os: 'linux', tier: 'none', previous: 'user', found: { userTrust: true } }))));
+  test('golden: Linux, No HTTPS, from User certificate', POSIX_PATHS, () => golden('setup-linux-none.txt', print(facts({ os: 'linux', tier: 'none', previous: 'user', found: { userTrust: true } }))));
 
-  test('No admin and No prompts have no sudo step at all; System-wide has one for each privileged part', () => {
+  test('User certificate and No HTTPS have no sudo step at all; System-wide has one for each privileged part', () => {
     for (const os of ['darwin', 'linux'] as const) {
       assert.deepEqual(sudoSteps(facts({ os, tier: 'user' })), [], `${os}: user`);
       assert.deepEqual(sudoSteps(facts({ os, tier: 'none' })), [], `${os}: none`);
@@ -132,11 +132,11 @@ describe('setup --print, per tier (D65)', () => {
     assert.equal(promptsAhead(plan(facts({ os: 'linux', tier: 'user' })), platformFor('linux')), 'Nothing here will ask for a password.');
   });
 
-  test('moving from System-wide to No admin: sudo once, to remove the pf redirect and the System keychain trust; said up front', () => {
+  test('moving from System-wide certificate to User certificate: sudo once, to remove the pf redirect and the System keychain trust; said up front', () => {
     const f = facts({ os: 'darwin', previous: 'system', found: { redirect: true, systemTrust: true } });
     const p = plan(f);
     assert.deepEqual(sudoSteps(f).map((s) => s.why.slice(0, 40)), ['Remove the pf redirect an older Hallway ', "Remove Hallway's local certificate autho"]);
-    assert.match(p.warnings.join(' '), /Moving from System-wide to No admin: what the old tier added is removed \(that needs sudo, this once\)/);
+    assert.match(p.warnings.join(' '), /Moving from System-wide certificate to User certificate: what the old tier added is removed \(that needs sudo, this once\)/);
     assert.match(promptsAhead(p, platformFor('darwin')), /^You'll be asked twice: for your password by sudo, here in the terminal, and then by macOS, for your Touch ID/);
     // the forwarders come before the pf redirect goes, so 443 keeps answering throughout
     const i = (re: RegExp) => p.steps.findIndex((s) => re.test(s.why));
@@ -151,10 +151,10 @@ describe('setup --print, per tier (D65)', () => {
     assert.match(plan(f).warnings.join(' '), /older Hallway's pf redirect is still installed: it's removed/);
   });
 
-  test('No prompts removes the user-domain trust (it may ask) and the system one; System-wide on Linux keeps the NSS entry', () => {
+  test('No HTTPS removes the user-domain trust (it may ask) and the system one; System-wide on Linux keeps the NSS entry', () => {
     const p = plan(facts({ os: 'darwin', tier: 'none', previous: 'user', found: { userTrust: true, systemTrust: true } }));
     assert.ok(p.steps.some((s) => s.kind === 'run' && /Stop trusting .* for your account/.test(s.why) && s.dialog));
-    assert.ok(p.steps.some((s) => s.kind === 'run' && /System keychain \(No prompts doesn't trust it/.test(s.why)));
+    assert.ok(p.steps.some((s) => s.kind === 'run' && /System keychain \(No HTTPS doesn't trust it/.test(s.why)));
     const l = plan(facts({ os: 'linux', tier: 'system', previous: 'user', found: { userTrust: true } }));
     assert.ok(!l.steps.some((s) => /NSS database \(as you/.test(s.why)), "System-wide's trust includes the NSS database");
   });
@@ -207,7 +207,7 @@ describe('setup --print, per tier (D65)', () => {
     assert.match(plan(f).refusals.join(' '), /needs nftables/);
   });
 
-  test("Linux No admin without certutil: refused, with how to get it; no NSS database yet: it's made first", () => {
+  test("Linux User certificate without certutil: refused, with how to get it; no NSS database yet: it's made first", () => {
     const f = facts({ os: 'linux', tier: 'user' });
     f.env.tools = { ...f.env.tools, certutil: null };
     assert.match(plan(f).refusals.join(' '), /needs certutil: install `certutil` \(Debian and Ubuntu: `sudo apt install libnss3-tools`/);

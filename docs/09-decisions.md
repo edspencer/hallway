@@ -1204,6 +1204,11 @@ and in most VPN kill-switch and firewall-app rulesets, so others will hit this. 
 
 ### D65 — **Accepted**: fronted mode without admin rights, in three tiers; launchd's sockets handed to Caddy by Node forwarders (2026-10-17)
 
+> **Amended by D70 (2026-10-18):** the tiers are now called **User certificate** (`user`, "No admin" below),
+> **System-wide certificate** (`system`, "System-wide") and **No HTTPS** (`none`, "No prompts"); User certificate is
+> always the recommended one (the admin/MDM-based recommendation below is gone); the dashboard shows them as a
+> settings list. The dashboard's Turn on raising macOS's trust dialog from the LaunchAgent daemon is **verified**.
+
 **Status: accepted by the author on 2026-10-17, with option 2 below (Node forwarders, no native code), and built**
 (0.7.0). The author asked whether fronted mode can work on a Mac where admin is granted only briefly (MDM). The
 experiments are in `11-research-notes.md`, "Fronted mode without admin rights" (CI runners) and "… verified on a real
@@ -1309,7 +1314,8 @@ choices, each with its URL, what it will ask for, and its command to copy (`hall
 machine's recommended one first (`FrontingInfo` gains `suggested: 'user' | 'system' | 'none'` and `admin: boolean`).
 Because tiers 1 and 3 need no sudo, D63's open "set it up from here" becomes possible for them: a **Turn on** button
 that asks the daemon to run setup with `--trust none` (no prompt at all) or `--trust user` (the macOS dialog appears
-on the user's screen; *unverified* that it does when the daemon, a LaunchAgent, triggers it rather than Terminal).
+on the user's screen; *unverified* that it does when the daemon, a LaunchAgent, triggers it rather than Terminal;
+**verified on a real Mac 2026-10-18: it does**, D70).
 That adds a write route that installs a LaunchAgent; it would get the same Host/Origin checks as every write and
 accept only those two tiers, never `system`. The header control, once on, names the tier ("Local domains · no
 admin").
@@ -1380,8 +1386,7 @@ no sudo and no prompt, not reachable on en0.
 
 **Still unverified on a real Mac** (CI's macOS runner covers launchd's sockets on 443/80 and `[::1]`, the migration from
 0.6.0 and plain HTTP, but has no person at the screen): the forwarders after logout/login and a reboot; whether
-removing *real* user trust settings prompts; Firefox's `enterprise_roots` with a user-domain root; the trust dialog
-when setup runs from a LaunchAgent (the dashboard's Turn on, D63's follow-up); Docker Desktop (or similar) already
+removing *real* user trust settings prompts; Firefox's `enterprise_roots` with a user-domain root; Docker Desktop (or similar) already
 holding `127.0.0.1:443` (setup should refuse: "443 answers, but not with Hallway's certificate"); on a managed Mac,
 the "Background Items Added" notification and whether MDM blocks user LaunchAgents with `Sockets`; `hallway teardown`
 on a real Mac.
@@ -1390,7 +1395,8 @@ on a real Mac.
 > listed — the No admin trust step run *by `hallway setup` itself* (a System-wide → No admin migration, with D67's
 > plan and `Continue?` prompt, one sudo password and then Touch ID), Safari and Chrome loading
 > `https://hallway.localhost` and app subdomains through the forwarders with no warning, and Vite HMR through
-> launchd → forwarder → Caddy (0.7.1, after the D68 fix) — are now verified. Details and what's still open:
+> launchd → forwarder → Caddy (0.7.1, after the D68 fix) — are now verified. So is the trust dialog when setup runs
+> from the LaunchAgent daemon (the dashboard's Turn on), 2026-10-18 (D70). Details and what's still open:
 > `11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop Mac".
 
 ### D66 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
@@ -1575,3 +1581,64 @@ the old dashboard and API while the new CLI drove setup.
 **Verified on a real Mac, 2026-10-17/18:** `npm i -g hallway@latest && hallway service install` on 0.7.0 reproduced
 the bug (the 0.5.2 daemon kept running); the same upgrade step on 0.7.1 restarted the daemon onto the new version, as
 designed (`11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop Mac").
+
+### D70 — The tiers renamed (User certificate, System-wide certificate, No HTTPS); User certificate always recommended; the panel as a settings list (2026-10-18; amends D65, D63)
+
+The author turned local domains on from 0.7.1's dashboard (torn down first, then **Turn on** for No admin at
+`localhost:4255`). It worked, but: "I didn't love the aesthetics of that choice, and it was a little bit
+overwhelming." All three tiers were cards at the same level of detail, and on his Mac (an admin, no MDM) the
+recommended one, with its highlighted border, was System-wide, the one that needs a terminal and an administrator.
+Five treatments were built and compared (branch `tiers-design`, not merged); he chose the settings list.
+
+- **Names.** `user` is **User certificate**, `system` is **System-wide certificate**, `none` is **No HTTPS**, everywhere
+  people read them: the dashboard, `hallway setup`'s question, plan and "Tier:" line, doctor, the startup hint,
+  `--help`, the API's refusals, the schema's docs (so AGENT-GUIDE.md), the website and README. The names say what
+  differs (whose trust store holds the certificate, or that there isn't one) where the old ones named a cost ("No
+  admin", "No prompts"), which stopped being the distinction once System-wide stopped being the norm. The header says
+  `hallway.localhost · user certificate`.
+- **The flags and config values stay** (`--trust user|system|none`, `proxy.trust`): they are what scripts and
+  config.yaml files already say, and they still read correctly (whose trust). Help and docs give the name next to the
+  value.
+- **User certificate is always recommended**, on macOS and on Linux, admin or not, managed or not
+  (`RECOMMENDED_TIER` in `server/proxy/tiers.ts`): the question's default, the dashboard's first and pre-chosen row,
+  and what `hallway setup` picks with no terminal and no current tier. It never needs an administrator, and the
+  dashboard can turn it on. **System-wide certificate is never recommended**: it is the choice for custom domains
+  (`--domain` still implies it), for other accounts on the machine, and for tools that read only the system's
+  certificates; on Linux also for links without a port.
+  - **Linux:** User certificate there means `https://<app>.localhost:4443` and trust in Chrome and Chromium only (the
+    user's NSS database; no certutil is a refusal saying how to install it). That is still the right default: no sudo,
+    nothing installed system-wide, and the dashboard can do it; anyone who needs portless links, curl, Node or Firefox
+    to trust it chooses System-wide certificate, and the panel and doctor say so.
+  - `machineFacts` now asks only `id -Gn` (the MDM check, `profiles status`, is gone). Whether the user is an
+    administrator only changes how System-wide certificate says it needs one ("an administrator's password" / "an
+    administrator (this account isn't one)"; Linux "sudo" / "sudo, which this account doesn't have").
+    `FrontingInfo.suggested` is `user` wherever fronted mode can work, and the tiers are in `/api/state` at once rather
+    than after the OS has answered. `TierOption` gains `summary` (the collapsed row's line) and `dashboardUrl`.
+- **The panel and the header's dialog** (D63) are one card styled like a settings pane: an icon tile and the title
+  "Local domains" with one line under it, then the tiers as an inset list with one radio each. The chosen row opens:
+  the address (a lock, or an open one for HTTP), what will ask (macOS: Touch ID, "It isn't an administrator prompt"),
+  what it gives up, and its action. User certificate starts chosen; the other two are one line each until chosen.
+  - **Turn on** (User certificate, No HTTPS) runs at once: 0.7.1's extra confirmation step is gone, because the row
+    already says what will ask and on a Mac the Touch ID dialog is itself the confirmation. **System-wide certificate
+    has no Turn on**, only its command to copy (D65: never root in the daemon).
+  - **Waiting:** on a Mac, User certificate shows "Waiting for Touch ID…"; otherwise "Turning on…" with setup's last
+    lines. **Stopped:** the reason in full, then the command to run in a terminal (on a Mac, "If the Touch ID prompt
+    was cancelled or went unanswered…": a cancelled dialog looks like any other failure from the daemon, so it's named
+    as the likely cause, not asserted), with what setup printed behind a disclosure. **Done:** "Local domains are
+    on", the new address and an Open button, shown at once, even before the page has heard that the mode changed.
+  - "Dismiss" is "Not now"; it still writes `dashboard.hints.localDomains` (D63).
+  - Narrow screens drop the rows' summaries and put Turn on full width. Colours and radii are tokens
+    (`--hw-radius-large`, `--hw-radius-tile`, `--hw-tier-chosen`).
+- **Rejected** (the other four treatments, screenshots in the exploration chat): a hero card for User certificate with
+  "Other ways to set it up" behind a disclosure (one obvious action, but the most space on the page); a one-line banner
+  opening a sheet with a segmented control (the most Mac-like flow, but a click more, and the segments made the tiers
+  peers again); "Give your doors names", door plates as the choices (the most character, but it hides what HTTPS
+  costs); and a one-line banner with an Options menu (too little for someone who has to choose).
+- **Rejected:** renaming the flag values to match (`--trust user-cert` …): breaks scripts and config.yaml files for no
+  gain in meaning; keeping a machine-dependent recommendation: an admin isn't a reason to recommend the tier that
+  needs an admin.
+
+**Verified on a real Mac (the author's, 2026-10-18):** the dashboard's Turn on for User certificate, run by the daemon
+as a LaunchAgent, brought up macOS's Touch ID dialog for `security add-trusted-cert` into the login keychain, and
+local domains came up afterwards (`11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop
+Mac"). This was D65's open "does the dialog appear when a LaunchAgent triggers it" (Q-USER-TRUST).

@@ -1,9 +1,9 @@
-// Fronted mode's tiers (server/proxy/tiers.ts, D65): the recommendation, what config.yaml says for each, the question
+// Fronted mode's tiers (server/proxy/tiers.ts, D65, D70): the names and the recommendation, what config.yaml says for each, the question
 // setup asks, and how `--trust` and `--domain` combine. Pure, plus the CLI's argument checks.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultConfig } from '../server/store/schema.ts';
-import { currentTier, machineFacts, suggestedTier, tierProxy, tierQuestion, tierUrls } from '../server/proxy/tiers.ts';
+import { RECOMMENDED_TIER, TIER_NAME, currentTier, machineFacts, tierOptions, tierProxy, tierQuestion, tierText, tierUrls } from '../server/proxy/tiers.ts';
 import { platformFor } from '../server/platform/index.ts';
 import { makeCtx } from '../server/commands/index.ts';
 import { setup as setupCommand } from '../server/commands/setup.ts';
@@ -12,32 +12,41 @@ import { type SetupDeps, chooseTier } from '../server/proxy/setup.ts';
 
 const cfg = defaultConfig();
 
-describe('which tier to recommend', () => {
-  test('macOS: No admin unless an admin on a Mac no MDM manages', () => {
-    assert.equal(suggestedTier('darwin', { admin: false, managed: false }), 'user');
-    assert.equal(suggestedTier('darwin', { admin: true, managed: true }), 'user');
-    assert.equal(suggestedTier('darwin', { admin: true, managed: false }), 'system');
+describe('which tier to recommend (D70)', () => {
+  test('User certificate, always: first and the only one marked, on macOS and Linux, admin or not', () => {
+    assert.equal(RECOMMENDED_TIER, 'user');
+    for (const p of ['darwin', 'linux'] as const)
+      for (const admin of [true, false, null]) {
+        const t = tierOptions(p, cfg, admin);
+        assert.deepEqual(t.map((x) => [x.trust, x.recommended, x.canTurnOn]), [['user', true, true], ['system', false, false], ['none', false, true]]);
+      }
   });
-  test('Linux: System-wide with sudo (and systemd and nftables to redirect with), else No admin', () => {
-    assert.equal(suggestedTier('linux', { admin: true, managed: false }), 'system');
-    assert.equal(suggestedTier('linux', { admin: true, managed: false, systemPossible: false }), 'user');
-    assert.equal(suggestedTier('linux', { admin: false, managed: false }), 'user');
+  test('the names people see', () => {
+    assert.deepEqual(TIER_NAME, { user: 'User certificate', system: 'System-wide certificate', none: 'No HTTPS' });
+    assert.deepEqual(tierOptions('darwin', cfg).map((t) => [t.name, t.summary]), [
+      ['User certificate', 'HTTPS, trusted for your account'],
+      ['System-wide certificate', 'For custom domains and every account; needs an administrator'],
+      ['No HTTPS', 'Plain HTTP; nothing asks for anything'],
+    ]);
   });
-  test('asked of the OS with no privilege: `id -Gn`, and `profiles status -type enrollment` on macOS', async () => {
+  test("being an administrator only changes how System-wide certificate says it needs one", () => {
+    assert.match(tierText('darwin', 'system', true).asks, /^Needs an administrator's password: it trusts/);
+    assert.match(tierText('darwin', 'system', false).asks, /^Needs an administrator \(this account isn't one\)/);
+    assert.match(tierText('linux', 'system', false).asks, /^Needs sudo, which this account doesn't have/);
+    assert.equal(tierText('darwin', 'user', true).asks, tierText('darwin', 'user', false).asks);
+  });
+  test('asked of the OS with no privilege: `id -Gn` only', async () => {
     const calls: string[] = [];
     const run = (answers: Record<string, string>) => async (cmd: string, args: string[]) => {
       calls.push([cmd, ...args].join(' '));
       return { code: 0, stdout: answers[cmd] ?? '', stderr: '' };
     };
-    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone admin', profiles: 'Enrolled via DEP: Yes\nMDM enrollment: Yes (User Approved)\n' }), 501), { admin: true, managed: true });
-    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone', profiles: 'Enrolled via DEP: No\nMDM enrollment: No\n' }), 501), { admin: false, managed: false });
-    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me adm sudo' }), 1000), { admin: true, managed: false });
-    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me users' }), 1000), { admin: false, managed: false });
-    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'root' }), 0), { admin: true, managed: false });
-    const noSystemd = { ...platformFor('linux'), fronting: { ...platformFor('linux').fronting, detect: () => ({ nft: null, certutil: null, nssdb: false, systemctl: null, resolved: false, caStore: null }) } };
-    assert.deepEqual(await machineFacts(noSystemd, run({ id: 'me sudo' }), 1000), { admin: true, managed: false, systemPossible: false });
-    assert.ok(calls.includes('profiles status -type enrollment'));
-    assert.ok(!calls.some((c) => c.startsWith('sudo')));
+    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone admin' }), 501), { admin: true });
+    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone' }), 501), { admin: false });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me adm sudo' }), 1000), { admin: true });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me users' }), 1000), { admin: false });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'root' }), 0), { admin: true });
+    assert.deepEqual([...new Set(calls)], ['id -Gn']);
   });
 });
 
@@ -62,10 +71,11 @@ describe('what each tier writes', () => {
 
 describe('the question', () => {
   test('three numbered choices with their URLs, the recommended one marked and the default', () => {
-    const q = tierQuestion('darwin', cfg, 'user', null);
-    assert.match(q.text, /^Local domains: open your apps by name instead of by port\.\n\n {2}1\) No admin {5}https:\/\/review\.localhost {3}\(recommended\)\n {5}macOS asks for your own password or Touch ID once/);
-    assert.match(q.text, /2\) System-wide {2}https:\/\/review\.localhost\n {5}Needs an administrator/);
-    assert.match(q.text, /3\) No prompts {3}http:\/\/review\.localhost\n {5}Nothing at all\./);
+    const q = tierQuestion('darwin', cfg, null, true);
+    assert.match(q.text, /^Local domains: open your apps by name instead of by port\.\n\n {2}1\) User certificate {9}https:\/\/review\.localhost {3}\(recommended\)\n {5}macOS asks for your Touch ID or password once/);
+    assert.match(q.text, /2\) System-wide certificate {2}https:\/\/review\.localhost\n {5}Needs an administrator's password/);
+    assert.match(q.text, /3\) No HTTPS {17}http:\/\/review\.localhost\n {5}Nothing will ask for a password\./);
+    assert.doesNotMatch(q.text, /2\) .*recommended/);
     assert.equal(q.prompt, 'Which? [1] ');
     assert.equal(q.byAnswer(''), 'user');
     assert.equal(q.byAnswer('2'), 'system');
@@ -74,10 +84,10 @@ describe('the question', () => {
     assert.equal(q.byAnswer('sure'), null);
   });
   test('set up already: the current tier is the default, and says so', () => {
-    const q = tierQuestion('linux', cfg, 'system', 'none');
+    const q = tierQuestion('linux', cfg, 'none');
     assert.equal(q.prompt, 'Which? [3] ');
-    assert.match(q.text, /3\) No prompts {3}http:\/\/review\.localhost:4480 {3}\(current\)/);
-    assert.match(q.text, /1\) No admin {5}https:\/\/review\.localhost:4443\n {5}Nothing: the certificate goes into your own NSS database/);
+    assert.match(q.text, /3\) No HTTPS {17}http:\/\/review\.localhost:4480 {3}\(current\)/);
+    assert.match(q.text, /1\) User certificate {9}https:\/\/review\.localhost:4443 {3}\(recommended\)\n {5}Nothing will ask for a password: the certificate goes into your own NSS database/);
   });
 });
 
@@ -98,7 +108,7 @@ describe('choosing the tier in setup', () => {
     const d = {
       store: { currentConfig: () => ({ ...c, mode: over.mode ?? 'direct', proxy: { ...c.proxy, trust: over.trust ?? null } }) },
       platform: platformFor('darwin'),
-      machine: { admin: false, managed: true },
+      machine: { admin: true },
       out: (s: string) => void (out += s),
       ...over,
     } as unknown as SetupDeps;
@@ -109,7 +119,7 @@ describe('choosing the tier in setup', () => {
     assert.equal(await chooseTier(deps().d, { trust: 'none' }), 'none');
     const h = deps();
     assert.equal(await chooseTier(h.d, { domain: 'myname.internal' }), 'system');
-    assert.match(h.out(), /A custom domain needs System-wide/);
+    assert.match(h.out(), /A custom domain needs System-wide certificate/);
   });
   test('on a terminal: the question, asked again until the answer makes sense; Enter takes the default', async () => {
     const answers = ['9', ''];
@@ -119,10 +129,10 @@ describe('choosing the tier in setup', () => {
     assert.deepEqual(asked, ['Which? [1] ', 'Which? [1] ']);
     assert.match(h.out(), /Answer 1, 2 or 3/);
   });
-  test('no terminal (or --yes, or --print): the current tier, else the recommended one, said out loud', async () => {
+  test('no terminal (or --yes, or --print): the current tier, else User certificate even for an admin, said out loud', async () => {
     const a = deps({ confirm: { yes: true } });
     assert.equal(await chooseTier(a.d, {}), 'user');
-    assert.match(a.out(), /^Tier: No admin \(--trust user\), recommended here\. Choose another with --trust user, --trust system or --trust none\./);
+    assert.match(a.out(), /^Tier: User certificate \(--trust user\), recommended here\. Choose another with --trust user, --trust system or --trust none\./);
     const b = deps({ mode: 'fronted', trust: null, confirm: { yes: true } });
     assert.equal(await chooseTier(b.d, {}), 'system', 'set up before the tiers: stays System-wide');
     assert.match(b.out(), /as set up now/);
@@ -148,7 +158,7 @@ describe("the dashboard's Turn on runs setup unattended (D65)", () => {
       const platform = { ...linux, listListeners: async () => [], processInfo: async () => new Map(), fronting: { ...linux.fronting, installed: () => ({ redirect: [leftover], trust: [], resolver: [] }) } };
       let out = '';
       const deps = { store: s.store, platform, services: () => { throw new Error('no service manager here'); }, env: { PATH: dir }, userHome: dir, query: async () => ({ code: 0, stdout: 'v2.11.2', stderr: '' }), out: (x: string) => void (out += x), isRoot: false, probe443: async () => 'none' as const, tlds: null };
-      await assert.rejects(setupUnattended(deps as never, 'system'), (e) => e instanceof SetupError && /System-wide needs an administrator/.test(e.message));
+      await assert.rejects(setupUnattended(deps as never, 'system'), (e) => e instanceof SetupError && /System-wide certificate needs an administrator/.test(e.message));
       await assert.rejects(setupUnattended(deps as never, 'none'), (e) => e instanceof SetupError && /this needs sudo once \(Remove the redirect.*\), so it runs in a terminal: `hallway setup --trust none`/.test(e.message));
       assert.equal(out, '', 'nothing ran');
     } finally {

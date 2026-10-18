@@ -134,7 +134,7 @@ export interface Forward {
 
 /**
  * The forwarders fronted mode wants on macOS (D65): loopback 443 and 80, on both families, to Caddy's ports; only 80
- * when it serves plain HTTP (the No prompts tier). Each is a socket launchd binds as root for a LaunchAgent: the only
+ * when it serves plain HTTP (the No HTTPS tier). Each is a socket launchd binds as root for a LaunchAgent: the only
  * way a user's job gets a privileged loopback port on macOS, with no sudo.
  */
 export function forwards(proxy: { httpsPort: number; httpPort: number }, scheme: 'https' | 'http'): Forward[] {

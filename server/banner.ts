@@ -142,7 +142,7 @@ export function startupMessage(o: Startup, t: Terminal): string {
       '',
       `Local domains are off. Run ${bold('hallway setup', depth)} to reach this dashboard at`,
       `${o.localDomains.dashboard} and each app at ${o.localDomains.app}`,
-      `(setup prints each step before it runs; the dashboard explains more).`,
+      `(by default with no admin needed; setup prints each step before it runs).`,
     );
   if (o.transient)
     out.push('', `Running from ${o.transient}, so it stops with this terminal. To keep it running:`, `  ${bold('npm i -g hallway && hallway service install', depth)}`);

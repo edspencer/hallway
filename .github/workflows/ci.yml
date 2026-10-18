@@ -133,7 +133,7 @@ jobs:
   # System-wide), the CA trusted system-wide or (Linux) in the user's NSS database, plain HTTP, Caddy (and, for a
   # custom domain, dnsmasq) as user-level jobs; scripts/fronted-real.mjs checks v1's acceptance criteria with curl and
   # that `hallway teardown` leaves nothing behind. It changes the runner's firewall, trust store and resolver, which is
-  # why it runs only here. On macOS, setup installs Caddy and dnsmasq itself, with Homebrew. The No admin tier's trust
+  # why it runs only here. On macOS, setup installs Caddy and dnsmasq itself, with Homebrew. The User certificate tier's trust
   # step on macOS waits for a Touch ID dialog nobody can answer on a runner, so there it's checked as a plan only.
   # ---------------------------------------------------------------------------------------------------------------
   fronted:

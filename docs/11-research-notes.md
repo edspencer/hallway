@@ -675,14 +675,21 @@ Run by the author on his own Mac (Apple silicon, current macOS, not MDM-managed;
   `pfd` (D64), broke the old pf redirect — moot now that D65 retired it on macOS; Caddy 2.11.7 via Homebrew;
   `sudo security add-trusted-cert` into the **System** keychain triggers its own Touch ID/trust-settings dialog even
   run under sudo, distinct from the user-domain dialog above.
+- **The dashboard's Turn on from the LaunchAgent daemon (2026-10-18, 0.7.1).** After `hallway teardown`, the author
+  opened `http://localhost:4255` and used **Turn on** for the user tier (then "No admin", now User certificate, D70).
+  The daemon, running as a LaunchAgent with no terminal, ran setup unattended, and its `security add-trusted-cert -r
+  trustRoot -k ~/Library/Keychains/login.keychain-db` **did bring up macOS's Touch ID dialog** on his screen; after he
+  answered it, local domains came up (the dashboard at `https://hallway.localhost`). **This settles D65's "the trust
+  dialog when setup runs from a LaunchAgent"** and the last open part of Q-USER-TRUST but Firefox. (Not tried: what
+  the daemon sees when that dialog is cancelled or left unanswered; the panel names it as the likely cause of a
+  failure rather than asserting it, D70.)
 - **Copy-paste UX**, for anyone writing setup instructions: oh-my-zsh's `url-quote-magic` escapes `;`, `>` and `(`
   right after a URL when a multi-line command is pasted (D65 already warns about this); separately, an interactive
   prompt (`npm create …`) swallows whatever was pasted after it in the same paste, so docs that chain an interactive
   command with further steps should put the interactive command on its own line, run on its own.
 
 **Still unverified on a real Mac:** logout/login and a reboot (the forwarders, the daemon, "Lost at last reboot", v1
-criterion 5's reboot half); the dashboard's **Turn on** dialog when setup is triggered by the LaunchAgent daemon
-rather than a terminal; Firefox; a managed (MDM) Mac; Docker Desktop or similar holding 443; `hallway teardown` on a
+criterion 5's reboot half); Firefox; a managed (MDM) Mac; Docker Desktop or similar holding 443; `hallway teardown` on a
 real Mac.
 
 ## Windows (D58), GitHub's hosted runners, 2026-10-16

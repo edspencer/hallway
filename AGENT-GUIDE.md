@@ -287,12 +287,12 @@ One group of links per file: `bookmarks/<group>.yaml`. The group slug is the fil
 | `domain.dashboard` | text | `hallway.localhost` when `base` is `localhost`, else `<base>` | Where the dashboard is in fronted mode. (a host name) |
 | `domain.tls` | true/false | `true` | Fronted mode is always HTTPS. |
 | `domain.dnsPort` | number 1–65535 | `4253` | Custom domains only: the loopback port Hallway's own dnsmasq answers on (the resolver configuration points at it). |
-| `proxy` | mapping |  | Fronted mode's Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` hands 443 and 80 to them (macOS: launchd's sockets; Linux: an nftables redirect, System-wide tier only). |
+| `proxy` | mapping |  | Fronted mode's Caddy (v1). Caddy runs as you on loopback ports above 1024; `hallway setup` hands 443 and 80 to them (macOS: launchd's sockets; Linux: an nftables redirect, System-wide certificate tier only). |
 | `proxy.caddy` | text | `caddy` on your PATH, else Homebrew's | The Caddy binary. |
 | `proxy.httpsPort` | number 1–65535 | `4443` | The loopback port Caddy serves HTTPS on. |
 | `proxy.httpPort` | number 1–65535 | `4480` | The loopback port Caddy serves HTTP on: a redirect to HTTPS, or the apps themselves with `scheme: http`. |
 | `proxy.publicPort` | number 1–65535 | `443` | The port in links: 443 (or 80 with `scheme: http`), which `hallway setup` hands to Caddy's ports. Set it to `httpsPort` to use fronted mode with nothing on 443 (links then carry the port); setup does that itself on Linux for the `user` and `none` tiers. |
-| `proxy.trust` | `user` \| `system` \| `none` | none chosen (a setup from before the tiers counts as `system`) | The tier `hallway setup` set up (D65), written by setup: `user` trusts Hallway's certificate for your account only (no admin), `system` for every account (admin; custom domains need it), `none` serves plain HTTP (no certificate, no prompt). |
+| `proxy.trust` | `user` \| `system` \| `none` | none chosen (a setup from before the tiers counts as `system`) | The tier `hallway setup` set up (D65, D70), written by setup: `user` is User certificate (the default: Hallway's certificate trusted for your account only, no admin), `system` is System-wide certificate (every account; admin; custom domains need it), `none` is No HTTPS (plain HTTP, no certificate, no prompt). |
 | `proxy.scheme` | `https` \| `http` | `https` | The scheme in links. `http` is the `none` tier: Caddy serves plain HTTP and redirects nothing. |
 | `probe` | mapping |  | Health checks. |
 | `probe.intervalSeconds` | number ≥ 5 | `60` | Seconds between checks. |

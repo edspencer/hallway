@@ -1,10 +1,10 @@
 // Linux: the OS-specific parts of fronted mode (fronting.ts, D47, D65).
-//   redirect   System-wide tier only (an unprivileged process can't have loopback 443 on Linux, and nothing binds it on
+//   redirect   System-wide certificate tier only (an unprivileged process can't have loopback 443 on Linux, and nothing binds it on
 //              the user's behalf): an nftables table, `inet hallway`, with a nat output chain, applied at boot by a oneshot system unit.
 //              Its own table: nothing else's rules are touched, and teardown deletes the table whole.
 //   trust      the system CA store (Debian/Ubuntu: /usr/local/share/ca-certificates; Fedora/RHEL/Arch:
 //              /etc/pki/ca-trust/source/anchors), plus the user's NSS database, which Chrome and Chromium read on
-//              Linux (no sudo; only when `certutil` and ~/.pki/nssdb exist). No admin: that NSS database alone,
+//              Linux (no sudo; only when `certutil` and ~/.pki/nssdb exist). User certificate: that NSS database alone,
 //              created if Chrome hasn't yet, with no prompt at all.
 //   resolver   a systemd-resolved drop-in routing `~<base>` to Hallway's dnsmasq.
 // POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too

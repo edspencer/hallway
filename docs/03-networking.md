@@ -82,14 +82,14 @@ Guidance the docs and `hallway doctor` must give:
   without dropping connections.
 - It keeps the daemon simple and unprivileged.
 
-### The tiers (D65)
+### The tiers (D65, D70)
 
 `hallway setup` asks which (or `--trust user|system|none`); re-running it with another switches, removing what the old
-tier added. The recommended tier comes first on the dashboard and is the question's default: No admin on a Mac whose
-user isn't an admin or that MDM manages, and on Linux without sudo (or without systemd and nftables); System-wide
-otherwise.
+tier added. **User certificate is always the recommended tier** (D70), on every platform and for every user: it comes
+first on the dashboard, already chosen, and is the question's default. System-wide certificate is for custom domains,
+other accounts and tools that read only the system's certificates (and, on Linux, links without a port).
 
-| | **No admin** (`user`) | **System-wide** (`system`) | **No prompts** (`none`) |
+| | **User certificate** (`user`) | **System-wide certificate** (`system`) | **No HTTPS** (`none`) |
 |---|---|---|---|
 | macOS links | `https://review.localhost` | the same, and custom domains | `http://review.localhost` |
 | macOS asks for | your own Touch ID or password, once (your certificate trust settings) | an administrator (System keychain; the resolver) | nothing |
@@ -99,13 +99,13 @@ otherwise.
 | Gives up | tools with their own CA list (Node without `--use-system-ca`, certifi, Homebrew's curl); custom domains | nothing | `Secure` cookies in Safari; apps that insist on `https:`; custom domains |
 
 config.yaml records it: `proxy.trust` (absent: a setup from before the tiers, which is System-wide), `proxy.scheme`
-(`http` for No prompts) and `proxy.publicPort` (the port in links). Every link Hallway gives comes from those.
+(`http` for No HTTPS) and `proxy.publicPort` (the port in links). Every link Hallway gives comes from those.
 
 ### Process and privileges (D47, D65)
 
 **Caddy runs as you, never as root, and never binds 443 or 80 itself.** The only root-owned parts of fronted mode are
 fixed jobs that take no configuration from anything a user-level process can write later (resolves
-Q-CADDY-UNPRIVILEGED), and on macOS there are none in the No admin and No prompts tiers:
+Q-CADDY-UNPRIVILEGED), and on macOS there are none in the User certificate and No HTTPS tiers:
 
 | Part | What | Runs as |
 |------|------|---------|
@@ -113,7 +113,7 @@ Q-CADDY-UNPRIVILEGED), and on macOS there are none in the No admin and No prompt
 | Its admin API | A Unix socket, `state/caddy/admin.sock`, mode `0600` (`admin.listen: unix//…/admin.sock\|0600`). Never a TCP port. | you |
 | 443 and 80, macOS (every tier) | launchd binds `127.0.0.1` and `::1` on 443 and 80 (80 only for plain HTTP) for four LaunchAgents, `hallway.forward.https`, `…https6`, `…http`, `…http6` (`Sockets`, inetd mode with `Wait`), started on the first connection; each runs `hallway forward <Caddy's port>`, a byte pipe from the socket it's handed to Caddy. | launchd binds, as root; the job runs as you |
 | The redirect, Linux (System-wide only) | Loopback 443 → 4443 and 80 → 4480: an nftables table (`inet hallway`, file `/etc/hallway/redirect.nft`) applied at boot by the system unit `hallway-redirect.service`. The other tiers have none: links carry Caddy's port. | root, fixed |
-| The trusted root | Hallway's local CA (`Hallway Local CA - <year> ECC Root`). System-wide: the System keychain / the system CA store (root, once). No admin: your login keychain's trust settings (macOS; your own password) or your NSS database (Linux; no prompt). | depends on the tier |
+| The trusted root | Hallway's local CA (`Hallway Local CA - <year> ECC Root`). System-wide certificate: the System keychain / the system CA store (root, once). User certificate: your login keychain's trust settings (macOS; your own password) or your NSS database (Linux; no prompt). | depends on the tier |
 | dnsmasq (custom domains) | `dnsmasq` on `127.0.0.1:domain.dnsPort` (4253), a user-level job `hallway.dnsmasq`. | you |
 | The resolver (custom domains) | macOS: `/etc/resolver/<base>` with `nameserver 127.0.0.1` and `port 4253`. Linux: `/etc/systemd/resolved.conf.d/hallway.conf` (`DNS=127.0.0.1:4253`, `Domains=~<base>`). | root, fixed |
 
@@ -154,7 +154,7 @@ Why this shape:
 
 **Fronted mode with nothing on 443 by hand:** set `proxy.publicPort` to `proxy.httpsPort` (4443) in `config.yaml`
 before running a System-wide setup. Links then carry the port (`https://review.localhost:4443`) and nothing is put on
-443. The No admin and No prompts tiers on Linux do this themselves.
+443. The User certificate and No HTTPS tiers on Linux do this themselves.
 
 ### Port 80/443 conflicts are real
 
@@ -202,7 +202,7 @@ http://:4480 {                # HTTP → HTTPS on the public port (443, or proxy
 }
 ```
 
-With `proxy.scheme: http` (No prompts) there's only the HTTP server, on 4480, with the same routes and fallback,
+With `proxy.scheme: http` (No HTTPS) there's only the HTTP server, on 4480, with the same routes and fallback,
 automatic HTTPS off and nothing redirected; no certificate is ever made.
 
 - A name already taken (an alias that is another app's slug, or the dashboard's name) is skipped and reported.
@@ -248,11 +248,11 @@ a managed app). The HTTP status stays the upstream error's (502).
   - System-wide, Linux: the system store (`/usr/local/share/ca-certificates/hallway-local-ca.crt` +
     `update-ca-certificates`, or `/etc/pki/ca-trust/source/anchors/` + `update-ca-trust extract`), and, as the user,
     the NSS database Chrome reads on Linux (`certutil -d sql:~/.pki/nssdb`) when `certutil` and that database exist.
-  - No admin, macOS: `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db <root.crt>`, no
+  - User certificate, macOS: `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db <root.crt>`, no
     sudo: macOS asks for the user's own Touch ID or password (`com.apple.trust-settings.user`), never an admin's. Only
     from a GUI session: run headless it waits on the dialog forever, so setup refuses when the console user isn't you.
     Teardown: `security remove-trusted-cert <root.crt>` (may ask again), then `delete-certificate -Z <sha1>`.
-  - No admin, Linux: only the NSS database, made first if Chrome hasn't run yet (`certutil -N --empty-password`).
+  - User certificate, Linux: only the NSS database, made first if Chrome hasn't run yet (`certutil -N --empty-password`).
 - `hallway doctor` checks the root is trusted where the tier puts it (macOS: its SHA-1 in `security find-certificate
   -a -Z` of the System or the login keychain, and for the user domain its name in `security dump-trust-settings`;
   Linux: the installed file, or the NSS database's copy).
@@ -266,7 +266,7 @@ a managed app). The HTTP status stays the upstream error's (502).
 TLS, moving an app behind a custom hostname silently breaks `crypto.subtle`, service workers, `getUserMedia`, the
 async clipboard API and anything else gated on secure contexts. (`http://*.localhost` *is* a secure context in
 Chromium, Firefox and WebKit, verified 2026-10-17, but WebKit still drops `Secure` cookies over plain HTTP; HTTPS
-removes the question. Plain HTTP on `*.localhost` is the opt-in No prompts tier (D65); custom domains are HTTPS only.)
+removes the question. Plain HTTP on `*.localhost` is the opt-in No HTTPS tier (D65); custom domains are HTTPS only.)
 
 ## DNS for custom domains (dnsmasq)
 
@@ -322,7 +322,7 @@ privileges (`server/proxy/setup.ts`; the tiers in `server/proxy/tiers.ts`; the p
 - `hallway setup`: check → (macOS, if missing: `brew install caddy`, as you) → write `generated/caddy.json` and check
   it with `caddy validate` → install and start the `hallway.caddy` user job → wait for its admin socket (and, for
   HTTPS, its CA) → (macOS) load the forwarders, launchd holding 443 and 80 → trust the root: **sudo** (System-wide) or
-  **you** (No admin) → (Linux, System-wide) **sudo**: install the redirect → remove what another tier (or an older
+  **you** (User certificate) → (Linux, System-wide certificate) **sudo**: install the redirect → remove what another tier (or an older
   Hallway: the pf redirect) added → set `mode: fronted` and the tier → check the dashboard answers at its address, with
   Hallway's certificate for HTTPS. (Homebrew runs with `HOMEBREW_NO_AUTO_UPDATE`, `HOMEBREW_NO_INSTALL_CLEANUP` and
   `HOMEBREW_NO_ENV_HINTS`, so its output doesn't bury setup's.)
@@ -338,7 +338,7 @@ privileges (`server/proxy/setup.ts`; the tiers in `server/proxy/tiers.ts`; the p
 - **It asks first (D67).** Typing `hallway setup` changes nothing by itself: it prints the plan (what `--print`
   shows), says what will ask for what (sudo's password in the terminal; on macOS, when the root isn't trusted yet,
   also the system's own Touch ID or password dialog for changing trust settings, which macOS requires even under sudo
-  since Big Sur, and which for No admin is the user's own, "not an administrator prompt"; or that nothing will ask),
+  since Big Sur, and which for User certificate is the user's own, "not an administrator prompt"; or that nothing will ask),
   then asks `Continue? [y/N]`. Anything but `y`/`yes` (Enter and Ctrl-D included) runs nothing and
   exits 1. `--yes` skips the question (scripts, CI); with no terminal and no `--yes` it's a usage error (exit 2),
   before anything runs. `hallway teardown` asks the same way.
@@ -349,8 +349,8 @@ privileges (`server/proxy/setup.ts`; the tiers in `server/proxy/tiers.ts`; the p
 - **Refusals**, before anything runs: `.local` (mDNS); an HSTS-preloaded TLD (`.dev`, `.app`, … the 51 whole-TLD
   entries on Chromium's preload list); `.example`/`.invalid`; something else on 80/443 or on Caddy's or dnsmasq's
   ports (named); a missing Caddy or dnsmasq with no Homebrew to install it; on Linux, no systemd, no `nft` or no CA
-  store for System-wide (with what to install), no `certutil` for No admin; on macOS, the CLI in npx's cache, or (No
-  admin) nobody at the Mac's screen to answer the trust dialog. **Warnings:** a delegated TLD (a domain you might own); a made-up TLD; Caddy older
+  store for System-wide certificate (with what to install), no `certutil` for User certificate; on macOS, the CLI in npx's cache, or (User
+  certificate) nobody at the Mac's screen to answer the trust dialog. **Warnings:** a delegated TLD (a domain you might own); a made-up TLD; Caddy older
   than 2.7; something on port 2019. The TLD check uses IANA's list, cached for a week in `cache/iana-tlds.txt`; a
   failed fetch is a warning.
 - **`hallway teardown [--print] [--uninstall-packages] [--yes]`** reverses only what is there (the resolver, the dnsmasq job,
@@ -359,7 +359,7 @@ privileges (`server/proxy/setup.ts`; the tiers in `server/proxy/tiers.ts`; the p
   `http://localhost:4255`. It never removes packages unless asked (`--uninstall-packages`: Homebrew's `caddy` and
   `dnsmasq`; on Linux it says to use the package manager). The CA stays, unused, in the data home.
 - Never writes outside: the data home; `~/Library/LaunchAgents/hallway.*.plist` or `~/.config/systemd/user/hallway-*`;
-  `/etc/hallway/` and `/etc/systemd/system/hallway-redirect.service` (Linux, System-wide); `/etc/resolver/<base>` or
+  `/etc/hallway/` and `/etc/systemd/system/hallway-redirect.service` (Linux, System-wide certificate); `/etc/resolver/<base>` or
   `/etc/systemd/resolved.conf.d/hallway.conf`; the trust store, or the user's login keychain or `~/.pki/nssdb`. (It
   removes `/Library/LaunchDaemons/hallway.pf.plist` and `/etc/pf.anchors/hallway` where an older Hallway left them.)
 - **Commands Hallway prints for copying avoid zsh's paste traps** (D65): one command per line, no shell metacharacters
@@ -373,12 +373,12 @@ Read-only diagnostics, each with a pass/warn/fail line and a suggested fix:
 - data home readable; any YAML parse/validation errors
 - (fronted) Caddy installed and at least 2.7; its job installed and running; its admin socket answering, private
   (`0600`), and holding the config in `generated/caddy.json`
-- (fronted) Caddy's ports, and (Linux, System-wide) 80/443, held by nothing else — or **who holds them instead**
+- (fronted) Caddy's ports, and (Linux, System-wide certificate) 80/443, held by nothing else — or **who holds them instead**
   (name and PID)
 - (fronted, macOS) `443 and 80 on loopback: launchd, for hallway.caddy`: the forwarders installed and loaded; an old
   pf redirect named as left over (`hallway setup` removes it, needing admin once)
 - (fronted) `https://<dashboard>` reaches Hallway's Caddy (through launchd's socket, or the redirect), with a
-  certificate that verifies against Hallway's root, and `http://` redirects; or, No prompts, `http://<dashboard>`
+  certificate that verifies against Hallway's root, and `http://` redirects; or, No HTTPS, `http://<dashboard>`
   answers, with an `info` line on Safari's `Secure` cookies
 - (fronted) Hallway's root trusted where the tier puts it (the system, or your account, with an `info` line on who
   else won't trust it and how to tell Node); a leftover system-wide trust in another tier; a Firefox note when Firefox
@@ -396,7 +396,7 @@ Read-only diagnostics, each with a pass/warn/fail line and a suggested fix:
 
 - `*.localhost` resolves through `systemd-resolved` (and `nss-myhostname`); doctor warns if it doesn't.
 - No unprivileged way to loopback 443 exists (`ip_unprivileged_port_start` is 1024, and a systemd *user* socket unit
-  gets `EACCES`: the user manager binds as the user), so No admin and No prompts carry Caddy's port in links.
+  gets `EACCES`: the user manager binds as the user), so User certificate and No HTTPS carry Caddy's port in links.
 - The redirect (System-wide) is nftables (`inet hallway`, a nat `output` chain), applied by a oneshot system unit after
   `nftables.service`; the file deletes and re-creates its own table, so re-applying it never duplicates rules and no
   one else's rules are touched.

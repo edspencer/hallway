@@ -3,7 +3,7 @@
 // macOS), which this build's `hallway setup --trust system` must migrate (launchd's sockets on macOS, no pf); then the
 // criteria, System-wide: 443/80 (launchd on macOS, nftables on Linux), the CA trusted system-wide, Caddy as a
 // user-level job; then a custom domain (dnsmasq and the resolver); then the other tiers, each switched to from the
-// last: No prompts (plain HTTP) everywhere, No admin for real on Linux (the NSS database) and as a plan on macOS (its
+// last: No HTTPS (plain HTTP) everywhere, User certificate for real on Linux (the NSS database) and as a plan on macOS (its
 // trust step waits for a Touch ID dialog nobody can answer on a runner); then `hallway teardown` must leave nothing
 // behind. It changes the machine's firewall, trust store and
 // resolver, so it refuses to run unless CI=true and HALLWAY_REAL_FRONTED=1. The data home is a throwaway; the labels
@@ -332,10 +332,10 @@ try {
   });
 
   step('D65: the other tiers, switched to from System-wide with a custom domain');
-  await check('No admin, as a plan: no sudo but the removals; the trust step is the user\'s own, and says so', async () => {
+  await check('User certificate, as a plan: no sudo but the removals; the trust step is the user\'s own, and says so', async () => {
     const out = must('setup', '--print', '--trust', 'user');
-    assert.match(out, /Moving from System-wide to No admin: what the old tier added is removed \(that needs sudo, this once\)/);
-    assert.match(out, /myname\.internal is a custom domain, and those need System-wide/);
+    assert.match(out, /Moving from System-wide certificate to User certificate: what the old tier added is removed \(that needs sudo, this once\)/);
+    assert.match(out, /myname\.internal is a custom domain, and those need System-wide certificate/);
     if (darwin) {
       assert.match(out, /\[you\] Trust Hallway's local certificate authority for your account only/);
       assert.match(out, /\$ security add-trusted-cert -r trustRoot -k \S+\/Library\/Keychains\/login\.keychain-db /);
@@ -344,9 +344,9 @@ try {
     // the only sudo steps remove what System-wide installed
     for (const line of out.split('\n').filter((l) => /^\d+\. \[sudo\]/.test(l))) assert.match(line, /Remove|Stop sending/, line);
   });
-  await check('No prompts: plain HTTP on the default names; the resolver, dnsmasq and the system-wide trust are gone', async () => {
+  await check('No HTTPS: plain HTTP on the default names; the resolver, dnsmasq and the system-wide trust are gone', async () => {
     const out = must('setup', '--yes', '--trust', 'none');
-    assert.match(out, /Moving from System-wide to No prompts/);
+    assert.match(out, /Moving from System-wide certificate to No HTTPS/);
     const app = darwin ? 'http://review.localhost/' : 'http://review.localhost:4480/';
     const r = await until('the app over plain HTTP', async () => {
       const x = curl(app);
@@ -367,7 +367,7 @@ try {
     assert.equal(s.fronting.trust, 'none');
   });
   if (!darwin)
-    await check('No admin on Linux, for real: https on :4443, the root in the NSS database only, no sudo', async () => {
+    await check('User certificate on Linux, for real: https on :4443, the root in the NSS database only, no sudo', async () => {
       const out = must('setup', '--yes', '--trust', 'user');
       assert.doesNotMatch(out, /\$ sudo /);
       const r = curl('https://review.localhost:4443/', ['--cacert', ca]);

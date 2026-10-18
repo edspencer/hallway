@@ -187,7 +187,7 @@ export class Services {
   /**
    * The Hallway version a job that runs Hallway's own CLI (the daemon, a forwarder) was last generated or started by,
    * when that isn't this CLI's: after `npm i -g hallway@latest` the file on disk is new, but a process started before
-   * keeps running the old code until it's restarted (D69). Null when it's this version, or unknown.
+   * keeps running the old code until it's restarted (D70). Null when it's this version, or unknown.
    */
   staleVersion(label: string): string | null {
     if (label !== DAEMON_LABEL && !isForwardLabel(label)) return null;
@@ -257,7 +257,7 @@ export class Services {
    * Rewrite job definitions from the YAML and the current Node and PATH (`service regenerate`), e.g. after a Node
    * upgrade removed the one a job was pointing at. Running jobs are restarted onto the new definition; stopped ones
    * stay stopped. A running job of Hallway's own (the daemon, a forwarder) started by another version of Hallway is
-   * restarted even if its definition is unchanged (D69): `daemonVersion` is what the running daemon says it is, which
+   * restarted even if its definition is unchanged (D70): `daemonVersion` is what the running daemon says it is, which
    * beats its manifest; `upgraded` says from which version.
    */
   async regenerate(slug?: string, { daemonVersion }: { daemonVersion?: string | null } = {}): Promise<{ label: string; changed: boolean; restarted: boolean; upgraded?: string; error?: string }[]> {
@@ -342,14 +342,14 @@ export class Services {
   }
 
   /** Load exactly these forwarders: each one's job written and loaded, any other `hallway.forward.*` removed. One
-   *  still running another version's code is restarted (D69). */
+   *  still running another version's code is restarted (D70). */
   async forwardersUp(want: readonly Forward[]): Promise<void> {
     const specs = want.map((f) => this.forwardSpec(f));
     for (const label of this.forwardersInstalled()) if (!want.some((f) => f.label === label)) await this.removeLabel(label);
     for (const spec of specs) await this.up(spec, { restart: !!this.staleVersion(spec.label) });
   }
 
-  /** Restart the running forwarders that another version of Hallway started (D69); returns their labels. Ones that
+  /** Restart the running forwarders that another version of Hallway started (D70); returns their labels. Ones that
    *  aren't running (launchd starts them on the next connection, with the CLI now on disk) are left alone. */
   async restartStaleForwarders(): Promise<string[]> {
     const done: string[] = [];
