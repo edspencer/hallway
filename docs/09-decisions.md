@@ -1379,14 +1379,19 @@ no sudo and no prompt, not reachable on en0.
   everywhere; teardown leaving no forwarder, pf file, trust or NSS entry.
 
 **Still unverified on a real Mac** (CI's macOS runner covers launchd's sockets on 443/80 and `[::1]`, the migration from
-0.6.0 and plain HTTP, but has no person at the screen): the No admin trust step run *by setup* (the same `security`
-command Ed ran by hand with Touch ID); Safari and Chrome on `https://hallway.localhost` through the forwarders; Vite HMR
-through launchd → forwarder → Caddy (verified on Linux with `--listen`, not through launchd's fd); the forwarders after
-logout/login and a reboot; whether removing *real* user trust settings prompts; Firefox's `enterprise_roots` with a
-user-domain root; the trust dialog when setup runs from a LaunchAgent (the dashboard's Turn on, D63's follow-up); Docker
-Desktop (or similar) already holding `127.0.0.1:443` (setup should refuse: "443 answers, but not with Hallway's
-certificate"); on a managed Mac, the "Background Items Added" notification and whether MDM blocks user LaunchAgents
-with `Sockets`.
+0.6.0 and plain HTTP, but has no person at the screen): the forwarders after logout/login and a reboot; whether
+removing *real* user trust settings prompts; Firefox's `enterprise_roots` with a user-domain root; the trust dialog
+when setup runs from a LaunchAgent (the dashboard's Turn on, D63's follow-up); Docker Desktop (or similar) already
+holding `127.0.0.1:443` (setup should refuse: "443 answers, but not with Hallway's certificate"); on a managed Mac,
+the "Background Items Added" notification and whether MDM blocks user LaunchAgents with `Sockets`; `hallway teardown`
+on a real Mac.
+
+> **Updated 2026-10-17/18 (real Mac, the author's, not managed):** the three items above that are no longer
+> listed — the No admin trust step run *by `hallway setup` itself* (a System-wide → No admin migration, with D67's
+> plan and `Continue?` prompt, one sudo password and then Touch ID), Safari and Chrome loading
+> `https://hallway.localhost` and app subdomains through the forwarders with no warning, and Vite HMR through
+> launchd → forwarder → Caddy (0.7.1, after the D68 fix) — are now verified. Details and what's still open:
+> `11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop Mac".
 
 ### D66 — Brand marks for doors with no favicon; the door-number plate is dropped (2026-10-17)
 
@@ -1524,6 +1529,11 @@ Vite, Astro, Next and most dev servers bind `localhost` by default. So this hits
   - honouring an explicit `host: 127.0.0.1` as "IPv4 only": the default is indistinguishable from it in the parsed
     config, and the case it would serve (a different server on each family, same port) is vanishingly rare.
 
+**Verified on a real Mac, 2026-10-17/18:** the fix was checked against the exact failure that led to this decision —
+Vite 8.3.4 bound to `[::1]` only, now reached through Caddy's `localhost` dial, launchd's sockets and the Node
+forwarders, with a real HMR update and no reload on 0.7.1 (`11-research-notes.md`, "Fronted mode, HMR and the
+upgrade restart on a real desktop Mac").
+
 ### D69 — An upgrade restarts what runs Hallway's own code: `service install`, `regenerate`, `setup`; doctor flags it (2026-10-18)
 
 Found on the author's real-Mac run: `npm i -g hallway@latest` (0.5.2 → 0.7.0), then `hallway service install` said
@@ -1561,3 +1571,7 @@ the old dashboard and API while the new CLI drove setup.
     changed;
   - an npm `postinstall` hook that restarts the daemon: install scripts don't run for everyone (`--ignore-scripts`,
     pnpm's defaults), run as whoever ran npm, and would reach into the service manager from a package install.
+
+**Verified on a real Mac, 2026-10-17/18:** `npm i -g hallway@latest && hallway service install` on 0.7.0 reproduced
+the bug (the 0.5.2 daemon kept running); the same upgrade step on 0.7.1 restarted the daemon onto the new version, as
+designed (`11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop Mac").
