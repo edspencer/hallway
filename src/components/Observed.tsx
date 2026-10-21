@@ -122,7 +122,7 @@ function ObservedRow({ o, home, takenSlugs, notify }: { o: ObservedListener; hom
   );
 }
 
-function IgnoreMenu({ o, home, onDone, notify }: { o: ObservedListener; home: string | null; onDone(): void; notify: ObservedProps['notify'] }) {
+export function IgnoreMenu({ o, home, onDone, notify }: { o: ObservedListener; home: string | null; onDone(): void; notify: ObservedProps['notify'] }) {
   const ref = useRef<HTMLDivElement>(null);
   const dir = o.identity.projectDir ?? o.identity.cwd;
   useEffect(() => {
@@ -164,7 +164,7 @@ const EXPECTED: { v: Expected; label: string; hint: string }[] = [
   { v: 'stopped', label: 'Off for now', hint: 'Kept, but expected to be off' },
 ];
 
-function ClaimForm({ o, takenSlugs, onDone, notify }: { o: ObservedListener; takenSlugs: Set<string>; onDone(): void; notify: ObservedProps['notify'] }) {
+export function ClaimForm({ o, takenSlugs, onDone, notify }: { o: ObservedListener; takenSlugs: Set<string>; onDone(): void; notify: ObservedProps['notify'] }) {
   const initialName = o.identity.name ?? o.identity.displayName ?? o.title ?? '';
   const [slug, setSlug] = useState(o.suggestedSlug ?? (slugify(initialName) || `port-${o.port}`));
   const [name, setName] = useState(initialName);

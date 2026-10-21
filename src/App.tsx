@@ -14,6 +14,7 @@ import { Help } from './components/Help';
 import { LocalDomainsDialog, LocalDomainsPanel, type TurnOn } from './components/LocalDomains';
 import { LostBanner } from './components/Lost';
 import { ObservedTray, listenerName } from './components/Observed';
+import { TrayLab, trayVariant } from './lab/tray/Lab';
 import { ProblemBanner } from './components/Problems';
 import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
@@ -260,7 +261,12 @@ export function App() {
       ) : null,
     observed: () =>
       isScanning(state) && observed.length > 0 ? (
-        <ObservedTray key="observed" observed={observed} home={home} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
+        // design exploration (tray-clarity): `?tray=a…d` swaps the tray for one of four grouped treatments
+        trayVariant() ? (
+          <TrayLab key="observed" initial={trayVariant()!} observed={observed} platform={state.daemon.platform} home={home} takenSlugs={takenSlugs} notify={toasts.push} />
+        ) : (
+          <ObservedTray key="observed" observed={observed} home={home} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
+        )
       ) : null,
     bookmarks: () =>
       hasBookmarks ? <Bookmarks key="bookmarks" groups={state.bookmarks} visible={found?.bookmarks} filtering={!!found} iconVersion={live.iconVersion} notify={toasts.push} /> : null,
