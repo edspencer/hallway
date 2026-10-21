@@ -23,7 +23,7 @@ export function currentTier(cfg: Pick<HallwayConfig, 'proxy'>): Trust {
 export interface MachineFacts {
   /** In the `admin` group (macOS), or `sudo`/`wheel`/`admin` (Linux), or root. */
   admin: boolean;
-  /** Browsers an organisation set to ignore certificates added to the OS (D72); absent: not asked. */
+  /** Browsers an organisation set to ignore certificates added to the OS (D73); absent: not asked. */
   policies?: BrowserPolicy[];
 }
 
@@ -37,7 +37,7 @@ export async function machineFacts(platform: Pick<Platform, 'id'> & { fronting?:
 }
 
 /**
- * What to say when an organisation has set a browser to ignore certificates added to the OS (D72): Chrome's (or
+ * What to say when an organisation has set a browser to ignore certificates added to the OS (D73): Chrome's (or
  * Edge's) `CAPlatformIntegrationEnabled = false`. It counts the login and the System keychain alike as added, so
  * System-wide certificate is no way round it (by Chrome's own description; unverified on a managed Mac). Null: no
  * such policy, or a tier without a certificate.

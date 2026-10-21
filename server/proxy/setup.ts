@@ -303,7 +303,7 @@ export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust:
     const here = await (deps.atScreen ?? (() => atTheScreen(deps.query)))();
     if (here === false) stops.push("trusting the certificate for your account shows a macOS dialog, and you aren't the one at this Mac's screen (logged in over SSH?): run `hallway setup --trust user` at the Mac itself, or use --trust none");
   }
-  // a browser its organisation set to ignore certificates you add: said before anything runs (D72)
+  // a browser its organisation set to ignore certificates you add: said before anything runs (D73)
   if (tier !== 'none' && f.browserPolicies) {
     const policies = deps.machine?.policies ?? (await f.browserPolicies(os.userInfo().username, deps.query).catch(() => []));
     const w = policyWarning(policies, tier);
@@ -391,7 +391,7 @@ export interface Plan {
   conflicts?: PortConflict[];
   /** When only 443/80 are in the way: Caddy's own port, which links can carry instead (`--port`), and the command. */
   alt?: { port: number; command: string } | null;
-  /** The step that trusts Hallway's root, if the tier has one: after a run, not `done` means it ran (D72). */
+  /** The step that trusts Hallway's root, if the tier has one: after a run, not `done` means it ran (D73). */
   trustStep?: Step;
   warnings: string[];
   steps: Step[];
@@ -792,7 +792,7 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
         else lines.push(`   ✗ ${url}: ${t ? `a certificate from ${t.issuer ?? 'someone else'} (${t.error})` : 'nothing answered'}`);
         if (h?.status === 308 && h.location?.startsWith(`https://${facts.dashboard}`)) lines.push(`   ✓ ${plain} redirects to HTTPS`);
         else lines.push(`   ✗ ${plain}: ${h ? `HTTP ${h.status}` : 'nothing answered'}`);
-        // Caddy serving Hallway's certificate isn't the same as the machine trusting it: check it as browsers do (D72)
+        // Caddy serving Hallway's certificate isn't the same as the machine trusting it: check it as browsers do (D73)
         const f = deps.platform.fronting;
         if (ok && f.osTrust && facts.tier !== 'none') {
           const v = await f.osTrust({ host: facts.dashboard, port: pub }, facts.tier, facts.env, deps.query);
@@ -1000,7 +1000,7 @@ export const captureExec =
  * and only when the plan has no sudo step (moving off System-wide certificate has some: that's for a terminal). macOS
  * may still show its own trust dialog (User certificate): that one is the user's, on their screen. Throws SetupError with why not.
  */
-/** Said once a trust step has run (D72): Chrome can keep a certificate error it saw before the root was trusted, until
+/** Said once a trust step has run (D73): Chrome can keep a certificate error it saw before the root was trusted, until
  *  it's quit and reopened (seen on one of the author's Macs, not on another). */
 export const RESTART_BROWSER = 'If a browser showed a certificate warning before, quit and reopen it (Chrome remembers the old result).';
 

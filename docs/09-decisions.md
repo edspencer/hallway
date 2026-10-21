@@ -1772,3 +1772,89 @@ fixed it. On his personal Mac, Chrome hadn't needed that.
     Android.
 - **Unverified on a real Mac:** the policy check on a managed Mac with the policy set; Apple's curl disagreeing with
   Chrome other than through Chrome's cached error (none seen); the restart line's wording in the dashboard on a Mac.
+
+### D73 — The observed tray says what each listener is: forwarders by what's behind them, desktop apps' ports as internals, tools by package, every port's answer in words, grouped (2026-10-21; amends D11, D38, D62)
+
+The author's work Mac (0.8.0) had 24 rows under "Found running, not yet named" and the tray was nearly unreadable.
+One Rancher Desktop Lima `ssh` mux (`ssh: …/rancher-desktop/lima/0/ssh.sock [mux]`, PPID 1, cwd `/`) held 17 ports,
+each shown as `ssh: /` and **orphaned**; a container's page title ("OWASP Juice Shop") was the only clue, in small
+grey italics. Rancher Desktop's own app ports were `app`, an authenticator's was `mobile`, a globally installed
+service was `service`, Local Review run with npx in some repository was named after the repository, a `tsx` server was
+called vite (vite was a devDependency), three scripts in one checkout were three identical rows, and nobody could say
+what "exposed" meant or which rows were web servers. A read-only check on that Mac showed the containers' published
+ports were 2224, 3000, 4000, 5432, 5544, 5546, 8014 and 9001; the rest (6443, 6444, 9000, 10010, 10248, 10249, 10250,
+10256–10259) were the k3s cluster's own. A published Postgres container (5432) was missing from the tray altogether.
+
+Four treatments were explored on the never-merged `tray-clarity` branch (`?tray=a…d`: a grouped list, a source list,
+shelves of tiles, a digest); the author had **A, the grouped list** (the recommendation) built.
+
+- **Forwarders are not the app** (`server/scanner/forwarders.ts`). A listener whose process is a forwarder (`ssh`,
+  `limactl`, `gvproxy`, `vpnkit`, `com.docker.*`, `docker-proxy`, `rootlessport`, `OrbStack…`, `kubectl
+  port-forward`) is matched to its tool by the command line (D71's table: Rancher Desktop, Colima, OrbStack, Docker
+  Desktop, Podman, Lima), else an `ssh` is an **SSH tunnel** named by its destination host. What's behind each port is
+  asked of the tool's own CLIs, once per scan and only when something is forwarded, read-only, each with a 4 s limit:
+  `docker --context <the tool's> ps --format '{{json .}}'` (then without `--context`), `nerdctl ps` (Rancher Desktop's
+  containerd engine, Lima, Colima), `podman ps --format json`, and `kubectl --context <the tool's> get svc -A -o json`
+  for LoadBalancer ports and NodePorts. The CLIs are looked for in the tool's own directory first (`~/.rd/bin`,
+  `~/.orbstack/bin`, Docker.app's), then PATH, so one tool's ports aren't looked up in another's engine; kubectl is
+  **never** run in the current context (it may be a real cluster).
+  - A cluster's own components by port: 6443 API server, 6444 (k3s's internal API server), 2379/2380 etcd, 10010 the
+    runtime's streaming server, 10248 kubelet health, 10249 kube-proxy metrics, 10250 kubelet, 10256 kube-proxy
+    health, 10257 controller manager, 10258 cloud controller manager, 10259 scheduler, unless a container publishes
+    the port. A forwarded port that no listed container and no service has, from a tool whose containers were listed
+    and that runs a cluster, is the cluster's too ("Kubernetes component": the author's 9000). Without the CLIs (no
+    docker, no kubectl, a stopped VM) nothing is guessed: the port is the tool's, named by its page title where it has
+    one, else "Unidentified forward".
+  - Forwarders, and desktop apps' helpers, are **never orphaned**: their tool supervises them, whatever their parent
+    (the Lima mux daemonises, so its PPID is 1). Amends D62.
+  - Docker Desktop's `com.docker.*` and `vpnkit*` leave the noise list (D38): they're forwarders, and hid every
+    container Docker Desktop publishes. Postgres and the other well-known daemons stay noise **by process name**, so a
+    published Postgres container, which is its forwarder's process, shows (as the container's, `Not HTTP`). Why the
+    author's 5432 was missing in 0.8.0 isn't known from the code (nothing filters an `ssh` by port); a scan from that
+    Mac with this version will say.
+- **Desktop apps' internal ports** (`server/scanner/apps.ts`): named by the outermost `.app` bundle in the command
+  line (helpers live inside their app's bundle), else a launchd `application.<bundle id>.<n>.<n>` label or a sandbox
+  container (`~/Library/Containers/<bundle id>`) humanised, else an install directory (`/opt/<App>`, `/snap/<app>`,
+  `Program Files\…\<App>`). Not when the bundle is inside the project (an Electron app under development is the
+  project). They're **App internals**, folded.
+- **Tools aren't the project they run in**: a package run from npx's or pnpm dlx's cache, a global prefix's
+  `lib/node_modules`, bun's, Volta's or Yarn's globals, pipx or `uv tool` is that package (`local-review`,
+  `@example/notebook`), an **app**, with the repository it runs in as context. Only those global locations count: a
+  project's own `node_modules/.bin/vite`, hoisted in a monorepo or not, stays the project.
+- **Names** (`describe.ts`, `nameOf`): the container, the Kubernetes service or component, the desktop app, a tool's
+  page title or package; a project's name unless it says nothing (`service`, `app`, `api`, `web`, `server`, a bare
+  runtime…), when the page's title does better; with no project, D62's supervisor-or-executable unless that says
+  nothing either (`ssh`, `mobile`), then the title. `labelListeners` uses it, so `hallway scan`, Lost at last reboot
+  and the claim slug get the same names. A project in a dot-directory of the home (`~/.notebook/service`) is an app.
+- **The script tells servers in one checkout apart** (`ListenerIdentity.script`, `scriptOf`): `node rig/a.mjs` →
+  `rig/a.mjs`, flags and their values skipped (`--require …`), `-m module`, a `.bin` name.
+- **Framework only from what the process runs** (amends D38): the command first; from the project's packages, only
+  server libraries in runtime `dependencies` (express, fastify, hono, koa, nest). Development servers and CLIs (vite,
+  next, astro…) are on the command line when they're what's running.
+- **Every port says what it answered** (`HttpAnswer`): page, API, sign-in (401/403/407, or a redirect whose
+  `Location` looks like a login), redirect, error (5xx), empty (another 4xx: "Nothing at /", or "HTTP 400"), not HTTP.
+  The sniff now keeps the content type and `Location`, and retries over TLS (any certificate; it only looks) when plain
+  HTTP was hung up on or answered 400 saying it wants HTTPS. A timeout is never retried. `ObservedListener.url` is
+  `https://` for those. Only a page, a sign-in or a redirect gets **Open**.
+- **"exposed" is "On your network"** in the tray, with one sentence above the groups when anything is: *Other
+  devices can reach it: it listens on every network interface, not just this Mac. Bind a server to 127.0.0.1 to keep
+  it to yourself.* The tooltip keeps the socket. Doors keep `exposed` for now.
+- **The groups** (`src/lib/tray.ts`, pure, tested under node; `ObservedListener.role` from the server): Your projects
+  (a set per repository, its worktrees and branches together; rows headed by package, else branch, else script; a
+  shared branch in the set's heading), Apps on this Mac / computer / PC, one group per forwarding tool (containers
+  and services, then its cluster's components in a folded **Kubernetes** set), App internals (folded), Other (folded
+  unless something in it is a page). Rows order pages first, not HTTP last. Opening a fold is remembered in the
+  browser. The filter matches `searchFields` (one list per row, kept for the search that comes next), opens folds while
+  it's on, and rows keep the headings they have in the whole tray.
+- **Also fixed on the way:** a home directory under a system directory (a service account's in `/var/lib`) was a
+  "non-project directory", so nothing in it had a project; only `~/Library` is ruled out there now. Ignore by
+  directory is disabled for `/` (it would hide everything started there).
+- **Rejected:** grouping by port ranges or process name alone (the author's complaint: SSH things mixed with
+  everything else; the process is the forwarder, not the thing). Asking `docker` through whatever context is current
+  (Docker Desktop's engine answering for Rancher Desktop's ports). Inferring containers from well-known port numbers
+  (9000 isn't always MinIO; on the author's Mac it was k3s's). Reading `Info.plist` for an app's name (the bundle path
+  already says it, and a binary plist needs `plutil`). The other three treatments: a source list hides everything but
+  one group; shelves of tiles and a digest each add something to learn before the identification shows.
+- **Unverified on a real Mac:** `docker --context rancher-desktop`, `nerdctl` from a LaunchAgent's environment,
+  `kubectl --context rancher-desktop`, the Lima mux's argv as lsof and ps report it (the fixtures follow the author's
+  output), OrbStack's helper's process name, and Docker Desktop's forwarders once they're no longer noise.

@@ -176,7 +176,7 @@ function RunStatus({ run, tier, macos, onCopy, onReset, onStart, noAlt }: { run:
 }
 
 /** Turned on from this page: where the dashboard is now, and the way there. When the run trusted Hallway's
- *  certificate, a browser that warned before may need quitting and reopening (D72). */
+ *  certificate, a browser that warned before may need quitting and reopening (D73). */
 function TurnedOn({ url, appUrl, trustChanged }: { url: string; appUrl: string; trustChanged?: boolean }) {
   return (
     <div className="hw-run hw-run--done" role="status">

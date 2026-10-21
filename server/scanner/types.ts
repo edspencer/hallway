@@ -1,5 +1,7 @@
 // What the scanner records about a listener: the full identity it worked out, as kept in state/observed.json. The
 // HTTP API's shapes (shared/api.ts) are derived from this by the daemon's wiring.
+import type { Sniff } from './sniff.js';
+import type { ListenerApp, ListenerVia } from '../../shared/api.js';
 import type { Supervisor } from '../platform/listeners.js';
 
 /** How exposed a listener is: loopback only, every interface (reachable from the network), or specific addresses. */
@@ -18,7 +20,7 @@ export interface Observation {
   bind: BindScope;
   /** `web` if it answered HTTP; `other` listeners go in a collapsed group. */
   kind: 'web' | 'other';
-  http: { status: number; title: string | null; favicon: string | null } | null;
+  http: Sniff | null;
   command: string | null;
   argv: string[] | null;
   cwd: string | null;
@@ -47,6 +49,12 @@ export interface Observation {
     commonDir: string;
     remote: string | null;
   } | null;
+  /** It forwards the port for a container, a Kubernetes service or an SSH tunnel (D73). Absent before 0.9. */
+  via?: ListenerVia | null;
+  /** The desktop application it belongs to (D73). */
+  app?: ListenerApp | null;
+  /** A package run as a tool (npx, a global install), not the project in its working directory (D73). */
+  tool?: string | null;
   /** What to call it: the project name, or `repo @ branch` when worktrees of one repository are running side by side. */
   label: string;
   firstSeen: string;

@@ -61,7 +61,7 @@ export interface FrontingEnv {
 
 export class FrontingUnsupported extends Error {}
 
-/** A verification of the served certificate the way browsers do it (D72): trusted, not trusted (with why), or not
+/** A verification of the served certificate the way browsers do it (D73): trusted, not trusted (with why), or not
  *  known (nothing answered: a connection problem, not a trust one). `how` says what checked it, for people. */
 export type OsTrust = { trusted: boolean | null; how: string; cause?: string };
 
@@ -72,7 +72,7 @@ export interface BrowserPolicy {
   file: string;
 }
 
-/** curl's verdict on a TLS connection, by its exit code (D72): 0 is trusted (whatever the HTTP status); 60 (no
+/** curl's verdict on a TLS connection, by its exit code (D73): 0 is trusted (whatever the HTTP status); 60 (no
  *  trusted issuer), 51 (wrong name), 35 and 58/59 (handshake, certificate) are not, with curl's own words; anything
  *  else (refused, timed out, can't resolve) says nothing about trust. */
 export function curlTrust(code: number, stderr: string, how: string): OsTrust {
@@ -105,12 +105,12 @@ export interface Fronting {
   userUntrust?(env: FrontingEnv): Recipe;
   /** Is it trusted for this user (the user-only kind, not the system-wide one)? */
   userTrusted?(env: FrontingEnv, run: Runner): Promise<boolean>;
-  /** Does this machine trust the certificate served at `https://host:port` the way browsers check it (D72)? Not
+  /** Does this machine trust the certificate served at `https://host:port` the way browsers check it (D73)? Not
    *  "is Hallway's root in a store" but a real verification with no CA given: Apple's curl on macOS (the keychain's
    *  trust settings, as Safari and Chrome read them), the system's curl for Linux's System-wide certificate, and
    *  Chrome's NSS database for Linux's User certificate. */
   osTrust?(target: { host: string; port: number }, tier: 'user' | 'system', env: FrontingEnv, run: Runner): Promise<OsTrust>;
-  /** Browsers an organisation has set to ignore certificates added to the OS's trust store (D72; macOS: Chrome's and
+  /** Browsers an organisation has set to ignore certificates added to the OS's trust store (D73; macOS: Chrome's and
    *  Edge's `CAPlatformIntegrationEnabled = false` in managed preferences), with where it was found. */
   browserPolicies?(user: string, run: Runner): Promise<BrowserPolicy[]>;
   /** Send the custom base domain to Hallway's dnsmasq, and stop. */

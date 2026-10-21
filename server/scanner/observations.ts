@@ -22,7 +22,7 @@ export function observationId(root: string | null, port: number, normalisedComma
 }
 
 /** Runtimes and shells that say nothing about what they run: `node` alone doesn't name a server. */
-const RUNTIMES = /^(node|nodejs|bun|deno|python[\d.]*|ruby|java|php|perl|dotnet|sh|bash|zsh|dash|fish|env|npm|npx|pnpm|yarn|uv|tsx)(\.exe)?$/i;
+export const RUNTIMES = /^(node|nodejs|bun|deno|python[\d.]*|ruby|java|php|perl|dotnet|sh|bash|zsh|dash|fish|env|npm|npx|pnpm|yarn|uv|tsx)(\.exe)?$/i;
 
 /**
  * A supervisor's label, shortened to what it names: `homebrew.mxcl.<formula>` and other reverse-DNS launchd labels
@@ -46,27 +46,6 @@ export function fallbackName(o: Pick<Observation, 'supervisor' | 'argv' | 'proce
   if (o.supervisor) return supervisorName(o.supervisor.label);
   const exe = o.argv?.[0] ? o.argv[0].split(/[\\/]/).at(-1)! : o.process;
   return exe && !RUNTIMES.test(exe) ? exe.replace(/\.exe$/i, '') : null;
-}
-
-/**
- * What to call each listener. Worktree siblings (listeners from different checkouts of one repository) become
- * `repo @ branch`, so three copies of one dashboard on three ports can be told apart; a lone linked worktree is
- * labelled the same way. Everything else is its project name, else its supervisor's label or its executable
- * (`fallbackName`), else its process name and port.
- */
-export function labelListeners(list: Observation[]): void {
-  const checkouts = new Map<string, Set<string>>();
-  for (const l of list) {
-    if (!l.git) continue;
-    const s = checkouts.get(l.git.commonDir) ?? new Set();
-    s.add(l.git.toplevel);
-    checkouts.set(l.git.commonDir, s);
-  }
-  for (const l of list) {
-    const g = l.git;
-    if (g && g.branch && (g.worktree || (checkouts.get(g.commonDir)?.size ?? 0) > 1)) l.label = `${g.repo} @ ${g.branch}`;
-    else l.label = l.project?.name ?? fallbackName(l) ?? `${l.process ?? 'unknown'} :${l.port}`;
-  }
 }
 
 /** state/observed.json. */

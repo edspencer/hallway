@@ -39,6 +39,9 @@ export function nonProjectDir(dir: string, home = os.homedir()): boolean {
   if (d === home || d === path.dirname(d)) return true;
   if (WINDOWS_SYSTEM.test(dir) || WINDOWS_SYSTEM.test(d)) return true;
   const under = (p: string) => d === p || d.startsWith(p.endsWith(path.sep) ? p : p + path.sep);
+  // a home directory can itself be below a system directory (a service account's in /var/lib): what's in it is the
+  // user's, so only ~/Library is ruled out there
+  if (home !== path.dirname(home) && under(home)) return under(path.join(home, 'Library'));
   return PLACES.includes(d) || [...PREFIXES, path.join(home, 'Library')].some(under);
 }
 
@@ -114,14 +117,12 @@ const COMMAND_FRAMEWORKS: [RegExp, string][] = [
   [/^hugo$/, 'hugo'],
 ];
 
+/**
+ * Server libraries that run inside the project's own process (`node server.js` with express): named from the
+ * project's runtime `dependencies`. Development servers and CLIs (vite, next, astro…) aren't here: when one is
+ * running, it's on the command line, and a `devDependencies` entry says only that the project *can* run it (D73).
+ */
 const DEPENDENCY_FRAMEWORKS: [string, string][] = [
-  ['next', 'next'],
-  ['nuxt', 'nuxt'],
-  ['astro', 'astro'],
-  ['@remix-run/dev', 'remix'],
-  ['@react-router/dev', 'react-router'],
-  ['@sveltejs/kit', 'sveltekit'],
-  ['vite', 'vite'],
   ['@nestjs/core', 'nest'],
   ['fastify', 'fastify'],
   ['hono', 'hono'],
@@ -130,8 +131,10 @@ const DEPENDENCY_FRAMEWORKS: [string, string][] = [
 ];
 
 /**
- * A guess at the framework, for an icon and for service-command hints: the command first (`vite`, `astro dev`,
- * `python3 -m http.server`, `manage.py runserver`), then the project's dependencies.
+ * A guess at the framework, for an icon and for service-command hints: what the command runs (`vite`, `astro dev`,
+ * `python3 -m http.server`, `manage.py runserver`), else a server library in the project's runtime dependencies.
+ * Never a development tool the command isn't running (D73: a `node --require tsx src/index.ts` server in a project
+ * that has vite among its devDependencies isn't vite).
  */
 export function guessFramework(argv: string[] | null, root: string | null): string | null {
   const words = (argv ?? []).map((a) => path.basename(a));
@@ -140,12 +143,11 @@ export function guessFramework(argv: string[] | null, root: string | null): stri
   if (!root) return null;
   const pkg = readJson(path.join(root, 'package.json'));
   if (pkg) {
-    const deps = { ...(pkg.devDependencies as object), ...(pkg.dependencies as object) };
+    const deps = (pkg.dependencies as object) ?? {};
     for (const [dep, fw] of DEPENDENCY_FRAMEWORKS) if (dep in deps) return fw;
   }
   const py = (readText(path.join(root, 'pyproject.toml')) ?? '') + (readText(path.join(root, 'requirements.txt')) ?? '');
-  for (const fw of ['django', 'fastapi', 'flask']) if (new RegExp(`\\b${fw}\\b`, 'i').test(py)) return fw;
-  if (/\brails\b/.test(readText(path.join(root, 'Gemfile')) ?? '')) return 'rails';
+  for (const fw of ['fastapi', 'flask']) if (new RegExp(`\\b${fw}\\b`, 'i').test(py)) return fw;
   return null;
 }
 

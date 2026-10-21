@@ -84,7 +84,7 @@ export function logTail(log: string, lines = 6): string {
   return log.trimEnd().split('\n').slice(-lines).join('\n');
 }
 
-/** Said once a Turn on has trusted Hallway's certificate (D72): Chrome can keep the error it saw before. The same words
+/** Said once a Turn on has trusted Hallway's certificate (D73): Chrome can keep the error it saw before. The same words
  *  as `hallway setup` (server/proxy/setup.ts, RESTART_BROWSER). */
 export const RESTART_BROWSER = 'If a browser showed a certificate warning before, quit and reopen it (Chrome remembers the old result).';
 
