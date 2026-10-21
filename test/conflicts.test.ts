@@ -112,6 +112,7 @@ describe('who holds 443/80 on a Mac, by tool (D71)', () => {
   test("a holder nobody can see (root's): sudo lsof names it", async () => {
     const [c] = await conflictsOf([{ port: 443, kind: 'standard', pid: null, process: null, command: null, addresses: [] }], 'darwin');
     assert.equal(conflictTitle(c), "Port 443 is taken by a process you can't see");
+    assert.match(formatConflict(c), /^Port 443 is taken by a process you can't see \(another user's, perhaps root's\)\. Hallway won't fight it for the port\.\n/);
     assert.match(c.fix[0], /sudo lsof -nP -iTCP:443 -sTCP:LISTEN/);
   });
 });

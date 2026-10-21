@@ -384,9 +384,11 @@ try {
     // every address, like Rancher Desktop's Traefik. On macOS as the user (visible to lsof, so named with its pid); on
     // Linux only root can, so it's someone else's, found by its socket
     const pidFile = path.join(tmp, 'squatter2.pid');
-    const code = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); const net = require('node:net'); for (const p of [443, 80]) net.createServer(s => s.end()).listen(p, '0.0.0.0')`;
+    // launchd lets go of the forwarders' sockets a moment after teardown: wait for that, and retry while it does
+    await until('443 and 80 to be free after teardown', async () => sh('nc', ['-z', '127.0.0.1', '443']).code !== 0 && sh('nc', ['-z', '127.0.0.1', '80']).code !== 0, 15000);
+    const code = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); const net = require('node:net'); const end = Date.now() + 20000; const hold = (p) => net.createServer(s => s.end()).on('error', (e) => { if (e.code !== 'EADDRINUSE' || Date.now() > end) throw e; setTimeout(() => hold(p), 500); }).listen(p, '0.0.0.0'); for (const p of [443, 80]) hold(p)`;
     const squatter = darwin ? spawn(process.execPath, ['-e', code], { stdio: 'inherit' }) : spawn('sudo', ['-n', process.execPath, '-e', code], { stdio: 'inherit' });
-    await until('the squatter on 443 and 80', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0 && sh('nc', ['-z', '127.0.0.1', '80']).code === 0, 10000);
+    await until('the squatter on 443 and 80', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0 && sh('nc', ['-z', '127.0.0.1', '80']).code === 0, 25000);
     await sleep(1500);
     try {
       await check('setup stops before changing anything, with one message for both ports and the way to coexist', async () => {

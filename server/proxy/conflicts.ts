@@ -201,7 +201,8 @@ export function conflictTitle(c: PortConflict): string {
 /** One conflict as setup prints it: the headline with who and where, then what to do, one line each. `indent` starts
  *  every line after the first. */
 export function formatConflict(c: PortConflict, indent = '  '): string {
-  const lines = [`${conflictTitle(c)}: ${holderText(c)}${c.addresses.length ? `, ${exposureText(c)}` : ''}. Hallway won't fight it for the port${c.ports.length > 1 ? 's' : ''}.`];
+  const who = c.pid ? `: ${holderText(c)}` : " (another user's, perhaps root's)";
+  const lines = [`${conflictTitle(c)}${who}${c.addresses.length ? `, ${exposureText(c)}` : ''}. Hallway won't fight it for the port${c.ports.length > 1 ? 's' : ''}.`];
   c.fix.forEach((f, i) => lines.push(`${indent}${i === 0 ? 'To free it: ' : ''}${f}${/[.)`]$/.test(f) ? '' : '.'}`));
   return lines.join('\n');
 }
