@@ -31,7 +31,7 @@ export function frontingInfo(cfg: HallwayConfig, platform: Pick<Platform, 'front
   return {
     suggested: offered ? RECOMMENDED_TIER : null,
     admin,
-    tiers: offered ? tierOptions(platform.id!, cfg, admin) : [],
+    tiers: offered ? tierOptions(platform.id!, cfg, admin, machine?.policies) : [],
     caddyPort: cfg.proxy.httpsPort,
     // on Caddy's own port by choice (D71): the dashboard offers the way back
     standardPort: cfg.mode === 'fronted' && chosenCaddyPorts(platform, cfg) ? (cfg.proxy.scheme === 'http' ? 80 : 443) : null,
@@ -52,7 +52,7 @@ export interface FrontingProviderOptions {
   machine?: () => Promise<MachineFacts>;
   /** Run setup, unattended, in a tier that needs no administrator (server/proxy/setup.ts `setupUnattended`), writing
    *  what it prints to `out`. Absent: the dashboard can't turn local domains on (an older or a test daemon). */
-  runSetup?: (trust: Trust, out: (s: string) => void, port?: number) => Promise<{ dashboardUrl: string; appUrl: string } | void>;
+  runSetup?: (trust: Trust, out: (s: string) => void, port?: number) => Promise<{ dashboardUrl: string; appUrl: string; trustChanged?: boolean } | void>;
   /** The proxy's status (server/proxy/index.ts), for its last push error. */
   proxyStatus?: () => { pushError: string | null };
   /** Doctor's networking checks; run only in fronted mode. */

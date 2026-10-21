@@ -506,6 +506,9 @@ export interface TierOption {
   recommended: boolean;
   /** The dashboard can turn it on itself (`POST /api/fronting/setup`): User certificate and No HTTPS, never System-wide certificate. */
   canTurnOn: boolean;
+  /** Something on this machine that will spoil it, said before Turn on (D72: a browser set by its organisation to
+   *  ignore certificates you add). Null or absent: nothing known. */
+  warning?: string | null;
 }
 
 /** `GET /api/fronting/setup`: the dashboard's Turn on, running or done. */
@@ -527,6 +530,8 @@ export interface FrontingSetupJob {
   /** Done: the dashboard's and an app's new addresses. */
   dashboardUrl?: string | null;
   appUrl?: string | null;
+  /** Done: the run changed certificate trust (so a browser that warned before may need quitting and reopening, D72). */
+  trustChanged?: boolean;
 }
 
 /** Why setup stopped (D71): something else holds 443/80 or Caddy's ports (`ports`); another refusal before anything

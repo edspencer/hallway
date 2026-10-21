@@ -32,7 +32,8 @@ import { fallbackHtml } from './fallback.js';
 import { ipv6Loopback, proxyApps } from './index.js';
 import { publicUrl } from './names.js';
 import { httpProbe, httpsStatus, readRoot, tlsProbe } from './probe.js';
-import { type MachineFacts, RECOMMENDED_TIER, currentTier, machineFacts, tierProxy, tierQuestion, tierText, atTheScreen } from './tiers.js';
+import { type MachineFacts, RECOMMENDED_TIER, currentTier, machineFacts, policyWarning, tierProxy, tierQuestion, tierText, atTheScreen } from './tiers.js';
+import os from 'node:os';
 import { type TldVerdict, delegatedTlds, tldVerdict } from './tld.js';
 
 /** The oldest Caddy that understands the config (2.6 ignores the admin socket's `|0600` mode: research notes). */
@@ -302,6 +303,12 @@ export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust:
     const here = await (deps.atScreen ?? (() => atTheScreen(deps.query)))();
     if (here === false) stops.push("trusting the certificate for your account shows a macOS dialog, and you aren't the one at this Mac's screen (logged in over SSH?): run `hallway setup --trust user` at the Mac itself, or use --trust none");
   }
+  // a browser its organisation set to ignore certificates you add: said before anything runs (D72)
+  if (tier !== 'none' && f.browserPolicies) {
+    const policies = deps.machine?.policies ?? (await f.browserPolicies(os.userInfo().username, deps.query).catch(() => []));
+    const w = policyWarning(policies, tier);
+    if (w) warnings.push(w);
+  }
   const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
   const done = {
     trust: tier === 'none' ? true : tier === 'user' ? found.userTrust : found.systemTrust,
@@ -384,6 +391,8 @@ export interface Plan {
   conflicts?: PortConflict[];
   /** When only 443/80 are in the way: Caddy's own port, which links can carry instead (`--port`), and the command. */
   alt?: { port: number; command: string } | null;
+  /** The step that trusts Hallway's root, if the tier has one: after a run, not `done` means it ran (D72). */
+  trustStep?: Step;
   warnings: string[];
   steps: Step[];
 }
@@ -489,15 +498,18 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
   }
   if (redirect) steps.push({ kind: 'run', why: redirect.why, recipe: redirect, done: facts.done.lowPorts });
   const userDialog = f.userTrustDialog;
+  let trustStep: Step | undefined;
   if (trust)
-    steps.push({
-      kind: 'run',
-      why: trust.why,
-      recipe: trust,
-      done: facts.done.trust,
-      recheck: a.isTrusted,
-      dialog: facts.tier === 'system' ? f.trustDialog : userDialog,
-    });
+    steps.push(
+      (trustStep = {
+        kind: 'run',
+        why: trust.why,
+        recipe: trust,
+        done: facts.done.trust,
+        recheck: a.isTrusted,
+        dialog: facts.tier === 'system' ? f.trustDialog : userDialog,
+      }),
+    );
   if (resolver) steps.push({ kind: 'run', why: resolver.why, recipe: resolver, done: facts.done.resolver });
 
   // what another tier (or an older Hallway) installed that this one doesn't use
@@ -536,7 +548,7 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
   });
   const through = facts.lowPorts === 'sockets' ? " through launchd's socket" : facts.lowPorts === 'redirect' ? ' through the redirect' : '';
   steps.push({ kind: 'hallway', why: `Check ${link(facts.dashboard)} answers${through}${facts.scheme === 'https' ? ", with Hallway's certificate" : ''}`, action: a.verify });
-  return { refusals, warnings, steps, conflicts: facts.conflicts, alt };
+  return { refusals, warnings, steps, conflicts: facts.conflicts, alt, trustStep };
 }
 
 /** The plan, for people (`--print`, and before running). */
@@ -766,6 +778,7 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
       const url = publicUrl(facts.dashboard, { scheme: facts.scheme, publicPort: pub });
       const lines: string[] = [];
       let ok = false;
+      let untrusted: string | null = null;
       if (https) {
         // launchctl bootstrap (and a systemd restart) can return before the port is held: give it a moment
         const pem = readRoot(paths.rootCert)?.pem ?? null;
@@ -779,6 +792,17 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
         else lines.push(`   ✗ ${url}: ${t ? `a certificate from ${t.issuer ?? 'someone else'} (${t.error})` : 'nothing answered'}`);
         if (h?.status === 308 && h.location?.startsWith(`https://${facts.dashboard}`)) lines.push(`   ✓ ${plain} redirects to HTTPS`);
         else lines.push(`   ✗ ${plain}: ${h ? `HTTP ${h.status}` : 'nothing answered'}`);
+        // Caddy serving Hallway's certificate isn't the same as the machine trusting it: check it as browsers do (D72)
+        const f = deps.platform.fronting;
+        if (ok && f.osTrust && facts.tier !== 'none') {
+          const v = await f.osTrust({ host: facts.dashboard, port: pub }, facts.tier, facts.env, deps.query);
+          if (v.trusted === true) lines.push(`   ✓ trusted by ${v.how}`);
+          else if (v.trusted === false) {
+            ok = false;
+            untrusted = `${url}'s certificate isn't trusted by ${v.how}: ${v.cause}`;
+            lines.push(`   ✗ not trusted by ${v.how}: ${v.cause}`);
+          } else lines.push(`   ! couldn't ask ${v.how} (${v.cause})`);
+        }
         // the daemon reads config.yaml through its file watcher, a moment after it changed: give it that moment
         const root = readRoot(paths.rootCert);
         if (ok && root && (await isListening(store.currentConfig().port))) {
@@ -797,6 +821,7 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
         lines.push(h ? `   ✓ ${url} answers (plain HTTP${h.status === 200 ? ', the dashboard' : `, HTTP ${h.status}: the daemon isn't up yet, so Caddy's fallback page`})` : `   ✗ ${url}: nothing answered`);
       }
       deps.out(lines.join('\n') + '\n');
+      if (untrusted) throw new SetupError(`${untrusted}. Browsers will warn. \`hallway doctor\` says more; \`hallway setup --trust ${facts.tier}\` tries the trust step again`);
       if (!ok) throw new SetupError(`fronted mode is set up but not answering on ${pub}; \`hallway doctor\` says why`);
     },
     isTrusted: () => (facts.tier === 'user' && deps.platform.fronting.userTrusted ? deps.platform.fronting.userTrusted(facts.env, deps.query) : isTrusted(deps, facts.env)),
@@ -856,6 +881,7 @@ export async function setup(deps: SetupDeps, opts: SetupOptions): Promise<number
   await runPlan(plan, deps);
   const firefox = facts.scheme === 'https' && deps.platform.id === 'darwin' ? ' Firefox: set security.enterprise_roots.enabled to true in about:config to trust the same certificates.' : '';
   deps.out(`\nDone. The dashboard is at ${link(facts.dashboard)}; \`hallway doctor\` checks everything.${firefox}\n`);
+  if (trustRan(plan)) deps.out(`${RESTART_BROWSER}\n`);
   return 0;
 }
 
@@ -974,7 +1000,14 @@ export const captureExec =
  * and only when the plan has no sudo step (moving off System-wide certificate has some: that's for a terminal). macOS
  * may still show its own trust dialog (User certificate): that one is the user's, on their screen. Throws SetupError with why not.
  */
-export async function setupUnattended(deps: SetupDeps, trust: Trust, port?: number): Promise<{ dashboardUrl: string; appUrl: string }> {
+/** Said once a trust step has run (D72): Chrome can keep a certificate error it saw before the root was trusted, until
+ *  it's quit and reopened (seen on one of the author's Macs, not on another). */
+export const RESTART_BROWSER = 'If a browser showed a certificate warning before, quit and reopen it (Chrome remembers the old result).';
+
+/** The plan's trust step ran (it wasn't already done, and the run got past it). Call after `runPlan`. */
+export const trustRan = (plan: Plan) => !!plan.trustStep && !plan.trustStep.done;
+
+export async function setupUnattended(deps: SetupDeps, trust: Trust, port?: number): Promise<{ dashboardUrl: string; appUrl: string; trustChanged: boolean }> {
   if (deps.platform.fronting.unsupported) throw new SetupError(deps.platform.fronting.unsupported, 'refused');
   if (trust === 'system') throw new SetupError('System-wide certificate needs an administrator: run `hallway setup --trust system` in a terminal', 'sudo');
   let facts: Facts;
@@ -999,5 +1032,5 @@ export async function setupUnattended(deps: SetupDeps, trust: Trust, port?: numb
   await runPlan(plan, deps);
   const link = (host: string) => publicUrl(host, { scheme: facts.scheme, publicPort: facts.publicPort });
   deps.out(`\nDone. The dashboard is at ${link(facts.dashboard)}.\n`);
-  return { dashboardUrl: link(facts.dashboard), appUrl: link(`<app>.${facts.base}`) };
+  return { dashboardUrl: link(facts.dashboard), appUrl: link(`<app>.${facts.base}`), trustChanged: trustRan(plan) };
 }

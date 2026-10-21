@@ -18,7 +18,8 @@ import { frontingInfo } from './status.js';
 import { httpProbe, isLoopback, readRoot, resolve, tlsProbe } from './probe.js';
 import { MIN_CADDY, chosenCaddyPorts, isOurForwarder, isTrusted, lowPortsFor, portConflicts, versionAtLeast } from './setup.js';
 import { conflictTitle, conflictsOf, containerOn, exposureText, holderText, whoHolds } from './conflicts.js';
-import { currentTier } from './tiers.js';
+import { currentTier, policyWarning } from './tiers.js';
+import os from 'node:os';
 import { forwards } from '../services/spec.js';
 import { delegatedTlds, tldVerdict } from './tld.js';
 
@@ -203,6 +204,19 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
     else add({ id: 'ca', status: 'fail', message: `Hallway's certificate authority (${root.subject}) isn't trusted by the system: browsers will warn`, fix: SETUP });
     if (root && firefoxInstalled(platform, deps.env))
       add({ id: 'firefox', status: 'warn', message: 'Firefox keeps its own certificate store', fix: 'in about:config, set security.enterprise_roots.enabled to true (or import the root from ' + show(paths.rootCert) + ')' });
+  }
+  // trusted as browsers check it (D72): a real verification of the served certificate, not "the root is in a store"
+  if (https && root && f.osTrust && tier !== 'none' && out.some((c) => c.id === 'redirect' && c.status === 'pass')) {
+    const v = await f.osTrust({ host: dashboard, port: pub }, tier, fenv, deps.query);
+    if (v.trusted === true) add({ id: 'os-trust', status: 'pass', message: `${url}'s certificate is trusted by ${v.how} (if a browser still warns, quit and reopen it: Chrome can remember an error from before)` });
+    else if (v.trusted === false) add({ id: 'os-trust', status: 'fail', message: `${url}'s certificate isn't trusted by ${v.how}: ${v.cause}. Browsers will warn`, fix: `\`hallway setup --trust ${tier}\` (it trusts Hallway's root again)` });
+    else add({ id: 'os-trust', status: 'warn', message: `couldn't check ${url}'s certificate with ${v.how}: ${v.cause}` });
+  }
+  // a browser its organisation set to ignore certificates added to the OS (D72)
+  if (https && f.browserPolicies && tier !== 'none') {
+    const policies = await f.browserPolicies(os.userInfo().username, deps.query).catch(() => []);
+    const w = policyWarning(policies, tier);
+    if (w) add({ id: 'browser-policy', status: 'fail', message: w.split(' Use Safari')[0], fix: 'use Safari for these addresses, ask your IT team to allow certificates you add, or `hallway setup --trust none` (plain HTTP)' });
   }
   if (systemTrusted && tier !== 'system') add({ id: 'leftover-trust', status: 'warn', message: `Hallway's root is still trusted system-wide, which ${tier === 'none' ? 'No HTTPS' : 'User certificate'} doesn't use`, fix: `\`hallway setup --trust ${tier}\` removes it (it needs admin, this once)` });
 

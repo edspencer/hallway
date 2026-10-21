@@ -8,7 +8,7 @@
 // `SetupActions` is the one place the panel's actions live.
 import { useEffect, useRef, useState } from 'react';
 import type { FrontingCheck, FrontingInfo, FrontingResponse, PortConflict, TierOption, Trust } from '../../shared/api';
-import { FRONTED_DOCS, SETUP_COMMANDS, TIER_LABEL, type TurnOnState, checksSummary, conflictHeadline, conflictProcess, conflictWhere, failedWords, hostOfUrl, initialTier, logTail, runningWords, tierChoices, turnOnPhase, withPort } from '../lib/domains';
+import { FRONTED_DOCS, RESTART_BROWSER, SETUP_COMMANDS, TIER_LABEL, type TurnOnState, checksSummary, conflictHeadline, conflictProcess, conflictWhere, failedWords, hostOfUrl, initialTier, logTail, runningWords, tierChoices, turnOnPhase, withPort } from '../lib/domains';
 import { CheckIcon, CloseIcon, CopyIcon, ExternalIcon, FingerprintIcon, GlobeIcon, LockIcon, TerminalIcon } from './icons';
 
 type Copy = (text: string, what?: string) => void;
@@ -175,8 +175,9 @@ function RunStatus({ run, tier, macos, onCopy, onReset, onStart, noAlt }: { run:
   );
 }
 
-/** Turned on from this page: where the dashboard is now, and the way there. */
-function TurnedOn({ url, appUrl }: { url: string; appUrl: string }) {
+/** Turned on from this page: where the dashboard is now, and the way there. When the run trusted Hallway's
+ *  certificate, a browser that warned before may need quitting and reopening (D72). */
+function TurnedOn({ url, appUrl, trustChanged }: { url: string; appUrl: string; trustChanged?: boolean }) {
   return (
     <div className="hw-run hw-run--done" role="status">
       <span className="hw-run-mark hw-run-mark--ok" aria-hidden="true">
@@ -187,6 +188,7 @@ function TurnedOn({ url, appUrl }: { url: string; appUrl: string }) {
         <span>
           This dashboard is now at {hostOfUrl(url)}, and each app at its own name, like <code>{appUrl}</code>.
         </span>
+        {trustChanged && <span className="hw-run-hint">{RESTART_BROWSER}</span>}
       </span>
       <a className="hw-btn hw-btn--primary hw-run-go" href={url}>
         Open {hostOfUrl(url)}
@@ -225,6 +227,11 @@ function TierList({ tiers, macos, onCopy, turnOn }: { tiers: TierOption[]; macos
                   <span>{t.asks}</span>
                 </p>
                 <p className="hw-tier-note">{t.note}</p>
+                {t.warning && (
+                  <p className="hw-tier-warning" role="note">
+                    {t.warning}
+                  </p>
+                )}
                 {mine ? (
                   <RunStatus run={mine} tier={t} macos={macos} onCopy={onCopy} onReset={turnOn!.reset} onStart={t.canTurnOn ? (port) => turnOn!.start(t.trust as 'user' | 'none', port) : undefined} />
                 ) : t.canTurnOn && turnOn ? (
@@ -257,7 +264,7 @@ export function SetupActions({ fronting, macos, onCopy, turnOn }: { fronting?: F
   // done, and the page hasn't heard yet that the mode changed: say so rather than offer Turn on again
   const run = turnOn?.state ?? null;
   const done = turnOnPhase(run) === 'done' ? tiers.find((t) => t.trust === run!.trust) : undefined;
-  if (done && fronting) return <TurnedOn url={run!.job?.dashboardUrl ?? done.dashboardUrl ?? fronting.dashboardUrl} appUrl={run!.job?.appUrl ?? done.url} />;
+  if (done && fronting) return <TurnedOn url={run!.job?.dashboardUrl ?? done.dashboardUrl ?? fronting.dashboardUrl} appUrl={run!.job?.appUrl ?? done.url} trustChanged={!!run!.job?.trustChanged} />;
   if (tiers.length)
     return (
       <div className="hw-domains-actions hw-domains-actions--tiers">
@@ -409,7 +416,7 @@ export function LocalDomainsDialog({
         {on ? (
           <>
             {justOn ? (
-              <TurnedOn url={fronting.dashboardUrl} appUrl={fronting.appUrl} />
+              <TurnedOn url={fronting.dashboardUrl} appUrl={fronting.appUrl} trustChanged={!!turnOn?.state?.job?.trustChanged} />
             ) : (
               <p className="hw-domains-text">
                 This dashboard is at{' '}

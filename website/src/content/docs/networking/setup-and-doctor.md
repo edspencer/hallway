@@ -219,6 +219,11 @@ the same checks):
   and tools with their own CA list, with the Node settings to use; on Linux everything but Chrome and Chromium, with
   the root's path for `curl --cacert` and `NODE_EXTRA_CA_CERTS`); a warning if a system-wide trust is left over from
   System-wide certificate;
+- the certificate **trusted the way browsers check it**: on macOS Apple's `/usr/bin/curl` with no CA given (it reads
+  the keychains' trust settings as Safari and Chrome do), on Linux the system's store (System-wide certificate) or
+  Chrome's NSS database (User certificate). A ✗ names the cause;
+- on macOS, a ✗ if your organisation has set Chrome or Edge to ignore certificates added to this Mac
+  (`CAPlatformIntegrationEnabled`, below);
 - `*.localhost` resolving (a warning only: browsers resolve it themselves);
 - for a custom domain: its TLD (delegated or made up, checked against IANA's list), dnsmasq running and bound to
   loopback only, the resolver entry in place, and both `<base>` and a name under it resolving to your machine.
@@ -276,6 +281,27 @@ hallway setup --port 443
 
 `hallway doctor` says which port links carry and whether 443 is free yet. On Linux, User certificate and No HTTPS
 always carry the port (nothing unprivileged can hold 443 there), so this only applies to System-wide certificate.
+
+### Chrome says NET::ERR_CERT_AUTHORITY_INVALID
+
+If `hallway doctor` says the certificate is trusted (`✓ … trusted by macOS's own trust settings`) but Chrome still
+shows a certificate error, **quit Chrome completely (⌘Q) and reopen it**. Chrome can hold on to the result of a check
+it made before Hallway's certificate was trusted, for example a page you opened before turning local domains on.
+`hallway setup` and the dashboard say this whenever they've just trusted the certificate. Safari and Apple's curl
+(`/usr/bin/curl https://hallway.localhost/api/health`) don't need it.
+
+If doctor says it **isn't** trusted, its line says why. `hallway setup --trust user` (or the tier you use) trusts it
+again.
+
+**On a managed Mac**, your organisation may have set Chrome (or Edge) to ignore certificates added to the Mac
+(the `CAPlatformIntegrationEnabled` policy). Setup, the dashboard and doctor say so when it's set. Then Chrome won't
+trust Hallway's certificate in any tier: the policy covers certificates in the System keychain as well, so
+System-wide certificate doesn't help. Use Safari for these addresses, ask your IT team, or use No HTTPS
+(`hallway setup --trust none`). You can check the policy with:
+
+```sh
+plutil -extract CAPlatformIntegrationEnabled raw -o - "/Library/Managed Preferences/com.google.Chrome.plist"
+```
 
 ### Nothing answers on 443 (macOS)
 

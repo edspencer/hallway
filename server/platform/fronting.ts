@@ -61,6 +61,31 @@ export interface FrontingEnv {
 
 export class FrontingUnsupported extends Error {}
 
+/** A verification of the served certificate the way browsers do it (D72): trusted, not trusted (with why), or not
+ *  known (nothing answered: a connection problem, not a trust one). `how` says what checked it, for people. */
+export type OsTrust = { trusted: boolean | null; how: string; cause?: string };
+
+/** A browser set by its organisation to ignore certificates added to the OS's trust store. */
+export interface BrowserPolicy {
+  browser: string;
+  /** The managed-preferences file that says so. */
+  file: string;
+}
+
+/** curl's verdict on a TLS connection, by its exit code (D72): 0 is trusted (whatever the HTTP status); 60 (no
+ *  trusted issuer), 51 (wrong name), 35 and 58/59 (handshake, certificate) are not, with curl's own words; anything
+ *  else (refused, timed out, can't resolve) says nothing about trust. */
+export function curlTrust(code: number, stderr: string, how: string): OsTrust {
+  const said = stderr.trim().split('\n').filter(Boolean).pop()?.replace(/^curl: \(\d+\) /, '') ?? '';
+  if (code === 0) return { trusted: true, how };
+  if ([35, 51, 58, 59, 60].includes(code)) return { trusted: false, how, cause: said || `curl exit ${code}` };
+  return { trusted: null, how, cause: said || `curl exit ${code}` };
+}
+
+/** The curl arguments for checking `https://host:port/` against the system's trust and nothing else: no CA given, no
+ *  config file, loopback whatever the resolver says. */
+export const curlTrustArgs = (host: string, port: number) => ['-q', '-sS', '-o', '/dev/null', '--max-time', '5', '--resolve', `${host}:${port}:127.0.0.1`, `https://${host}:${port}/`];
+
 export interface Fronting {
   /** Set where fronted mode can't work at all (Windows, D58): why, for `hallway setup` to refuse with up front. */
   unsupported?: string;
@@ -80,6 +105,14 @@ export interface Fronting {
   userUntrust?(env: FrontingEnv): Recipe;
   /** Is it trusted for this user (the user-only kind, not the system-wide one)? */
   userTrusted?(env: FrontingEnv, run: Runner): Promise<boolean>;
+  /** Does this machine trust the certificate served at `https://host:port` the way browsers check it (D72)? Not
+   *  "is Hallway's root in a store" but a real verification with no CA given: Apple's curl on macOS (the keychain's
+   *  trust settings, as Safari and Chrome read them), the system's curl for Linux's System-wide certificate, and
+   *  Chrome's NSS database for Linux's User certificate. */
+  osTrust?(target: { host: string; port: number }, tier: 'user' | 'system', env: FrontingEnv, run: Runner): Promise<OsTrust>;
+  /** Browsers an organisation has set to ignore certificates added to the OS's trust store (D72; macOS: Chrome's and
+   *  Edge's `CAPlatformIntegrationEnabled = false` in managed preferences), with where it was found. */
+  browserPolicies?(user: string, run: Runner): Promise<BrowserPolicy[]>;
   /** Send the custom base domain to Hallway's dnsmasq, and stop. */
   resolver(env: FrontingEnv): Recipe;
   unresolver(env: FrontingEnv): Recipe;

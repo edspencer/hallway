@@ -205,7 +205,11 @@ try {
   });
 
   step('criteria 1–2: setup, for real');
-  must('setup', '--yes', '--trust', 'system');
+  const first = must('setup', '--yes', '--trust', 'system');
+  await check("setup's last check is trust as browsers check it, and it says to reopen a browser after trusting (D72)", async () => {
+    assert.match(first, darwin ? /✓ trusted by macOS's own trust settings \(Apple's curl/ : /✓ trusted by the system's certificate store/);
+    assert.match(first, /If a browser showed a certificate warning before, quit and reopen it/);
+  });
   const ca = path.join(data, 'state', 'caddy', 'data', 'pki', 'authorities', 'local', 'root.crt');
   await check('https://hallway.localhost serves the dashboard with a certificate the system trusts', async () => {
     const r = curl('https://hallway.localhost/api/health');
@@ -251,14 +255,16 @@ try {
   await check('re-running setup', async () => {
     const out = must('setup', '--yes', '--trust', 'system');
     assert.match(out, /already done/);
+    assert.doesNotMatch(out, /quit and reopen it/, 'trust was already in place: nothing to reopen for');
   });
 
   step('doctor');
   await check('doctor has no networking failures', async () => {
     const r = hw('doctor', '--json');
     const checks = JSON.parse(r.out.slice(r.out.indexOf('{'))).checks;
-    const bad = checks.filter((c) => c.status === 'fail' && ['caddy', 'caddy-service', 'caddy-config', 'caddy-socket', 'caddy-ports', 'ports-80-443', 'low-ports', 'redirect', 'ca'].includes(c.id));
+    const bad = checks.filter((c) => c.status === 'fail' && ['caddy', 'caddy-service', 'caddy-config', 'caddy-socket', 'caddy-ports', 'ports-80-443', 'low-ports', 'redirect', 'ca', 'os-trust'].includes(c.id));
     assert.deepEqual(bad, []);
+    assert.equal(checks.find((c) => c.id === 'os-trust')?.status, 'pass', 'trusted as browsers check it (D72)');
   });
 
   if (darwin) {
@@ -374,7 +380,7 @@ try {
       assert.equal(status(r), 200, r.out);
       assert.match(sh('certutil', ['-L', '-d', `sql:${os.homedir()}/.pki/nssdb`]).out, /Hallway Local CA/);
       assert.equal(systemTrusted(), false);
-      assert.deepEqual(doctorFails(['redirect', 'ca']), []);
+      assert.deepEqual(doctorFails(['redirect', 'ca', 'os-trust']), []);
     });
 
   step('D71: something else on 443 and 80 → named once, then links on Caddy\'s own port (--port 4443), then back');
@@ -418,7 +424,7 @@ try {
         }, 10000);
         assert.equal(s.fronting.standardPort, 443);
         assert.match(await (await fetch('http://localhost:4255/llms.txt')).text(), /review\.localhost:4443/);
-        assert.deepEqual(doctorFails(['caddy', 'caddy-service', 'caddy-config', 'redirect', 'ca', 'ports-80-443']), []);
+        assert.deepEqual(doctorFails(['caddy', 'caddy-service', 'caddy-config', 'redirect', 'ca', 'os-trust', 'ports-80-443']), []);
         const doc = hw('doctor', '--json');
         assert.match(doc.out, /links carry Caddy's own port, :4443/);
         assert.equal(status(curl(`https://review.localhost:4443/`)), 200);

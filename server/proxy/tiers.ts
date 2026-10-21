@@ -9,7 +9,7 @@
 //              nothing (~/.pki/nssdb)       sudo; --domain                  nothing
 import os from 'node:os';
 import type { HallwayConfig, TierOption, Trust } from '../../shared/api.js';
-import type { Platform, Runner } from '../platform/index.js';
+import type { BrowserPolicy, Platform, Runner } from '../platform/index.js';
 import { publicUrl } from './names.js';
 
 export const TIERS: readonly Trust[] = ['user', 'system', 'none'];
@@ -23,14 +23,30 @@ export function currentTier(cfg: Pick<HallwayConfig, 'proxy'>): Trust {
 export interface MachineFacts {
   /** In the `admin` group (macOS), or `sudo`/`wheel`/`admin` (Linux), or root. */
   admin: boolean;
+  /** Browsers an organisation set to ignore certificates added to the OS (D72); absent: not asked. */
+  policies?: BrowserPolicy[];
 }
 
-/** Ask the OS, read-only: `id -Gn`. */
-export async function machineFacts(platform: Pick<Platform, 'id'>, run: Runner, uid = process.getuid?.()): Promise<MachineFacts> {
-  if (platform.id === 'win32') return { admin: false };
+/** Ask the OS, read-only: `id -Gn`, and (macOS) the browsers' managed preferences. */
+export async function machineFacts(platform: Pick<Platform, 'id'> & { fronting?: Pick<Platform['fronting'], 'browserPolicies'> }, run: Runner, uid = process.getuid?.()): Promise<MachineFacts> {
+  if (platform.id === 'win32') return { admin: false, policies: [] };
   const groups = await run('id', ['-Gn']);
   const names = groups.code === 0 ? groups.stdout.trim().split(/\s+/) : [];
-  return { admin: uid === 0 || names.some((g) => (platform.id === 'darwin' ? g === 'admin' : ['sudo', 'wheel', 'admin'].includes(g))) };
+  const policies = platform.fronting?.browserPolicies ? await platform.fronting.browserPolicies(os.userInfo().username, run).catch(() => []) : [];
+  return { admin: uid === 0 || names.some((g) => (platform.id === 'darwin' ? g === 'admin' : ['sudo', 'wheel', 'admin'].includes(g))), policies };
+}
+
+/**
+ * What to say when an organisation has set a browser to ignore certificates added to the OS (D72): Chrome's (or
+ * Edge's) `CAPlatformIntegrationEnabled = false`. It counts the login and the System keychain alike as added, so
+ * System-wide certificate is no way round it (by Chrome's own description; unverified on a managed Mac). Null: no
+ * such policy, or a tier without a certificate.
+ */
+export function policyWarning(policies: readonly BrowserPolicy[] | undefined, tier: Trust): string | null {
+  if (!policies?.length || tier === 'none') return null;
+  const names = [...new Set(policies.map((p) => p.browser))];
+  const who = names.join(' and ');
+  return `Your organisation has set ${who} to ignore certificates added to this Mac (CAPlatformIntegrationEnabled is false in ${policies[0].file}), so ${who} will warn on Hallway's addresses even though Safari and curl trust them. That covers the System keychain too, so System-wide certificate doesn't get round it. Use Safari for these addresses, ask your IT team to allow certificates you add, or use No HTTPS (--trust none).`;
 }
 
 /** The tier to recommend, on every platform and for every user (D70): User certificate. It never needs an
@@ -90,8 +106,8 @@ export function tierText(platformId: Platform['id'], tier: Trust, admin: boolean
 
 /** The tiers as the dashboard offers them (D65, D70): User certificate first and recommended, each with its URL, what it
  *  asks for and its command; the dashboard can turn on only the two that need no administrator. */
-export function tierOptions(platformId: Platform['id'], cfg: Pick<HallwayConfig, 'proxy' | 'domain'>, admin: boolean | null = null): TierOption[] {
-  return TIERS.map((t) => ({ trust: t, ...tierText(platformId, t, admin), url: tierUrls(platformId, t, cfg).app, dashboardUrl: tierUrls(platformId, t, cfg).dashboard, command: `hallway setup --trust ${t}`, recommended: t === RECOMMENDED_TIER, canTurnOn: t !== 'system' }));
+export function tierOptions(platformId: Platform['id'], cfg: Pick<HallwayConfig, 'proxy' | 'domain'>, admin: boolean | null = null, policies?: readonly BrowserPolicy[]): TierOption[] {
+  return TIERS.map((t) => ({ trust: t, ...tierText(platformId, t, admin), warning: policyWarning(policies, t), url: tierUrls(platformId, t, cfg).app, dashboardUrl: tierUrls(platformId, t, cfg).dashboard, command: `hallway setup --trust ${t}`, recommended: t === RECOMMENDED_TIER, canTurnOn: t !== 'system' }));
 }
 
 /** The question `hallway setup` asks on a terminal when no --trust is given (D65, D70). Numbers are fixed (1 user, 2

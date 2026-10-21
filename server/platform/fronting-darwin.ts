@@ -8,7 +8,9 @@
 //   resolver   /etc/resolver/<base>, `nameserver 127.0.0.1` with a `port` line (resolver(5)).
 // POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
 import { posix as path } from 'node:path';
-import { type Fronting, type FrontingEnv, MARK, type Recipe, findTool } from './fronting.js';
+import fs from 'node:fs';
+import { type BrowserPolicy, type Fronting, type FrontingEnv, MARK, type Recipe, curlTrust, curlTrustArgs, findTool } from './fronting.js';
+import type { Runner } from './services.js';
 
 export const PF_ANCHOR_NAME = 'com.apple/hallway';
 export const PF_ANCHOR = '/etc/pf.anchors/hallway';
@@ -34,6 +36,37 @@ port ${dnsPort}
 }
 
 const root = { sudo: true } as const;
+
+/** Apple's curl: it verifies against the keychains' trust settings, as Safari and Chrome do (verified, D65, D72);
+ *  Homebrew's brings its own CA list, so it's never the one asked. */
+export const APPLE_CURL = '/usr/bin/curl';
+
+/** Browsers whose managed preferences can turn off certificates added to the keychains (D72). */
+export const POLICY_BROWSERS = [
+  { browser: 'Chrome', domain: 'com.google.Chrome' },
+  { browser: 'Edge', domain: 'com.microsoft.Edge' },
+] as const;
+
+/** Where an organisation's (MDM's) preferences for a browser live: machine-wide and for this user. */
+export const managedPrefsFiles = (domain: string, user: string, base = '/Library/Managed Preferences') => [path.join(base, `${domain}.plist`), path.join(base, user, `${domain}.plist`)];
+
+/** `plutil -extract CAPlatformIntegrationEnabled raw -o - <file>`: the policy is off. */
+export const policyOff = (code: number, stdout: string) => code === 0 && /^(false|0|NO)$/i.test(stdout.trim());
+
+/** The browsers set to ignore certificates added to the keychains, read from managed preferences (D72). */
+export async function darwinBrowserPolicies(user: string, run: Runner, base?: string, exists: (f: string) => boolean = fs.existsSync): Promise<BrowserPolicy[]> {
+  const out: BrowserPolicy[] = [];
+  for (const b of POLICY_BROWSERS)
+    for (const file of managedPrefsFiles(b.domain, user, base)) {
+      if (!exists(file)) continue;
+      const r = await run('plutil', ['-extract', 'CAPlatformIntegrationEnabled', 'raw', '-o', '-', file]);
+      if (policyOff(r.code, r.stdout)) {
+        out.push({ browser: b.browser, file });
+        break;
+      }
+    }
+  return out;
+}
 
 /** Keep Homebrew's own housekeeping (an auto-update, cleanup, hints) from burying setup's steps. */
 export const BREW_ENV = ['HOMEBREW_NO_AUTO_UPDATE=1', 'HOMEBREW_NO_INSTALL_CLEANUP=1', 'HOMEBREW_NO_ENV_HINTS=1'];
@@ -117,6 +150,13 @@ export const darwinFronting: Fronting = {
     const dump = await run('security', ['dump-trust-settings']);
     return dump.code === 0 && userTrustListsRoot(dump.stdout);
   },
+
+  async osTrust(target, _tier, _env, run) {
+    const r = await run(APPLE_CURL, curlTrustArgs(target.host, target.port));
+    return curlTrust(r.code, r.stderr, "macOS's own trust settings (Apple's curl, which reads them as Safari and Chrome do)");
+  },
+
+  browserPolicies: (user, run) => darwinBrowserPolicies(user, run),
 
   resolver(env): Recipe {
     const f = { src: path.join(env.setupDir, 'resolver'), dest: resolverFile(env.base), text: resolverText(env.base, env.dnsPort) };

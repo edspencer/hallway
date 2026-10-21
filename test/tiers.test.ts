@@ -35,17 +35,17 @@ describe('which tier to recommend (D70)', () => {
     assert.match(tierText('linux', 'system', false).asks, /^Needs sudo, which this account doesn't have/);
     assert.equal(tierText('darwin', 'user', true).asks, tierText('darwin', 'user', false).asks);
   });
-  test('asked of the OS with no privilege: `id -Gn` only', async () => {
+  test('asked of the OS with no privilege: `id -Gn`, and (macOS) only managed preferences that exist', async () => {
     const calls: string[] = [];
     const run = (answers: Record<string, string>) => async (cmd: string, args: string[]) => {
       calls.push([cmd, ...args].join(' '));
       return { code: 0, stdout: answers[cmd] ?? '', stderr: '' };
     };
-    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone admin' }), 501), { admin: true });
-    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone' }), 501), { admin: false });
-    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me adm sudo' }), 1000), { admin: true });
-    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me users' }), 1000), { admin: false });
-    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'root' }), 0), { admin: true });
+    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone admin' }), 501), { admin: true, policies: [] });
+    assert.deepEqual(await machineFacts(platformFor('darwin'), run({ id: 'staff everyone' }), 501), { admin: false, policies: [] });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me adm sudo' }), 1000), { admin: true, policies: [] });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'me users' }), 1000), { admin: false, policies: [] });
+    assert.deepEqual(await machineFacts({ id: 'linux' }, run({ id: 'root' }), 0), { admin: true, policies: [] });
     assert.deepEqual([...new Set(calls)], ['id -Gn']);
   });
 });
