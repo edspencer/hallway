@@ -3,6 +3,7 @@
 // tools run from npx or a global install, the script a runtime runs, what `GET /` answered (over TLS too), names and
 // roles, and a whole macOS-shaped scan of a machine running Rancher Desktop. Generic names throughout.
 import { after, describe, test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -183,7 +184,10 @@ describe('desktop apps and tools', () => {
   test('Linux and Windows install directories; an Electron app under development is the project', () => {
     assert.equal(desktopApp('/opt/Example Chat/example-chat --type=renderer', null, '/', null, '/home/someone')?.name, 'Example Chat');
     assert.equal(desktopApp('/opt/homebrew/bin/llm-server', null, '/', null, HOME), null);
+    assert.equal(desktopApp('/opt/hostedtoolcache/node/22.13.0/x64/bin/node server.js', null, '/home/runner/app', null, '/home/runner'), null, 'a runtime in /opt runs your project');
+    assert.equal(desktopApp('/opt/python3.12/bin/python3.12 -m http.server', null, '/srv/x', null, '/home/someone'), null);
     assert.equal(desktopApp('"C:\\Program Files\\Example\\Example Sync\\sync.exe" --background', null, null, null, 'C:\\Users\\someone')?.name, 'Example Sync');
+    assert.equal(desktopApp('"C:\\Program Files\\nodejs\\node.exe" server.js', null, 'C:\\Users\\someone\\code\\app', null, 'C:\\Users\\someone'), null, 'node from Program Files runs your project');
     const proj = `${HOME}/code/my-electron`;
     assert.equal(desktopApp(`${proj}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .`, null, proj, proj, HOME), null);
     assert.equal(desktopApp('node server.js', null, `${HOME}/code/app`, `${HOME}/code/app`, HOME), null);
@@ -239,8 +243,18 @@ describe('what `GET /` answered', () => {
     assert.equal(answerOf({ status: 200, title: 'Old', favicon: null }).kind, 'page');
   });
 
-  test('a port that only speaks HTTPS is asked again over TLS; a Go-style "use HTTPS" 400 too', async () => {
-    const tls = { key: fixture('tls-test.key'), cert: fixture('tls-test.crt') };
+  // a throwaway self-signed certificate, made here rather than kept in the repository
+  const cert = (() => {
+    try {
+      const dir = tmpDir('hw-tls-');
+      execFileSync('openssl', ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-keyout', path.join(dir, 'k.pem'), '-out', path.join(dir, 'c.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore' });
+      return { key: fs.readFileSync(path.join(dir, 'k.pem'), 'utf8'), cert: fs.readFileSync(path.join(dir, 'c.pem'), 'utf8') };
+    } catch {
+      return null;
+    }
+  })();
+  test('a port that only speaks HTTPS is asked again over TLS; a Go-style "use HTTPS" 400 too', { skip: cert ? false : 'needs openssl to make a certificate' }, async () => {
+    const tls = cert!;
     const secure = https.createServer(tls, (_q, res) => (res.writeHead(401, { 'content-type': 'application/json' }), res.end('{}')));
     // plain HTTP that says it wants TLS, and isn't TLS either: the 400 is what's left
     const goStyle = http.createServer((_q, res) => (res.writeHead(400, { 'content-type': 'text/plain' }), res.end('Client sent an HTTP request to an HTTPS server.\n')));

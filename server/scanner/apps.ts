@@ -5,6 +5,7 @@
 import path from 'node:path';
 import type { ListenerApp } from '../../shared/api.js';
 import type { Supervisor } from '../platform/listeners.js';
+import { RUNTIMES } from './observations.js';
 
 const isUnder = (p: string, dir: string) => p === dir || p.startsWith(dir.endsWith('/') ? dir : dir + '/');
 
@@ -34,11 +35,14 @@ export function desktopApp(command: string | null, supervisor: Supervisor | null
   const bundleId = label ?? (container && /\./.test(container) ? container.replace(/^[A-Z0-9]{10}\./, '') : null);
   if (bundle && !inProject(bundle[1])) return { name: bundle[2], bundleId };
   if (bundleId) return { name: bundleName(bundleId), bundleId };
-  // the command, not its first word: install directories have spaces (`/opt/Example Chat/example-chat`)
-  const linux = /^\/(?:opt|snap)\/([^/]+)\//.exec(cmd.trim());
-  if (linux && !['homebrew', 'local'].includes(linux[1]) && !inProject(cmd.trim())) return { name: linux[1], bundleId: null };
+  // the command, not its first word: install directories have spaces (`/opt/Example Chat/example-chat`); never a
+  // runtime installed there (`/opt/hostedtoolcache/node/…/bin/node`: CI's node runs your project, it isn't an app)
+  const linux = /^\/(?:opt|snap)\/([^/]+)\/(\S*)/.exec(cmd.trim());
+  const linuxExe = linux ? (linux[2].split('/').at(-1) ?? '') : '';
+  if (linux && linuxExe && !RUNTIMES.test(linuxExe) && !['homebrew', 'local'].includes(linux[1]) && !inProject(cmd.trim())) return { name: linux[1], bundleId: null };
   const win = /^[a-z]:\\(?:program files(?: \(x86\))?\\(?:[^\\]+\\)?|users\\[^\\]+\\appdata\\local\\programs\\)([^\\]+)\\/i.exec(cmd.replace(/^"/, ''));
-  if (win) return { name: win[1], bundleId: null };
+  const winExe = win ? (/^"?([^"]*?\.exe)/i.exec(cmd)?.[1].split('\\').at(-1) ?? '') : '';
+  if (win && !RUNTIMES.test(winExe)) return { name: win[1], bundleId: null };
   return null;
 }
 
