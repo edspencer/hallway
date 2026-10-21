@@ -245,7 +245,58 @@ export interface ListenerIdentity {
   startedAt: string | null;
   /** `repo @ branch` for worktree siblings, else null (docs/04, step 5). */
   label: string | null;
+  /** It forwards the port for something else (a container tool's VM, an SSH tunnel), and what that is (D72). Absent in
+   *  records from before 0.9. */
+  via?: ListenerVia | null;
+  /** The desktop application the process belongs to (D72): its internal ports aren't projects. */
+  app?: ListenerApp | null;
+  /** A package run as a tool (`npx local-review`, a global install) in someone else's directory: the tool, not the
+   *  project in its working directory, is what's listening (D72). */
+  tool?: string | null;
 }
+
+/** The tools that forward ports to containers and VMs, plus plain SSH tunnels and `kubectl port-forward` (D72). */
+export type ForwarderTool = PortHolder | 'ssh' | 'kubectl' | 'kubernetes';
+
+/** What a forwarding listener forwards to (D72). */
+export interface ListenerVia {
+  /** The forwarder's tool: `{ id: 'rancher-desktop', name: 'Rancher Desktop' }`. */
+  tool: { id: ForwarderTool; name: string };
+  /** The container publishing the port, when `docker ps` or `nerdctl ps` names it. */
+  container: { name: string; image: string | null } | null;
+  /** A Kubernetes service on the port, or one of the cluster's own components (`system`: the API server, kubelet…). */
+  kubernetes: { name: string; namespace: string | null; system: boolean } | null;
+  /** For an SSH tunnel: the host it goes to. */
+  host?: string | null;
+}
+
+/** A desktop application (D72), from its bundle (`/Applications/Name.app`), its launchd label or its install directory. */
+export interface ListenerApp {
+  name: string;
+  /** macOS's bundle id, when known (`com.example.App`). */
+  bundleId: string | null;
+}
+
+/**
+ * What a listener says when asked for `/` (D72), so every row answers "is it a web server?": a page (HTML), an API
+ * (JSON or plain text), a sign-in (401/403, or a redirect to a login page), a redirect elsewhere, an error, a web
+ * server with nothing at `/`, or not HTTP at all.
+ */
+export interface HttpAnswer {
+  kind: 'page' | 'api' | 'sign-in' | 'redirect' | 'error' | 'empty' | 'not-http';
+  status: number | null;
+  /** It answered over HTTPS only. */
+  tls: boolean;
+  /** Where a redirect (or a sign-in redirect) goes, as sent. */
+  location: string | null;
+}
+
+/**
+ * Where a listener belongs in the tray (D72): a project of yours; a tool or service you run (an app on this machine);
+ * something behind a forwarder (a container, a Kubernetes service, an SSH tunnel); a cluster's own components; a desktop
+ * application's internal port; anything else.
+ */
+export type ListenerRole = 'project' | 'app' | 'forwarded' | 'cluster' | 'internal' | 'other';
 
 /** A listener the scanner found that is neither declared nor discovered. Provider: the scanner. */
 export interface ObservedListener {
@@ -259,6 +310,12 @@ export interface ObservedListener {
   title: string | null;
   /** A favicon URL found on the page, if any. */
   favicon: string | null;
+  /** What to call it (D72): the container, the desktop app, the page's title when the project's name says nothing… */
+  name: string;
+  role: ListenerRole;
+  answer: HttpAnswer;
+  /** Where to open it: `http://localhost:<port>`, or `https://` when it only speaks HTTPS. */
+  url: string;
   firstSeen: string;
   lastSeen: string;
   identity: ListenerIdentity;

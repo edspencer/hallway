@@ -23,7 +23,8 @@ export const EPHEMERAL = { from: 49152, to: 65535 } as const;
 export const NON_WEB_DAEMONS = [
   'postgres', 'postmaster', 'mysqld', 'mariadbd', 'redis-server', 'valkey-server', 'mongod', 'memcached',
   'sshd', 'rapportd', 'ControlCenter', 'sharingd', 'identityservicesd', 'cupsd', 'dnsmasq', 'systemd-resolve',
-  'rpcbind', 'containerd', 'dockerd', 'com.docker.*', 'Docker Desktop', 'vpnkit*', 'Dropbox', 'Spotify',
+  // Docker Desktop's backend and vpnkit forward containers' published ports: shown, named by their container (D72)
+  'rpcbind', 'containerd', 'dockerd', 'Docker Desktop', 'Dropbox', 'Spotify',
   // Windows (D59): the kernel's HTTP.sys listeners (WinRM on 5985, 47001) show as `System`, PID 4
   'System', 'svchost', 'lsass', 'wininit', 'services', 'spoolsv', 'MsMpEng',
 ];

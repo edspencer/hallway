@@ -10,8 +10,11 @@ import type { Observation } from './types.js';
 import { dataPaths } from '../config.js';
 import { type Listener, type Platform, type ProcessInfo, bindScope, connectAddress, currentPlatform, mergeListeners } from '../platform/index.js';
 import { EMPTY_IGNORE, type IgnoreRules, noiseReason } from './filter.js';
+import { desktopApp, toolPackage } from './apps.js';
+import { forwarderOf, lookupBehind, type QueryRunner } from './forwarders.js';
 import { identify } from './identify.js';
-import { ObservedStore, labelListeners, normaliseCommand, observationId, recordBoot } from './observations.js';
+import { labelListeners } from './describe.js';
+import { ObservedStore, normaliseCommand, observationId, recordBoot } from './observations.js';
 import { type Sniff, sniff } from './sniff.js';
 
 export { suggestSlug } from './claim.js';
@@ -59,6 +62,9 @@ export interface ScannerOptions {
   identityTtlMs?: number;
   homeDir?: string;
   now?: () => number;
+  /** Runs the container tools' CLIs (`docker ps`, `nerdctl ps`, `kubectl get svc`) for forwarded ports (D72). */
+  query?: QueryRunner;
+  env?: NodeJS.ProcessEnv;
 }
 
 interface CachedIdentity {
@@ -158,7 +164,10 @@ export function createScanner(opts: ScannerOptions) {
     );
 
     const t = now();
-    const all = kept.map((l, i) => toObserved(l, ids.get(l.pid!)!, sniffs[i], t));
+    const all = kept.map((l, i) => toObserved(l, ids.get(l.pid!)!, sniffs[i], t, homeDir));
+    // what's behind the forwarded ports: one lookup per tool per scan
+    const vias = new Map(all.filter((o) => o.via).map((o) => [o.port, o.via!]));
+    if (vias.size) await lookupBehind(vias, { run: opts.query, env: opts.env, home: homeDir }).catch(() => {});
     labelListeners(all);
     store.record(all, t);
     const result: ScanResult = {
@@ -214,8 +223,11 @@ export function createScanner(opts: ScannerOptions) {
 
 export type Scanner = ReturnType<typeof createScanner>;
 
-function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: number): Observation {
+function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: number, home: string): Observation {
   const { info, identity } = id;
+  const via = forwarderOf(l.process, info.command, info.argv);
+  const app = via ? null : desktopApp(info.command, info.supervisor, info.cwd, identity.project?.root ?? null, home);
+  const tool = via || app ? null : toolPackage(info.argv);
   const norm = normaliseCommand(info.argv, info.command);
   const at = new Date(t).toISOString();
   return {
@@ -232,8 +244,12 @@ function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: numb
     argv: info.argv,
     cwd: info.cwd,
     startedAt: info.startTime === null ? null : new Date(info.startTime).toISOString(),
-    orphan: info.orphan,
+    // a container tool's forwarder and a desktop app's helper are supervised by their tool, whatever their parent (D72)
+    orphan: info.orphan && !via && !app,
     supervisor: info.supervisor ?? null,
+    via,
+    app,
+    tool,
     project: identity.project,
     git: identity.git,
     label: '',

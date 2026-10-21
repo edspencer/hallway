@@ -18,6 +18,7 @@ import { type LostAppInput, type LostRecord, LostStore, computeLost } from './lo
 import type { ProviderRegistry } from './providers.js';
 import { isListening } from './services/ports.js';
 import { type Observation, type Scanner, createScanner, fallbackName, noiseReason, suggestSlug } from './scanner/index.js';
+import { answerOf, nameOf, openUrlOf, roleOf } from './scanner/describe.js';
 import type { Store } from './store/index.js';
 
 export interface LiveOptions {
@@ -66,10 +67,13 @@ export function toIdentity(o: Observation): ListenerIdentity {
     displayName: o.project ? null : fallbackName(o),
     startedAt: o.startedAt,
     label: o.label.includes(' @ ') ? o.label : null,
+    via: o.via ?? null,
+    app: o.app ?? null,
+    tool: o.tool ?? null,
   };
 }
 
-export function toObserved(o: Observation, taken: ReadonlySet<string>): ObservedListener {
+export function toObserved(o: Observation, taken: ReadonlySet<string>, home = os.homedir()): ObservedListener {
   return {
     id: o.id,
     port: o.port,
@@ -77,6 +81,10 @@ export function toObserved(o: Observation, taken: ReadonlySet<string>): Observed
     httpStatus: o.http?.status ?? null,
     title: o.http?.title ?? null,
     favicon: o.http?.favicon ?? null,
+    name: nameOf(o),
+    role: roleOf(o, home),
+    answer: answerOf(o.http),
+    url: openUrlOf(o),
     firstSeen: o.firstSeen,
     lastSeen: o.lastSeen,
     identity: toIdentity(o),

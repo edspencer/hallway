@@ -48,27 +48,6 @@ export function fallbackName(o: Pick<Observation, 'supervisor' | 'argv' | 'proce
   return exe && !RUNTIMES.test(exe) ? exe.replace(/\.exe$/i, '') : null;
 }
 
-/**
- * What to call each listener. Worktree siblings (listeners from different checkouts of one repository) become
- * `repo @ branch`, so three copies of one dashboard on three ports can be told apart; a lone linked worktree is
- * labelled the same way. Everything else is its project name, else its supervisor's label or its executable
- * (`fallbackName`), else its process name and port.
- */
-export function labelListeners(list: Observation[]): void {
-  const checkouts = new Map<string, Set<string>>();
-  for (const l of list) {
-    if (!l.git) continue;
-    const s = checkouts.get(l.git.commonDir) ?? new Set();
-    s.add(l.git.toplevel);
-    checkouts.set(l.git.commonDir, s);
-  }
-  for (const l of list) {
-    const g = l.git;
-    if (g && g.branch && (g.worktree || (checkouts.get(g.commonDir)?.size ?? 0) > 1)) l.label = `${g.repo} @ ${g.branch}`;
-    else l.label = l.project?.name ?? fallbackName(l) ?? `${l.process ?? 'unknown'} :${l.port}`;
-  }
-}
-
 /** state/observed.json. */
 interface ObservedFile {
   version: 1;
