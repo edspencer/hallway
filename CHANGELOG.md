@@ -1,5 +1,11 @@
 # hallway
 
+## 0.10.0
+
+### Minor Changes
+
+- [#54](https://github.com/edspencer/hallway/pull/54) [`d884ef6`](https://github.com/edspencer/hallway/commit/d884ef6ed200954a656a47a5610c720e9189425e) Thanks [@edspencer](https://github.com/edspencer)! - The "Found running, not yet named" tray now says what each thing is, grouped: your projects (a repository's worktrees, branches and scripts together), apps on this machine, what each container tool forwards (Rancher Desktop, Docker Desktop, Colima, OrbStack, Podman, SSH tunnels; its Kubernetes cluster's own ports folded away), desktop apps' internal ports (folded), and anything else. Port forwarders are named by the container or Kubernetes service behind them (asked read-only of the tool's own `docker`, `nerdctl`, `podman` and `kubectl`) and are no longer "orphaned"; desktop apps' ports are named by the app; a tool run from npx or a global install is that tool; a project called `service` or `app` takes its page's title. Every row says what it answers (Web page, API, Needs sign-in, Redirects to…, Not HTTP; HTTPS-only ports are asked over TLS), only pages get Open, and "exposed" is now "On your network", explained in words. Docker Desktop's published containers, previously hidden, now show; a framework is only claimed when the process is running it.
+
 ## 0.9.0
 
 ### Minor Changes
