@@ -12,6 +12,7 @@ import { BREW_ENV, darwinFronting, resolverText, userTrustListsRoot } from '../s
 import { dnsmasqConf } from '../server/platform/fronting.ts';
 import { forwards } from '../server/services/spec.ts';
 import { type Facts, type SetupDeps, SetupError, cmdLine, formatPlan, planSetup, promptsAhead, runPlan, setup, teardown, versionAtLeast } from '../server/proxy/setup.ts';
+import type { PortConflict } from '../shared/api.ts';
 import { HSTS_PRELOADED_TLDS, parseTlds, tldVerdict, delegatedTlds } from '../server/proxy/tld.ts';
 import { onWindows, ROOT, tmpDir, rmTmp } from './fixture.ts';
 
@@ -66,6 +67,7 @@ function facts(over: Over = { os: 'darwin' }): Facts {
     caddy: { path: '/opt/homebrew/bin/caddy', version: 'v2.11.7', install: { advice: 'x' } },
     dnsmasq: custom ? { path: '/opt/homebrew/sbin/dnsmasq', install: { advice: 'x' } } : null,
     conflicts: [],
+    chosenPort: false,
     warnings: [],
     stops: [],
     env,
@@ -190,10 +192,11 @@ describe('setup --print, per tier (D65)', () => {
   });
 
   test('refusals: .local, a port held by someone else, a missing tool with no installer', () => {
-    const p = plan(facts({ os: 'linux', base: 'foo.local', conflicts: ['port 443 (HTTPS) is held by ssh (pid 42: ssh -L 443:…), listening on 127.0.0.1'], caddy: { path: null, version: null, install: { advice: 'install Caddy' } } }));
+    const ssh: PortConflict = { ports: [443], kind: 'standard', pid: 42, process: 'ssh', command: 'ssh -L 443:…', addresses: ['127.0.0.1'], exposed: false, tool: null, container: null, fix: ['stop it if you don\'t need it (`kill 42`), or move it to another port'] };
+    const p = plan(facts({ os: 'linux', base: 'foo.local', conflicts: [ssh], caddy: { path: null, version: null, install: { advice: 'install Caddy' } } }));
     assert.equal(p.refusals.length, 3);
     assert.match(p.refusals[0], /mDNS/);
-    assert.match(p.refusals[1], /ssh \(pid 42[\s\S]*Docker Desktop/);
+    assert.match(p.refusals[1], /^Port 443 is taken by ssh: ssh \(pid 42: ssh -L 443:…\), listening on 127\.0\.0\.1\. Hallway won't fight it[\s\S]*kill 42[\s\S]*Then run `hallway setup` again\.\n    Or leave it running[\s\S]*`hallway setup --trust system --port 4443`/);
     assert.match(p.refusals[2], /caddy isn't installed: install Caddy/);
   });
 
@@ -221,12 +224,12 @@ describe('setup --print, per tier (D65)', () => {
 
 describe('System-wide with nothing on 443 (a publicPort of httpsPort set by hand before the tiers)', () => {
   test('no redirect step, no 443/80 needed, a warning saying links carry the port; fine without systemd', () => {
-    const f = facts({ os: 'linux', tier: 'system', lowPorts: 'none' });
+    const f = facts({ os: 'linux', tier: 'system', lowPorts: 'none', chosenPort: true });
     f.env.tools = { ...f.env.tools, systemctl: null, nft: null };
     const p = plan(f);
     assert.deepEqual(p.refusals, []);
     assert.ok(!p.steps.some((s) => /Redirect/.test(s.why)));
-    assert.match(p.warnings.join(' '), /links carry :4443/);
+    assert.match(p.warnings.join(' '), /Links carry Caddy's own port, :4443, and nothing is put on 443 and 80. `hallway setup --port 443` moves them/);
     assert.match(formatPlan(p), /Check https:\/\/hallway\.localhost:4443 answers, with/);
   });
 });

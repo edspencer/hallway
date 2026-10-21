@@ -920,3 +920,28 @@ Read 2026-10-14. Relevant internals:
   cgroupfs):** a fake unit couldn't be made here. A double-forked server (PPID 1) was reported `orphaned: true,
   supervisor: null` by the built CLI, so a machine without systemd behaves as before. *Verified.*
 - **Windows:** unchanged (D62): no supervisor lookup; orphaned means the parent has exited.
+
+## Something else on 443: Rancher Desktop on a managed Mac (D71), 2026-10-21
+
+- **Seen on the author's work Mac** (managed, Hallway 0.8.0): the dashboard's Turn on for User certificate stopped
+  with `ssh (pid …: ssh: ~/Library/Application Support/rancher-desktop/lima/0/ssh…)` listening on `*` for both 443
+  and 80. That's Rancher Desktop: its Lima VM's ssh forwards guest ports to the host, including k3s's Traefik ingress
+  (a LoadBalancer service on 80 and 443, on by default). Setup had changed nothing: the refusal comes from the facts,
+  before any step (now tested, `test/conflicts.test.ts`).
+- **Rancher Desktop's switch** (docs.rancherdesktop.io, read 2026-10-21): Preferences → Kubernetes, "Enable Traefik"
+  ("By disabling Traefik, you can free up port 80 and 443 for alternate ingress configuration"), and `rdctl set
+  --kubernetes.options.traefik=false`. Unverified by hand.
+- **The command lines in `test/fixtures/conflicts/`** are what each tool is documented or commonly reported to run
+  (Rancher's and Colima's `ssh: …/ssh.sock [mux]`, Docker Desktop's `com.docker.backend`, `OrbStack Helper`, `limactl
+  hostagent`, nginx's master/worker, Linux's `docker-proxy`); only Rancher's was seen on a real Mac. lsof's `c` field
+  truncates names to 9 characters (`com.docke`, `OrbStack `), so the tool is told from the full `ps` command line.
+  Newer Rancher Desktop releases may forward with `limactl hostagent` instead of `ssh`; both match `rancher-desktop`
+  in the path. **Unverified on macOS:** the others' real output.
+- **Links on Caddy's port** (`--port 4443`) are the same configuration Linux's User certificate has run in CI since
+  D65; on macOS only the forwarders are skipped. CI's fronted jobs now hold 443 and 80 with a dummy listener (root's,
+  on every address), check the message, then run `--port 4443` and back. Unverified in Safari on a real Mac.
+- **GitHub's macOS runner (macos-latest, 2026-10-21) won't let a user hold 443:** `listen(443, '127.0.0.1')` is EACCES
+  and `listen(443, '0.0.0.0')` EADDRINUSE with nothing listening there (lsof as root shows only outbound connections).
+  Yet Rancher Desktop's ssh held `*:443` as the user on the author's Mac, so this differs between machines;
+  unexplained. The CI squatter runs as root instead, so the user-visible, named-tool path is covered by the fixtures,
+  not by CI.

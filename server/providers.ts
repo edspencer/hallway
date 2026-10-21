@@ -62,7 +62,7 @@ export interface StateProvider {
   /** Doctor's fronted-mode checks, cached briefly (`fresh`: run them again). Resolves null in direct mode. */
   frontingChecks?(fresh?: boolean): Promise<{ checks: FrontingCheck[]; checkedAt: string } | null>;
   /** The dashboard's Turn on (D65): start setup in a tier that needs no administrator, or say why not. */
-  turnOnFronting?(trust: Trust): FrontingSetupJob | { refused: string; status: 400 | 409 | 503 };
+  turnOnFronting?(trust: Trust, port?: number): FrontingSetupJob | { refused: string; status: 400 | 409 | 503 };
   /** The Turn on that's running, or the last one. */
   frontingSetup?(): FrontingSetupJob;
 }

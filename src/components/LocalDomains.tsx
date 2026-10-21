@@ -7,8 +7,8 @@
 // On: the header shows the dashboard's host and the tier, and the dialog lists doctor's checks with their fixes.
 // `SetupActions` is the one place the panel's actions live.
 import { useEffect, useRef, useState } from 'react';
-import type { FrontingCheck, FrontingInfo, FrontingResponse, TierOption, Trust } from '../../shared/api';
-import { FRONTED_DOCS, SETUP_COMMANDS, TIER_LABEL, type TurnOnState, checksSummary, failedWords, hostOfUrl, initialTier, logTail, runningWords, tierChoices, turnOnPhase } from '../lib/domains';
+import type { FrontingCheck, FrontingInfo, FrontingResponse, PortConflict, TierOption, Trust } from '../../shared/api';
+import { FRONTED_DOCS, SETUP_COMMANDS, TIER_LABEL, type TurnOnState, checksSummary, conflictHeadline, conflictProcess, conflictWhere, failedWords, hostOfUrl, initialTier, logTail, runningWords, tierChoices, turnOnPhase, withPort } from '../lib/domains';
 import { CheckIcon, CloseIcon, CopyIcon, ExternalIcon, FingerprintIcon, GlobeIcon, LockIcon, TerminalIcon } from './icons';
 
 type Copy = (text: string, what?: string) => void;
@@ -16,7 +16,8 @@ type Copy = (text: string, what?: string) => void;
 /** A Turn on in progress, or how the last one went, for the panel and the dialog. */
 export interface TurnOn {
   state: TurnOnState | null;
-  start(trust: 'user' | 'none'): void;
+  /** `port`: the port links carry (D71): Caddy's own when 443 is taken, or 443 to move back. */
+  start(trust: 'user' | 'none', port?: number): void;
   reset(): void;
 }
 
@@ -63,12 +64,75 @@ function DomainsHead({ id, title, sub, children }: { id: string; title: string; 
   );
 }
 
+/** Something else holds the ports (D71): who, where, that tool's own fix, and Caddy's port as the way to coexist. */
+function PortsInUse({ conflicts, altPort, appUrl, onRetry, onAlt, onReset }: { conflicts: PortConflict[]; altPort: number | null; appUrl: string; onRetry?(): void; onAlt?(): void; onReset(): void }) {
+  return (
+    <div className="hw-run hw-run--failed hw-ports" role="alert">
+      <span className="hw-run-mark hw-run-mark--fail" aria-hidden="true">
+        !
+      </span>
+      <span className="hw-run-words">
+        {conflicts.map((c, i) => {
+          const where = conflictWhere(c);
+          const proc = conflictProcess(c);
+          return (
+            <span className="hw-ports-one" key={i}>
+              <strong>{conflictHeadline(c)}</strong>
+              {(proc || c.command) && (
+                <span className="hw-ports-proc">
+                  {proc}
+                  {c.command && <code title={c.command}>{c.command}</code>}
+                </span>
+              )}
+              {where && <span className={`hw-ports-where${where.exposed ? ' hw-ports-where--exposed' : ''}`}>{where.text}</span>}
+              <span className="hw-ports-fix-head">{c.kind === 'standard' ? `To free ${c.ports.length > 1 ? 'them' : 'it'}:` : 'To fix it:'}</span>
+              <ul className="hw-ports-fix">
+                {c.fix.map((f, j) => (
+                  <li key={j}>
+                    <Words text={sentence(f)} />
+                  </li>
+                ))}
+              </ul>
+            </span>
+          );
+        })}
+        <span>Hallway won’t fight {conflicts.length > 1 ? 'them' : 'it'} for the ports. Then turn local domains on again.</span>
+        {altPort && (
+          <span className="hw-ports-alt">
+            <span>
+              <strong>Or leave it running</strong> and use Caddy’s own port, {altPort}: links become <code>{withPort(appUrl, altPort)}</code>. You can move back to 443 later.
+            </span>
+          </span>
+        )}
+        <span className="hw-run-buttons">
+          {altPort && onAlt && (
+            <button type="button" className="hw-btn hw-btn--primary hw-btn--small" onClick={onAlt}>
+              Use port {altPort} instead
+            </button>
+          )}
+          {onRetry && (
+            <button type="button" className="hw-btn hw-btn--small" onClick={onRetry}>
+              Try again
+            </button>
+          )}
+          <button type="button" className="hw-btn hw-btn--quiet hw-btn--small" onClick={onReset}>
+            OK
+          </button>
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /** A Turn on that's running or stopped, in its tier's row. */
-function RunStatus({ run, tier, macos, onCopy, onReset }: { run: TurnOnState; tier: TierOption; macos: boolean; onCopy: Copy; onReset(): void }) {
+function RunStatus({ run, tier, macos, onCopy, onReset, onStart, noAlt }: { run: TurnOnState; tier: TierOption; macos: boolean; onCopy: Copy; onReset(): void; onStart?(port?: number): void; noAlt?: boolean }) {
   const phase = turnOnPhase(run);
   const tail = logTail(run.job?.log ?? '');
+  const job = run.job;
+  if (phase === 'failed' && job?.reason === 'ports' && job.conflicts?.length)
+    return <PortsInUse conflicts={job.conflicts} altPort={noAlt ? null : (job.altPort ?? null)} appUrl={tier.url} onReset={onReset} onRetry={onStart && (() => onStart(run.port ?? undefined))} onAlt={onStart && job.altPort ? () => onStart(job.altPort!) : undefined} />;
   if (phase === 'failed') {
-    const w = failedWords(tier.trust, macos);
+    const w = failedWords(tier.trust, macos, job?.reason ?? null);
     return (
       <div className="hw-run hw-run--failed" role="alert">
         <span className="hw-run-mark hw-run-mark--fail" aria-hidden="true">
@@ -162,7 +226,7 @@ function TierList({ tiers, macos, onCopy, turnOn }: { tiers: TierOption[]; macos
                 </p>
                 <p className="hw-tier-note">{t.note}</p>
                 {mine ? (
-                  <RunStatus run={mine} tier={t} macos={macos} onCopy={onCopy} onReset={turnOn!.reset} />
+                  <RunStatus run={mine} tier={t} macos={macos} onCopy={onCopy} onReset={turnOn!.reset} onStart={t.canTurnOn ? (port) => turnOn!.start(t.trust as 'user' | 'none', port) : undefined} />
                 ) : t.canTurnOn && turnOn ? (
                   <div className="hw-tier-actions">
                     <span className="hw-tier-or">
@@ -193,7 +257,7 @@ export function SetupActions({ fronting, macos, onCopy, turnOn }: { fronting?: F
   // done, and the page hasn't heard yet that the mode changed: say so rather than offer Turn on again
   const run = turnOn?.state ?? null;
   const done = turnOnPhase(run) === 'done' ? tiers.find((t) => t.trust === run!.trust) : undefined;
-  if (done && fronting) return <TurnedOn url={done.dashboardUrl ?? fronting.dashboardUrl} appUrl={done.url} />;
+  if (done && fronting) return <TurnedOn url={run!.job?.dashboardUrl ?? done.dashboardUrl ?? fronting.dashboardUrl} appUrl={run!.job?.appUrl ?? done.url} />;
   if (tiers.length)
     return (
       <div className="hw-domains-actions hw-domains-actions--tiers">
@@ -259,6 +323,32 @@ export function LocalDomainsPanel({ fronting, macos, onCopy, onDismiss, turnOn }
   );
 }
 
+/** Fronted mode on Caddy's own port (D71): which port, and the way back to 443 once nothing else holds it, one click
+ *  for the two tiers the daemon can run setup for, a command for System-wide certificate. */
+function PortBack({ fronting, port, macos, turnOn, onCopy }: { fronting: FrontingInfo; port: number; macos: boolean; turnOn?: TurnOn; onCopy: Copy }) {
+  const trust = fronting.trust!;
+  const tier = tierChoices(fronting).find((t) => t.trust === trust);
+  const run = turnOn?.state ?? null;
+  const command = `hallway setup --trust ${trust} --port ${port}`;
+  const mine = run && run.trust === trust && run.port === port && turnOnPhase(run) !== 'done' ? run : null;
+  if (mine && tier) return <RunStatus run={mine} tier={{ ...tier, command }} macos={macos} onCopy={onCopy} onReset={turnOn!.reset} onStart={(p) => turnOn!.start(trust as 'user' | 'none', p)} noAlt />;
+  const current = /:(\d+)$/.exec(hostOfUrl(fronting.dashboardUrl))?.[1];
+  return (
+    <div className="hw-ports-back">
+      <span>
+        Links carry Caddy’s own port{current ? `, :${current}` : ''}, as chosen with <code>--port</code>, and nothing is on {port}. Once nothing else holds {port}, links can move back to it.
+      </span>
+      {trust !== 'system' && turnOn ? (
+        <button type="button" className="hw-btn hw-btn--small" onClick={() => turnOn.start(trust as 'user' | 'none', port)}>
+          Move to port {port}
+        </button>
+      ) : (
+        <Cmd command={command} onCopy={onCopy} />
+      )}
+    </div>
+  );
+}
+
 /** Setup's errors start lower case (they follow `hallway: ` in a terminal); on the page they're sentences. */
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -302,6 +392,8 @@ export function LocalDomainsDialog({
   }, []);
   const on = fronting.mode === 'fronted';
   const sum = checksSummary(result?.checks ?? null, fronting.pushError);
+  // on Caddy's own port by choice (D71): the way back (doctor's line below says whether the port is free yet)
+  const back = on && fronting.standardPort ? fronting.standardPort : null;
   const shown = (result?.checks ?? []).filter((c) => c.status !== 'skip');
   const tierName = fronting.trust ? (tierChoices(fronting).find((t) => t.trust === fronting.trust)?.name ?? TIER_LABEL[fronting.trust]) : null;
   // turned on from this page a moment ago: say so, with the way to the new address
@@ -335,6 +427,7 @@ export function LocalDomainsDialog({
                 Check again
               </button>
             </p>
+            {back && fronting.trust && <PortBack fronting={fronting} port={back} macos={macos} turnOn={turnOn} onCopy={onCopy} />}
             {fronting.pushError && <p className="hw-form-error">The daemon couldn’t give Caddy its configuration: {fronting.pushError}</p>}
             {shown.length > 0 && (
               <ul className="hw-domains-checks">

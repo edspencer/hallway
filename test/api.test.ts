@@ -352,7 +352,7 @@ describe('local domains (D63)', () => {
     assert.equal((await req('/api/fronting')).status, 503);
     providers.register(frontingProvider({ store, platform: { fronting: darwinFronting }, checks: async () => [] }));
     const f = ((await (await req('/api/state')).json()) as StateResponse).fronting;
-    assert.deepEqual(f, { suggested: null, admin: null, tiers: [], unsupported: null, mode: 'direct', trust: null, dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null });
+    assert.deepEqual(f, { suggested: null, admin: null, tiers: [], unsupported: null, mode: 'direct', trust: null, dashboardUrl: 'https://hallway.localhost', appUrl: 'https://<app>.localhost', base: 'localhost', pushError: null, caddyPort: 4443, standardPort: null });
     await store.patchConfig({ mode: 'fronted', domain: { base: 'myname.internal' }, proxy: { publicPort: 4443 } });
     const g = ((await (await req('/api/state')).json()) as StateResponse).fronting!;
     assert.equal(g.mode, 'fronted');

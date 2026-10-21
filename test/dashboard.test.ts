@@ -9,7 +9,7 @@ import { BRAND_REGISTRY, explicitBrandSlug, matchBrand } from '../src/lib/brands
 import { PAINTS, dominantColour, hash, monogram, paintIndex } from '../src/lib/colour.ts';
 import { matchScore } from '../src/lib/filter.ts';
 import { ago, displayUrl, duration, homeDir, hostOf, millis, percent, shorten, slugify, tildify } from '../src/lib/format.ts';
-import { TIER_LABEL, checksSummary, domainsView, failedWords, hostOfUrl, initialTier, logTail, runningWords, tierChoices, turnOnPhase } from '../src/lib/domains.ts';
+import { TIER_LABEL, checksSummary, conflictHeadline, conflictProcess, conflictWhere, domainsView, failedWords, hostOfUrl, withPort, initialTier, logTail, runningWords, tierChoices, turnOnPhase } from '../src/lib/domains.ts';
 import { bootLabel, lostCommand, lostCount, lostWhere } from '../src/lib/lost.ts';
 import { countStates, doorState, faviconMark, isScanning, subtitle, tabTitle } from '../src/lib/status.ts';
 import { ROOT } from './fixture.ts';
@@ -347,6 +347,21 @@ describe('local domains: the tiers (D65, D70)', () => {
     assert.equal(runningWords('none', true).title, 'Turning on…');
     assert.match(failedWords('user', true).detail, /^If the Touch ID prompt was cancelled or went unanswered, run it in a terminal instead:$/);
     assert.match(failedWords('none', true).detail, /^Run it in a terminal instead/);
+  });
+  test("the stop's reason picks the words (D71): Touch ID only when the dialog's step failed (or an older daemon didn't say)", () => {
+    assert.match(failedWords('user', true, 'dialog').detail, /Touch ID/);
+    for (const r of ['ports', 'refused', 'sudo', 'failed'] as const) assert.doesNotMatch(failedWords('user', true, r).detail, /Touch ID/, r);
+    assert.match(failedWords('user', true, 'sudo').detail, /needs sudo/);
+  });
+  test('a port conflict, for people; an address on another port', () => {
+    const c = { ports: [443, 80], kind: 'standard' as const, pid: 7090, process: 'ssh', command: 'ssh: ~/x', addresses: ['*'], exposed: true, tool: { id: 'rancher-desktop' as const, name: 'Rancher Desktop' }, container: null, fix: [] };
+    assert.equal(conflictHeadline(c), 'Ports 443 and 80 are taken by Rancher Desktop');
+    assert.equal(conflictProcess(c), 'ssh, pid 7090');
+    assert.deepEqual(conflictWhere(c), { text: 'Listening on every address (*): reachable from your network, not just this machine', exposed: true });
+    assert.equal(conflictHeadline({ ...c, ports: [443], tool: null, pid: null, process: null }), 'Port 443 is taken by a process you can’t see');
+    assert.equal(withPort('https://<app>.localhost', 4443), 'https://<app>.localhost:4443');
+    assert.equal(withPort('https://hallway.localhost:4443', 443), 'https://hallway.localhost');
+    assert.equal(withPort('http://review.localhost', 4480), 'http://review.localhost:4480');
   });
   test('an older daemon sends no tiers (the panel falls back to the two commands); the log tail is the last lines; the header names', () => {
     assert.deepEqual(tierChoices({ unsupported: null, mode: 'direct', trust: null, dashboardUrl: '', appUrl: '', base: 'localhost', pushError: null }), []);

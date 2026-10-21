@@ -16,7 +16,8 @@ import { CA_NAME, caddyPaths } from './caddy.js';
 import { publicPort, publicUrl } from './names.js';
 import { frontingInfo } from './status.js';
 import { httpProbe, isLoopback, readRoot, resolve, tlsProbe } from './probe.js';
-import { MIN_CADDY, isTrusted, lowPortsFor, portConflicts, versionAtLeast } from './setup.js';
+import { MIN_CADDY, chosenCaddyPorts, isOurForwarder, isTrusted, lowPortsFor, portConflicts, versionAtLeast } from './setup.js';
+import { conflictTitle, conflictsOf, containerOn, exposureText, holderText, whoHolds } from './conflicts.js';
 import { currentTier } from './tiers.js';
 import { forwards } from '../services/spec.js';
 import { delegatedTlds, tldVerdict } from './tld.js';
@@ -140,13 +141,31 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
     else if (unloaded.length) add({ id: 'low-ports', status: 'fail', message: `${unloaded.join(', ')} ${unloaded.length === 1 ? "isn't" : "aren't"} loaded, so launchd isn't holding ${ports} for Hallway`, fix: SETUP });
     else add({ id: 'low-ports', status: 'pass', message: `${ports} on loopback: launchd, for hallway.caddy (${want.length} ${f.userServiceNoun}s)` });
   }
-  if (low === 'redirect') {
-    const { conflicts } = await portConflicts(platform, [
-      { port: 443, what: 'HTTPS' },
-      { port: 80, what: 'HTTP' },
-    ]);
-    for (const c of conflicts)
-      add({ id: 'ports-80-443', status: 'fail', message: c, fix: "stop it: Hallway's redirect takes loopback 80 and 443 before it can see them. A container tool (Docker Desktop, Rancher Desktop, Colima, Lima) forwarding 80/443 is the usual culprit: turn that port forward off" });
+  // something else on 443/80 (D71): named, with its tool's own fix, and Caddy's port as the way to coexist
+  const lowList = https ? [443, 80] : [80];
+  const holdersOf = async () => {
+    const { holders } = await whoHolds(platform, lowList.map((port) => ({ port, kind: 'standard' as const, oursIf: isOurForwarder })));
+    return conflictsOf(holders, platform.id, containerOn(deps.query, deps.env, f.helperDirs, deps.userHome), deps.userHome);
+  };
+  const std = https ? 443 : 80;
+  const alt = https ? cfg.proxy.httpsPort : cfg.proxy.httpPort;
+  if (low !== 'none') {
+    for (const c of await holdersOf())
+      add({
+        id: 'ports-80-443',
+        status: 'fail',
+        message: `${conflictTitle(c)}: ${holderText(c)}${c.addresses.length ? `, ${exposureText(c)}` : ''}`,
+        fix: `${c.fix.join('; ')}. Or leave it running: \`hallway setup --port ${alt}\` puts links on Caddy's own port`,
+      });
+  } else if (chosenCaddyPorts(platform, cfg)) {
+    // on Caddy's port by choice: say which, and whether the way back is open yet
+    const held = await holdersOf();
+    add({
+      id: 'public-port',
+      status: 'info',
+      message: `links carry Caddy's own port, :${pub} (\`hallway setup --port ${alt}\`), so nothing is put on ${lowList.join(' and ')}${held.length ? `; ${held.map((c) => `${c.ports.join(' and ')} ${c.ports.length > 1 ? 'are' : 'is'} still held by ${c.tool?.name ?? c.process ?? 'another process'}`).join('; ')}` : `; ${std} is free now`}`,
+      fix: held.length ? `${held[0].fix.join('; ')}; then \`hallway setup --port ${std}\`` : `\`hallway setup --port ${std}\` moves links to ${std}`,
+    });
   }
   const via = low === 'sockets' && !(pf && !forwarders?.length) ? " through launchd's socket" : low !== 'none' ? ' through the redirect from 443' : '';
   const root = readRoot(paths.rootCert);

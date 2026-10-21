@@ -479,6 +479,11 @@ export interface FrontingInfo {
   admin?: boolean | null;
   /** The three tiers as choices, User certificate first (empty where fronted mode can't work). */
   tiers?: TierOption[];
+  /** Caddy's own HTTPS port (`proxy.httpsPort`): where links go when 443 is taken (D71). Absent from an older daemon. */
+  caddyPort?: number;
+  /** Fronted mode on Caddy's own ports by choice (`hallway setup --port 4443`, D71), where 443 and 80 were possible:
+   *  the port to move back to (443, or 80 for No HTTPS). Null otherwise. */
+  standardPort?: number | null;
 }
 
 /** One of setup's tiers, as the dashboard offers it (D65). */
@@ -507,9 +512,52 @@ export interface TierOption {
 export interface FrontingSetupJob {
   state: 'idle' | 'running' | 'done' | 'failed';
   trust: Trust | null;
+  /** The port links were asked to carry (`--port`), or null for the default. Absent from an older daemon. */
+  port?: number | null;
   /** What setup printed, so far. */
   log: string;
   error: string | null;
+  /** Why it stopped (D71), so the page says the right thing: a cancelled Touch ID dialog only for `dialog`. Absent
+   *  from an older daemon. */
+  reason?: SetupStopReason | null;
+  /** `reason: 'ports'`: what holds them, one entry per process. */
+  conflicts?: PortConflict[];
+  /** `reason: 'ports'`, when only 443/80 are in the way: Caddy's own port, which links can carry instead (D71). */
+  altPort?: number | null;
+  /** Done: the dashboard's and an app's new addresses. */
+  dashboardUrl?: string | null;
+  appUrl?: string | null;
+}
+
+/** Why setup stopped (D71): something else holds 443/80 or Caddy's ports (`ports`); another refusal before anything
+ *  ran (`refused`); it needs sudo, so a terminal (`sudo`); the step that raises the OS's own dialog failed (`dialog`:
+ *  on a Mac, most likely a cancelled Touch ID prompt); any other failure while it ran (`failed`). */
+export type SetupStopReason = 'ports' | 'refused' | 'sudo' | 'dialog' | 'failed';
+
+/** The tools that commonly hold 443/80 on a developer's machine, as `hallway setup` and doctor recognise them (D71). */
+export type PortHolder = 'rancher-desktop' | 'docker-desktop' | 'colima' | 'orbstack' | 'podman' | 'lima' | 'nginx' | 'apache' | 'caddy';
+
+/** Something else listening on a port setup needs (D71): one process, every port of setup's it holds. */
+export interface PortConflict {
+  /** The ports it holds, 443 first. */
+  ports: number[];
+  /** `standard`: 443/80, which links can do without (Caddy's own port instead); `hallway`: Caddy's or dnsmasq's port. */
+  kind: 'standard' | 'hallway';
+  /** Null: a process this user can't see (root's, perhaps). */
+  pid: number | null;
+  /** The short process name (`ssh`, `com.docker.backend`). */
+  process: string | null;
+  /** Its command line, shortened, with the home directory as `~`. */
+  command: string | null;
+  addresses: string[];
+  /** It listens beyond loopback (`*`, `0.0.0.0`, `::` or another address): reachable from the network. */
+  exposed: boolean;
+  /** The tool it belongs to, when it can be told from its command line. */
+  tool: { id: PortHolder; name: string } | null;
+  /** The container publishing the port, when `docker ps` names one. */
+  container: string | null;
+  /** What to do about it, for people (`backticked` commands), in order. */
+  fix: string[];
 }
 
 /** One of `hallway doctor`'s fronted-mode checks (server/proxy/doctor.ts), with its fix. `info`: a fact, not a problem. */

@@ -1,0 +1,8 @@
+ 7090     1 Tue Oct 21 08:58:12 2026     ssh: /Users/someone/Library/Application Support/rancher-desktop/lima/0/ssh.sock [mux]
+  812   790 Mon Oct 20 09:00:01 2026     /Applications/Docker.app/Contents/MacOS/com.docker.backend services
+ 2301     1 Tue Oct 21 08:12:44 2026     ssh: /Users/someone/.colima/_lima/colima/ssh.sock [mux]
+  655   640 Mon Oct 20 09:00:03 2026     /Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper vmgr -build-id 1730000000 -handoff
+ 3001     1 Tue Oct 21 10:02:00 2026     /opt/homebrew/bin/limactl hostagent --pidfile /Users/someone/.lima/default/ha.pid --socket /Users/someone/.lima/default/ha.sock default
+  990     1 Mon Oct 20 08:59:58 2026     nginx: master process /opt/homebrew/opt/nginx/bin/nginx -g daemon off;
+  991   990 Mon Oct 20 08:59:58 2026     nginx: worker process
+ 4321  4300 Tue Oct 21 11:00:00 2026     node /Users/someone/Code/my-app/server.js

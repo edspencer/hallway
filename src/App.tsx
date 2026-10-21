@@ -128,9 +128,9 @@ export function App() {
     () => ({
       state: run,
       reset: () => setRun(null),
-      start: (trust) => {
-        setRun({ trust, job: null, error: null });
-        void turnOnFronting(trust).then((r) => setRun({ trust, job: r.ok ? r.value : null, error: r.ok ? null : r.error }));
+      start: (trust, port) => {
+        setRun({ trust, port: port ?? null, job: null, error: null });
+        void turnOnFronting(trust, port).then((r) => setRun({ trust, port: port ?? null, job: r.ok ? r.value : null, error: r.ok ? null : r.error }));
       },
     }),
     [run],

@@ -187,17 +187,19 @@ LaunchAgent's launchd socket on a privileged loopback port answered with no sudo
 worked through launchd's sockets, the forwarders and Caddy. The dashboard's **Turn on** for User certificate, run by
 the background daemon, brought up macOS's Touch ID dialog too, and local domains came up. CI's macOS runners also run setup for real with launchd's
 sockets on 443 and 80. Still to check on a desktop Mac: Firefox with a root trusted for the user; launchd's sockets
-and the trust settings across a logout and a reboot; a managed (MDM) Mac; and Docker Desktop or similar already
-holding 443. On Linux, CI checks the tiers with `curl`.
+and the trust settings across a logout and a reboot; and a managed (MDM) Mac. Rancher Desktop already holding 443
+was seen on a real (managed) Mac: setup stopped before changing anything. On Linux, CI checks the tiers with `curl`.
 :::
 
 ## Ports 80 and 443 may already be taken
 
 Container tools (Docker Desktop, Rancher Desktop, Lima, Colima and similar) often forward ports 80 and 443 from
 their VM. `hallway setup` refuses to start while anything else holds the low ports its tier needs, or Caddy's own
-ports, and says which process (name, PID and command line) holds them; turning that tool's forwarding of 80 and 443
-off is usually the fix. On macOS, where you can't see root's sockets, it also checks whether 443 answers with
-Hallway's certificate. `hallway doctor` reports the same.
+ports, and says which tool and process (name, PID and command line) holds them, with that tool's own fix (Rancher
+Desktop: untick Enable Traefik). On macOS, where you can't see root's sockets, it also checks whether 443 answers with
+Hallway's certificate. `hallway doctor` reports the same. To leave the other tool running, `hallway setup --port 4443`
+puts links on Caddy's own port (`https://<app>.localhost:4443`); `hallway setup --port 443` moves them back. See
+[Port 443 is already in use](/networking/setup-and-doctor/#port-443-is-already-in-use).
 
 ## From an older Hallway on macOS
 
