@@ -68,10 +68,12 @@ Every two minutes (and on demand, with `hallway scan`), the scanner:
    observed tray instead, with a tooltip saying why.
 2. **Filters out the noise.** On a typical development machine, IDE language servers and agent-tool helpers outnumber
    real dev servers about ten to one. Hallway skips ports below 1024, the ephemeral range 49152–65535 (where those
-   helpers live), known non-web daemons (`postgres`, `redis-server`, `sshd` and the like), itself, Caddy, anything in
-   `ignore.yaml`, and ports that belong to declared or discovered apps.
-3. **Sniffs for HTTP.** It sends `GET /`. Anything that answers in HTTP, with any status, is a web app; Hallway keeps
-   its status, `<title>` and favicon link. Non-HTTP listeners go into a collapsed "other listeners" group.
+   helpers live), known non-web daemons by process name (`postgres`, `redis-server`, `sshd` and the like; a Postgres
+   *container* still shows, as the container's), itself, Caddy, anything in `ignore.yaml`, and ports that belong to
+   declared or discovered apps.
+3. **Asks what it is.** It sends `GET /` (and, to a port that only speaks HTTPS, asks again over TLS). Every row then
+   says what it answered: **Web page**, **API**, **Needs sign-in**, **Redirects to …**, **Nothing at /**, or **Not
+   HTTP**. Only what a browser can show gets an Open button.
 4. **Identifies it.** Command lines are often useless (`node dist/index.js`), so **the working directory is the
    primary clue**. From it Hallway walks up to the project root (the nearest `package.json`, `pyproject.toml`,
    `Cargo.toml`, `go.mod` or `.git`), takes a name and description from `package.json` or the README, reads the git
@@ -81,12 +83,24 @@ Every two minutes (and on demand, with `hallway scan`), the scanner:
    parent too, but it isn't orphaned: Hallway shows what supervises it instead, as `launchd: com.example.api` or
    `systemd: api.service`.
 
+   **Port forwarders aren't the app.** Rancher Desktop, Colima and Lima forward their VM's ports through `ssh`; Docker
+   Desktop, OrbStack and Podman have forwarders of their own; so do SSH tunnels and `kubectl port-forward`. Hallway
+   names the tool, then asks its own CLIs, read-only, what's behind each port: `docker ps` or `nerdctl ps` for the
+   container (shown by name, with its image), `kubectl get svc` in the tool's own context for a Kubernetes service.
+   The cluster's own ports (the API server on 6443, the kubelet on 10250 and so on) are named and folded away. Without
+   those CLIs, the ports still belong to the tool, named by their page title where they have one.
+
+   **Desktop apps keep ports for themselves** (Rancher Desktop's, an authenticator's, an editor's helpers). They are
+   named by the app and folded into **App internals**. A package run from npx's cache or a global install
+   (`npx local-review` in some repository) is that tool, not the repository it was run in.
+
    Some directories say nothing about what runs in them: `/`, your home directory, a package manager's prefix such as
    `/opt/homebrew` (itself a git repository), or a system directory. A server started in one has no project, so
    Hallway names it by its supervisor's label or its executable (`api`, `my-server`), with the page's `<title>`
    alongside.
-5. **Labels worktree siblings.** Several copies of one app running from different git worktrees show as
-   `repo @ branch`, so they are no longer indistinguishable.
+5. **Groups them.** Your projects (one set per repository, its worktrees and branches together; several servers in
+   one checkout are told apart by the script each runs), apps on this machine, one group per forwarding tool, app
+   internals, and anything else. Copies of one app in different git worktrees are labelled `repo @ branch`.
 6. **Remembers.** Each observation is saved under a stable ID (a hash of project root, port and normalised command,
    since PIDs change on every restart), with when it was first and last seen.
 
@@ -112,7 +126,7 @@ observation:
 
 ### Exposed
 
-A listener marked **exposed** is listening on all network interfaces (`*:4321` or `0.0.0.0:4321`), not just on this
+A listener marked **On your network** (on an app's door, **exposed**) is listening on all network interfaces (`*:4321` or `0.0.0.0:4321`), not just on this
 machine, so other devices on your network can reach it. That is sometimes what you want (testing on a phone), but a
 dev server usually doesn't need it. If it isn't intended, bind it to `127.0.0.1`: most dev servers take a `--host`
 option or a `HOST` variable. Hover over or focus the badge for the address it's bound to; the detail drawer shows it

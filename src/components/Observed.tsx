@@ -13,7 +13,12 @@ import { BoxIcon, BranchIcon, ChevronIcon, CogIcon, ExternalIcon, GlobeIcon, Que
 import { TipBadge } from './Tip';
 
 export interface ObservedProps {
+  /** What to show: everything, or what the filter matched. */
   observed: ObservedListener[];
+  /** Everything, filtered or not: rows are headed by what tells them apart from their whole set (D73). */
+  all?: ObservedListener[];
+  /** The filter is on: folded groups open, so what it matched shows. */
+  filtering?: boolean;
   home: string | null;
   /** The daemon's platform: "Apps on this Mac" or "this computer". */
   platform: string | null;
@@ -24,6 +29,7 @@ export interface ObservedProps {
 }
 
 interface Ctx {
+  filtering: boolean;
   home: string | null;
   machine: string;
   takenSlugs: Set<string>;
@@ -56,11 +62,11 @@ function useOpen(key: string, folded: boolean): [boolean, (v: boolean) => void] 
   return [open, set];
 }
 
-export function ObservedTray({ observed, home, platform, lead, takenSlugs, notify }: ObservedProps) {
-  const groups = trayGroups(observed, platform);
+export function ObservedTray({ observed, all = observed, filtering = false, home, platform, lead, takenSlugs, notify }: ObservedProps) {
+  const groups = visibleGroups(trayGroups(all, platform), observed);
   const machine = machineWord(platform);
   const pages = observed.filter((o) => o.answer.kind === 'page').length;
-  const ctx: Ctx = { home, machine, takenSlugs, notify };
+  const ctx: Ctx = { filtering, home, machine, takenSlugs, notify };
   return (
     <section className="hw-section hw-observed" aria-labelledby="hw-observed-title">
       <header className="hw-section-head">
@@ -81,6 +87,17 @@ export function ObservedTray({ observed, home, platform, lead, takenSlugs, notif
       ))}
     </section>
   );
+}
+
+/** The groups as they are for everything, cut down to the rows being shown (empty sets and groups dropped). */
+function visibleGroups(groups: TrayGroup[], shown: ObservedListener[]): TrayGroup[] {
+  const ids = new Set(shown.map((o) => o.id));
+  const out: TrayGroup[] = [];
+  for (const g of groups) {
+    const sets = g.sets.map((s) => ({ ...s, rows: s.rows.filter((o) => ids.has(o.id)), all: s })).filter((s) => s.rows.length);
+    if (sets.length) out.push({ ...g, sets, rows: sets.flatMap((s) => s.rows) });
+  }
+  return out;
 }
 
 /** "On your network", said once in words wherever something is (D73). */
@@ -112,7 +129,8 @@ function GroupIcon({ g }: { g: TrayGroup }) {
 }
 
 function Group({ g, ctx }: { g: TrayGroup; ctx: Ctx }) {
-  const [open, setOpen] = useOpen(g.key, g.folded);
+  const [opened, setOpen] = useOpen(g.key, g.folded);
+  const open = opened || ctx.filtering;
   const id = `hw-tray-${g.key.replace(/[^a-z0-9]+/gi, '-')}`;
   const summary = foldSummary(g);
   return (
@@ -128,9 +146,9 @@ function Group({ g, ctx }: { g: TrayGroup; ctx: Ctx }) {
       {open ? (
         <div className="hw-tray-card">
           {g.sets.map((s) => (
-            <Set key={s.key} s={s} ctx={ctx} />
+            <SetRows key={s.key} s={s} ctx={ctx} />
           ))}
-          {g.folded && (
+          {g.folded && !ctx.filtering && (
             <button type="button" className="hw-tray-fold hw-tray-fold--hide" aria-expanded="true" onClick={() => setOpen(false)}>
               Hide {g.title.toLowerCase()}
             </button>
@@ -152,9 +170,10 @@ function Group({ g, ctx }: { g: TrayGroup; ctx: Ctx }) {
   );
 }
 
-function Set({ s, ctx }: { s: TraySet; ctx: Ctx }) {
-  const [open, setOpen] = useOpen(s.key, s.folded);
-  const labels = rowLabels(s, (p) => tildify(p, ctx.home));
+function SetRows({ s, ctx }: { s: TraySet & { all?: TraySet }; ctx: Ctx }) {
+  const [opened, setOpen] = useOpen(s.key, s.folded);
+  const open = opened || ctx.filtering;
+  const labels = rowLabels(s.all ?? s, (p) => tildify(p, ctx.home));
   if (!open)
     return (
       <button type="button" className="hw-tray-fold hw-tray-fold--set" aria-expanded="false" onClick={() => setOpen(true)}>
@@ -167,14 +186,22 @@ function Set({ s, ctx }: { s: TraySet; ctx: Ctx }) {
         <ChevronIcon />
       </button>
     );
+  const detail = s.detail?.startsWith('/') || /^[a-z]:\\/i.test(s.detail ?? '') ? tildify(s.detail!, ctx.home) : s.detail;
+  // a set of one whose row says the same thing needs no heading of its own: the row carries where it is
+  const only = s.rows.length === 1 && (s.all ?? s).rows.length === 1 ? s.rows[0] : null;
+  const heading = !!s.title && !(only && labels.get(only.id)?.title === s.title);
+  if (only && s.title && !heading) {
+    const l = labels.get(only.id)!;
+    labels.set(only.id, { ...l, detail: [l.detail, detail].filter(Boolean).join(' · ') || null });
+  }
   return (
-    <div className={`hw-tray-set${s.title ? ' has-title' : ''}`}>
-      {s.title && (
+    <div className={`hw-tray-set${heading ? ' has-title' : ''}`}>
+      {heading && (
         <div className="hw-tray-set-head">
           <strong>{s.title}</strong>
-          {s.detail && <span className={s.detail.startsWith('@ ') ? 'hw-tray-set-detail hw-tray-mono' : 'hw-tray-set-detail'}>{s.detail}</span>}
+          {detail && <span className={detail.startsWith('@ ') || detail.startsWith('~') ? 'hw-tray-set-detail hw-tray-mono' : 'hw-tray-set-detail'}>{detail}</span>}
           {s.rows.length > 1 && <span>{s.rows.length} running</span>}
-          {s.folded && (
+          {s.folded && !ctx.filtering && (
             <button type="button" className="hw-tray-set-hide" aria-expanded="true" onClick={() => setOpen(false)}>
               Hide
             </button>

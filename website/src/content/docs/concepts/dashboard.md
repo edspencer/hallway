@@ -35,8 +35,11 @@ the sketches are drawn in text from that design, not screenshots.
 │ └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘          │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ FOUND RUNNING — NOT YET NAMED                                                │
-│ :4666  dashboard · ~/Code/dashboard-wt-b @ feature/new-chart · up 9 days     │
-│        orphaned   [Claim]  [Ignore ▾]                                        │
+│ ⑂ Your projects                                                              │
+│   dashboard   feature/new-chart :4666 · ● Web page · up 9 days    [Open]     │
+│ ▢ Rancher Desktop                                                            │
+│   juice-shop :3000 · ● Web page · bkimminich/juice-shop           [Open]     │
+│   Kubernetes · the cluster’s own components · 9 ports                  ›     │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ BOOKMARKS                                                                    │
 │ Production   (◉ Admin console) (◉ BI dashboards) (◉ Status page)             │
@@ -46,6 +49,12 @@ the sketches are drawn in text from that design, not screenshots.
 
 Which sections appear, and in what order, is `dashboard.sections` in [`config.yaml`](/reference/config-yaml/). The
 observed tray hides itself when empty, and so do bookmarks.
+
+**Found running, not yet named** groups what the scanner found by what it is: your projects (a repository's
+worktrees and branches together), apps on this machine, what each container tool forwards (its Kubernetes cluster's
+own ports folded away), desktop apps' internal ports (folded) and anything else. Every row says what it answers (a web
+page, an API, a sign-in, a redirect, nothing at `/`, not HTTP); only what a browser can show gets **Open**. See
+[how the scanner identifies them](/concepts/apps/#observed-listeners-the-scanner).
 
 ## App cards
 

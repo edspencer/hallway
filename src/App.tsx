@@ -261,7 +261,7 @@ export function App() {
       ) : null,
     observed: () =>
       isScanning(state) && observed.length > 0 ? (
-        <ObservedTray key="observed" observed={observed} home={home} platform={state.daemon.platform} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
+        <ObservedTray key="observed" observed={observed} all={state.observed} filtering={!!found} home={home} platform={state.daemon.platform} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
       ) : null,
     bookmarks: () =>
       hasBookmarks ? <Bookmarks key="bookmarks" groups={state.bookmarks} visible={found?.bookmarks} filtering={!!found} iconVersion={live.iconVersion} notify={toasts.push} /> : null,

@@ -96,7 +96,10 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
                    also picks the tier, D55); card.ts (the generated card: SVG → PNG with resvg); shots.ts and browser.ts
                    (opt-in screenshots, and the browser `hallway thumbs enable` installs into the data home, D56)
   scanner/         observed listeners: filter.ts (noise), identify.ts (cwd → project, git, worktrees), sniff.ts
-                   (HTTP), observations.ts (ids, labels, state/observed.json, state/boot.json), claim.ts (slugs)
+                   (HTTP, then TLS), observations.ts (ids, state/observed.json, state/boot.json), claim.ts (slugs);
+                   D73: forwarders.ts (port forwarders and what's behind them: docker/nerdctl/podman/kubectl), apps.ts
+                   (desktop apps' ports, tools run from npx or a global install), describe.ts (answer, role, name,
+                   script, labels)
   prober/          probe.ts (the TCP → health path → GET / ladder), state.ts (states, flap damping), index.ts (schedule)
   health/          uptime.ts (samples + hourly rollups in state/health.sqlite, node:sqlite), index.ts (startHealth)
   lost/            "Lost at last reboot" (D54): index.ts (what was running before the reboot and isn't now, state/lost.json),
@@ -119,9 +122,10 @@ src/               the dashboard (React, built by Vite into dist/web)
   api.ts           the client for the HTTP API (writes return conflict/invalid results for the forms)
   keyboard.ts      `/`, arrows (spatial), `c`, `i`, Esc, `?`;  ambient.ts: tab title + canvas favicon (D22)
   components/      Door (app card), UptimeBar, LatencyChart, Drawer, Lost (the banner), LocalDomains (the panel and
-                   the header's dialog, D63), Observed tray, Bookmarks,
+                   the header's dialog, D63), Observed tray (grouped, D73), Bookmarks,
                    Header, Problems, Empty, …
-  lib/             pure logic, tested under node: status counts, formatting, filter, door paint
+  lib/             pure logic, tested under node: status counts, formatting, filter, door paint, the observed tray's
+                   groups and row headings (tray.ts, D73)
   theme/tokens.css every colour, typeface and radius (theme.ts applies `dashboard.theme`)
   brand/           the provisional mark
 public/            static files copied into dist/web (favicon.svg)
