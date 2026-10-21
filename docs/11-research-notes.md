@@ -945,3 +945,25 @@ Read 2026-10-14. Relevant internals:
   Yet Rancher Desktop's ssh held `*:443` as the user on the author's Mac, so this differs between machines;
   unexplained. The CI squatter runs as root instead, so the user-visible, named-tool path is covered by the fixtures,
   not by CI.
+
+## Chrome, trust and MDM on the author's managed work Mac (D72), 2026-10-21
+
+- **Rancher Desktop / Traefik** (D71, above): with "Enable Traefik" unticked, 443 and 80 were free and the
+  dashboard's Turn on (User certificate) **succeeded** on the managed Mac.
+- **MDM allowed launchd's `Sockets` agents.** On this managed Mac, the user LaunchAgents with `Sockets` (D65's
+  forwarders) and Caddy's job loaded and served 443. macOS showed its **"Background Items Added"** notification
+  naming Caddy. This was D65's open question about managed Macs: answered for this MDM's configuration (another
+  organisation's could still block them).
+- **Chrome needed a restart; the OS didn't.** Right after the Turn on, Chrome showed `NET::ERR_CERT_AUTHORITY_INVALID`
+  for `https://hallway.localhost`. Meanwhile `hallway doctor` reported 18 checks passing and 0 problems,
+  `security dump-trust-settings` listed "Hallway Local CA - 2026 ECC Root" with "Number of trust settings : 0"
+  (unconstrained trust, as `add-trusted-cert -r trustRoot` makes it), and `/usr/bin/curl
+  https://hallway.localhost/api/health` returned 200. **Quitting Chrome with ⌘Q and reopening it fixed it.** On the
+  author's personal Mac (2026-10-17/18) Chrome picked up the new trust without a restart. The difference is unexplained;
+  the likeliest cause is that Chrome had already loaded the address before the trust step (an error page, or an
+  earlier attempt during D71) and kept that verification result for the session.
+- **Chrome's `CAPlatformIntegrationEnabled` policy** (Chrome and Edge 133+ on macOS; read 2026-10-21 from Microsoft's
+  Edge policy reference, which mirrors Chrome's, and Chrome's root-store FAQ): when false, "user-added TLS
+  certificates from platform trust stores won't be used". Chrome's FAQ says that on macOS it consumes certificates
+  *added* to "Default and System Keychains", so the System keychain is most likely covered too. **Unverified on a
+  managed Mac with the policy set.** The author's work Mac doesn't set it (Chrome trusted the root after a restart).

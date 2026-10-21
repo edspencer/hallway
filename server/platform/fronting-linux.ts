@@ -10,7 +10,7 @@
 // POSIX paths whatever OS this runs on, so this platform's logic is tested on Windows too
 import { posix as path } from 'node:path';
 import fs from 'node:fs';
-import { type Cmd, type Fronting, type FrontingEnv, FrontingUnsupported, MARK, type Recipe, findTool } from './fronting.js';
+import { type Cmd, type Fronting, type FrontingEnv, FrontingUnsupported, MARK, type Recipe, curlTrust, curlTrustArgs, findTool } from './fronting.js';
 import type { Runner } from './services.js';
 
 export const NFT_FILE = '/etc/hallway/redirect.nft';
@@ -186,6 +186,19 @@ export const linuxFronting: Fronting = {
     const r = await run(env.tools.certutil, ['-L', '-d', nssDb(env.userHome), '-n', NSS_NICKNAME, '-a']);
     const pem = safeRead(env.rootCert);
     return r.code === 0 && !!pem && pemBody(r.stdout) === pemBody(pem);
+  },
+
+  // User certificate is Chrome's NSS database (what Chrome and Chromium read); System-wide certificate, the system's
+  // store, as the system's curl reads it
+  async osTrust(target, tier, env, run) {
+    if (tier === 'user') {
+      // the database may have been made since the facts were gathered (setup makes it before the trust step): look again
+      const ok = await linuxFronting.userTrusted!({ ...env, tools: { ...env.tools, nssdb: env.tools.nssdb || fs.existsSync(nssDir(env.userHome)) } }, run);
+      return ok ? { trusted: true, how: "Chrome's NSS database (~/.pki/nssdb)" } : { trusted: false, how: "Chrome's NSS database (~/.pki/nssdb)", cause: "Hallway's root isn't in it" };
+    }
+    const r = await run('curl', curlTrustArgs(target.host, target.port));
+    if (r.code === 127) return { trusted: null, how: "the system's certificate store", cause: 'curl is not installed' };
+    return curlTrust(r.code, r.stderr, "the system's certificate store (curl, with no CA given)");
   },
 
   resolver(env): Recipe {

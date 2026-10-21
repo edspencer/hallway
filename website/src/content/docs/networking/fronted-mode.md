@@ -187,8 +187,9 @@ LaunchAgent's launchd socket on a privileged loopback port answered with no sudo
 worked through launchd's sockets, the forwarders and Caddy. The dashboard's **Turn on** for User certificate, run by
 the background daemon, brought up macOS's Touch ID dialog too, and local domains came up. CI's macOS runners also run setup for real with launchd's
 sockets on 443 and 80. Still to check on a desktop Mac: Firefox with a root trusted for the user; launchd's sockets
-and the trust settings across a logout and a reboot; and a managed (MDM) Mac. Rancher Desktop already holding 443
-was seen on a real (managed) Mac: setup stopped before changing anything. On Linux, CI checks the tiers with `curl`.
+and the trust settings across a logout and a reboot; and a managed Mac whose organisation blocks user LaunchAgents. On the author's managed work Mac, Rancher Desktop
+holding 443 made setup stop before changing anything; with its Traefik off, Turn on worked (macOS showed "Background
+Items Added" for Caddy), and Chrome needed quitting and reopening once to drop a certificate error from before. On Linux, CI checks the tiers with `curl`.
 :::
 
 ## Ports 80 and 443 may already be taken

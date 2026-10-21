@@ -1391,6 +1391,11 @@ holding `127.0.0.1:443` (setup should refuse: "443 answers, but not with Hallway
 the "Background Items Added" notification and whether MDM blocks user LaunchAgents with `Sockets`; `hallway teardown`
 on a real Mac.
 
+> **Updated 2026-10-21 (the author's work Mac, managed):** MDM allowed the user LaunchAgents with `Sockets`: the
+> dashboard's Turn on (User certificate) succeeded once Rancher Desktop's Traefik was off (D71), and macOS showed its
+> "Background Items Added" notification for Caddy. Chrome then needed quitting and reopening to drop a certificate error
+> it had seen before (D72).
+
 > **Updated 2026-10-17/18 (real Mac, the author's, not managed):** the three items above that are no longer
 > listed — the No admin trust step run *by `hallway setup` itself* (a System-wide → No admin migration, with D67's
 > plan and `Continue?` prompt, one sudo password and then Touch ID), Safari and Chrome loading
@@ -1723,3 +1728,47 @@ these (Rancher Desktop, Docker Desktop publishing 80/443, Colima, OrbStack, Podm
   output beyond the one message he saw; `docker ps` from the LaunchAgent daemon's environment; `--port 4443` in Safari
   and Chrome with the User certificate; Move to port 443 after turning Traefik off). CI's fronted jobs run setup against
   a root listener on every address's 443 and 80, then `--port 4443` for real, then back.
+
+### D72 — Trusted as browsers check it: setup's last check and doctor verify the OS's trust; reopen the browser after trusting; browsers set to ignore added certificates (2026-10-21)
+
+The author's work Mac (managed, 0.8.x, after D71): Turn on (User certificate) succeeded and `hallway doctor` said
+everything passed, but Chrome showed `NET::ERR_CERT_AUTHORITY_INVALID` for `https://hallway.localhost`. Yet
+`security dump-trust-settings` listed "Hallway Local CA - 2026 ECC Root" with no constraints (correct), and
+`/usr/bin/curl https://hallway.localhost/api/health` answered 200. Quitting Chrome completely (⌘Q) and reopening it
+fixed it. On his personal Mac, Chrome hadn't needed that.
+
+- **Setup's last check and doctor now ask the question browsers ask** (`Fronting.osTrust`), not only "does Caddy
+  serve a certificate from Hallway's CA, verified against that CA". macOS: **Apple's curl** (`/usr/bin/curl`, never
+  Homebrew's, which brings its own CA list) with no CA given, `-q` (no `~/.curlrc`), `--resolve <host>:<port>:127.0.0.1`;
+  it verifies against the keychains' trust settings as Safari and Chrome do (verified D65, and on the author's Mac
+  here). Linux, System-wide certificate: the system's curl the same way (the system CA store). Linux, User certificate:
+  Chrome's NSS database, which is what Chrome and Chromium read there (curl wouldn't, by design). Exit 0 is trusted;
+  35, 51, 58, 59 and 60 are not trusted, with curl's own words as the cause; anything else (refused, timed out) says
+  nothing about trust, and is a warning, not a ✗. Setup prints `✓ trusted by …` or `✗ not trusted by …: <cause>` and
+  then fails (exit 1, the dashboard's "Setup stopped") rather than saying "Done" while browsers warn. doctor adds
+  `os-trust`, after the TLS check passes.
+  - **Rejected:** `security verify-cert -p ssl -s <host>` on the served leaf: the same answer, after fetching and
+    writing out the leaf, and curl is what the author ran by hand. `security dump-trust-settings` alone: it says the
+    setting exists, not that a verification succeeds (it was right on the author's Mac while Chrome still warned).
+- **"If a browser showed a certificate warning before, quit and reopen it (Chrome remembers the old result)."** Said
+  only when a trust step actually ran (`trustRan(plan)`: the plan's trust step wasn't already done and the run got past
+  it): at the end of `hallway setup`, and in the dashboard's "Local domains are on" (`FrontingSetupJob.trustChanged`).
+  doctor's passing `os-trust` line says it too, since that's where someone whose browser still warns will look. Why
+  Chrome kept the error on one Mac and not the other is unknown (a page loaded before the trust step, which it
+  caches per session, is the likeliest explanation).
+- **A browser set by its organisation to ignore certificates you add** (`Fronting.browserPolicies`, macOS): Chrome's and
+  Edge's `CAPlatformIntegrationEnabled = false` in managed preferences, `/Library/Managed Preferences/<domain>.plist` and
+  `/Library/Managed Preferences/<user>/<domain>.plist`, read with `plutil -extract … raw` (files that don't exist
+  aren't read). For the certificate tiers: a warning in setup's plan (before `Continue?`), the tier row's warning in
+  the dashboard (`TierOption.warning`, from `machineFacts`, asked once at start), and a doctor ✗ (`browser-policy`).
+  - **Disagreement with the brief, recorded here and raised with the author:** the request was to advise
+    "use System-wide certificate (`hallway setup --trust system`)". By Chrome's own description, it doesn't help.
+    The policy ("user-added TLS certificates from platform trust stores won't be used") covers what Chrome calls
+    *added* certificates, and Chrome's root-store FAQ lists both the login keychain and the System keychain as stores
+    whose added certificates it consumes. So the words say that System-wide certificate doesn't get round it, and offer
+    Safari, the IT team, or No HTTPS. Unverified on a managed Mac with the policy set. If a real one shows the System
+    keychain is honoured, this becomes "use System-wide certificate".
+  - Not on Linux: there Chrome reads the NSS database, and the policy's documented platforms are Windows, macOS and
+    Android.
+- **Unverified on a real Mac:** the policy check on a managed Mac with the policy set; Apple's curl disagreeing with
+  Chrome other than through Chrome's cached error (none seen); the restart line's wording in the dashboard on a Mac.

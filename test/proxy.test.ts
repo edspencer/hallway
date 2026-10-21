@@ -451,4 +451,22 @@ describe("doctor's networking checks per tier (D65)", () => {
       s.cleanup();
     }
   });
+
+  test('a browser set by its organisation to ignore certificates you add is a ✗ for the certificate tiers, not for No HTTPS (D72)', async () => {
+    const s = await tmpStore();
+    const [httpsPort, httpPort] = [await freePort(), await freePort()];
+    const platform = { ...quiet, fronting: { ...quiet.fronting, browserPolicies: async () => [{ browser: 'Chrome', file: '/Library/Managed Preferences/com.google.Chrome.plist' }] } };
+    const deps = { store: s.store, platform, services: null, query: async () => ({ code: 1, stdout: '', stderr: '' }), env: { PATH: '' }, userHome: '/home/me' };
+    try {
+      await s.store.patchConfig({ mode: 'fronted', proxy: { trust: 'user', publicPort: httpsPort, httpsPort, httpPort } });
+      const c = (await networkChecks(deps as never)).find((x) => x.id === 'browser-policy');
+      assert.equal(c?.status, 'fail');
+      assert.match(c!.message, /^Your organisation has set Chrome to ignore certificates added to this Mac[\s\S]*System-wide certificate doesn't get round it\.$/);
+      assert.match(c!.fix!, /Safari/);
+      await s.store.patchConfig({ proxy: { trust: 'none', scheme: 'http', publicPort: httpPort } });
+      assert.ok(!(await networkChecks(deps as never)).some((x) => x.id === 'browser-policy'));
+    } finally {
+      s.cleanup();
+    }
+  });
 });
