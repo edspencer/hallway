@@ -15,7 +15,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { HallwayConfig, Trust } from '../../shared/api.js';
+import type { HallwayConfig, PortConflict, SetupStopReason, Trust } from '../../shared/api.js';
 import { UsageError } from '../args.js';
 import { dataPaths, tildify } from '../config.js';
 import { type Cmd, type FrontingEnv, FrontingUnsupported, type Platform, type Recipe, type Runner, type StagedFile, dnsmasqConf, mergeListeners } from '../platform/index.js';
@@ -27,6 +27,7 @@ import { isListening } from '../services/ports.js';
 import { atomicWrite } from '../store/safefs.js';
 import { CaddyUnreachable, loadConfig, runningConfig } from './admin.js';
 import { CA_NAME, caddyConfig, caddyPaths, caddyText } from './caddy.js';
+import { type WantedPort, altPortText, conflictsOf, containerOn, formatConflict, whoHolds } from './conflicts.js';
 import { fallbackHtml } from './fallback.js';
 import { ipv6Loopback, proxyApps } from './index.js';
 import { publicUrl } from './names.js';
@@ -67,8 +68,10 @@ export interface Facts {
   tld: TldVerdict | null;
   caddy: { path: string | null; version: string | null; install: { cmd: string[] } | { advice: string } };
   dnsmasq: { path: string | null; install: { cmd: string[] } | { advice: string } } | null;
-  /** Who holds a port setup needs, for people; non-empty means stop. */
-  conflicts: string[];
+  /** Who holds a port setup needs, one entry per process; non-empty means stop (D71). */
+  conflicts: PortConflict[];
+  /** Links on Caddy's own ports by choice (`--port 4443`, or kept from config.yaml), where 443/80 were possible. */
+  chosenPort: boolean;
   warnings: string[];
   /** Reasons to stop that the facts found (the CLI that forwarders would run is npx's, nobody at the Mac's screen…). */
   stops: string[];
@@ -110,6 +113,8 @@ export interface SetupDeps {
   probe443?: () => Promise<'ours' | 'other' | 'none'>;
   machine?: MachineFacts;
   atScreen?: () => Promise<boolean | null>;
+  /** The container publishing a port (`docker ps`), or null. */
+  container?: (port: number) => Promise<string | null>;
 }
 
 const versionOf = (s: string) => /v?(\d+)\.(\d+)\.(\d+)/.exec(s)?.slice(1, 4).map(Number) ?? null;
@@ -149,12 +154,50 @@ export async function portConflicts(
 /** A command line that's one of Hallway's forwarders (`node …/cli.js forward 4443`), as launchd runs them. */
 export const isOurForwarder = (command: string) => /[/\\]cli\.js forward \d+(\s|$)/.test(command);
 
-/** How loopback 443/80 reach Caddy for a tier on this platform. A hand-set `publicPort: httpsPort` from before the
- *  tiers (fronted mode with nothing on 443, D47) is kept for System-wide certificate, the only tier that had it. */
-export function lowPortsFor(platform: Pick<Platform, 'fronting'>, tier: Trust, cfg: Pick<HallwayConfig, 'proxy'>): LowPorts {
-  if (tier === 'system' && cfg.proxy.trust === null && cfg.proxy.publicPort === cfg.proxy.httpsPort) return 'none';
+/** How loopback 443/80 reach Caddy for a tier on this platform, by nature: launchd's sockets (macOS), the redirect
+ *  (Linux, System-wide certificate), or nothing (Linux's other tiers: links carry Caddy's port). */
+export function naturalLowPorts(platform: Pick<Platform, 'fronting'>, tier: Trust): LowPorts {
   if (platform.fronting.lowPorts === 'sockets') return 'sockets';
   return tier === 'system' ? 'redirect' : 'none';
+}
+
+/**
+ * config.yaml puts links on Caddy's own port by choice (D71): `proxy.publicPort` is Caddy's port where the tier set up
+ * would have had 443/80 (macOS, every tier; Linux, System-wide certificate). That's `hallway setup --port 4443`, or
+ * the hand-set `publicPort: httpsPort` from before the tiers (D47, fronted mode with nothing on 443).
+ */
+export function chosenCaddyPorts(platform: Pick<Platform, 'fronting'>, cfg: Pick<HallwayConfig, 'mode' | 'proxy'>): boolean {
+  const p = cfg.proxy;
+  if (p.publicPort !== p.httpsPort && p.publicPort !== p.httpPort) return false;
+  if (cfg.mode !== 'fronted') return p.trust === null;
+  return naturalLowPorts(platform, currentTier(cfg)) !== 'none';
+}
+
+/** How loopback 443/80 reach Caddy for a tier on this platform: by `--port` when given (`caddy`: not at all, links
+ *  carry Caddy's port), else as config.yaml chose before (D71), else the tier's nature. */
+export function lowPortsFor(platform: Pick<Platform, 'fronting'>, tier: Trust, cfg: Pick<HallwayConfig, 'mode' | 'proxy'>, choice?: PortChoice): LowPorts {
+  if (choice === 'caddy') return 'none';
+  if (choice === undefined && chosenCaddyPorts(platform, cfg)) return 'none';
+  return naturalLowPorts(platform, tier);
+}
+
+/** `--port`: the standard port (443, or 80 for No HTTPS) or Caddy's own (proxy.httpsPort, or httpPort). */
+export type PortChoice = 'standard' | 'caddy';
+
+/** `--port <n>` for a tier, checked (D71): the standard port or Caddy's, and the standard one only where something
+ *  can hold it (not Linux's User certificate or No HTTPS). A string is why not, for a usage error. */
+export function portChoice(platform: Pick<Platform, 'fronting' | 'id'>, tier: Trust, proxy: Pick<HallwayConfig['proxy'], 'httpsPort' | 'httpPort'>, port: number): PortChoice | string {
+  const https = tier !== 'none';
+  const standard = https ? 443 : 80;
+  const caddy = https ? proxy.httpsPort : proxy.httpPort;
+  if (port === caddy) return 'caddy';
+  if (port === standard) {
+    if (naturalLowPorts(platform, tier) === 'none') return `${tierText(platform.id, tier).name} can't have port ${standard} on Linux: nothing unprivileged can hold it. System-wide certificate (--trust system) redirects it, with sudo`;
+    return 'standard';
+  }
+  const key = https ? 'proxy.httpsPort' : 'proxy.httpPort';
+  if (naturalLowPorts(platform, tier) === 'none') return `--port is Caddy's own port here, ${caddy} (${key} in config.yaml: change that to use another), not ${port}`;
+  return `--port is ${standard} (the default) or Caddy's own port, ${caddy} (${key} in config.yaml: change that to use another), not ${port}`;
 }
 
 export interface SetupOptions {
@@ -162,6 +205,8 @@ export interface SetupOptions {
   print?: boolean;
   /** The tier; without one, setup asks on a terminal, or else keeps the current tier, or else User certificate (D70). */
   trust?: Trust;
+  /** `--port`: links on the standard port or on Caddy's own (D71); without one, what config.yaml chose before. */
+  port?: number;
 }
 
 export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust: Trust }): Promise<Facts> {
@@ -182,7 +227,11 @@ export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust:
   const { httpsPort, httpPort } = cfg.proxy;
   const dnsPort = cfg.domain.dnsPort;
   const paths = caddyPaths(store.home);
-  const lowPorts = lowPortsFor(platform, tier, cfg);
+  const asked = opts.port === undefined ? undefined : portChoice(platform, tier, cfg.proxy, opts.port);
+  if (asked !== undefined && asked !== 'caddy' && asked !== 'standard') throw new UsageError(asked);
+  const choice = asked as PortChoice | undefined;
+  const lowPorts = lowPortsFor(platform, tier, cfg, choice);
+  const chosenPort = lowPorts === 'none' && naturalLowPorts(platform, tier) !== 'none';
   const scheme = tierProxy(platform.id, tier, cfg.proxy).scheme;
   // what links will carry: Caddy's own port when nothing holds 443/80 for it
   const publicPort = lowPorts === 'none' ? (scheme === 'https' ? httpsPort : httpPort) : scheme === 'https' ? 443 : 80;
@@ -201,18 +250,20 @@ export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust:
 
   // the low ports this tier needs, by scheme: plain HTTP needs only 80
   // a forwarder of ours that launchd has started (macOS) shows up as a node on 443/80: it isn't in the way
-  const lows = (lowPorts === 'none' ? [] : scheme === 'https' ? [{ port: 443, what: 'HTTPS' }, { port: 80, what: 'HTTP' }] : [{ port: 80, what: 'HTTP' }]).map((l) => ({ ...l, oursIf: isOurForwarder }));
+  const lows: WantedPort[] = (lowPorts === 'none' ? [] : scheme === 'https' ? [443, 80] : [80]).map((port) => ({ port, kind: 'standard', oursIf: isOurForwarder }));
   const ours = (file: string) => (cmd: string) => cmd.includes(file);
-  const { conflicts, seen } = await portConflicts(platform, [
+  const { holders, seen } = await whoHolds(platform, [
     ...lows,
-    { port: httpsPort, what: 'proxy.httpsPort, for Caddy', oursIf: ours(paths.config) },
-    { port: httpPort, what: 'proxy.httpPort, for Caddy', oursIf: ours(paths.config) },
-    ...(custom ? [{ port: dnsPort, what: "domain.dnsPort, for Hallway's dnsmasq", oursIf: ours(path.join(dataPaths(store.home).generated, 'dnsmasq.conf')) }] : []),
+    { port: httpsPort, kind: 'hallway', oursIf: ours(paths.config) },
+    { port: httpPort, kind: 'hallway', oursIf: ours(paths.config) },
+    ...(custom ? [{ port: dnsPort, kind: 'hallway' as const, oursIf: ours(path.join(dataPaths(store.home).generated, 'dnsmasq.conf')) }] : []),
   ]);
   // lsof shows only your own processes: a root listener on 443 (or launchd holding it for someone else's agent) is
   // invisible to it, but not to a connection
   const p443 = lows.some((l) => l.port === 443) && !seen.has(443) ? await probe443Cached(deps, dashboard, cfg.domain.dashboard) : null;
-  if (p443 === 'other') conflicts.push("port 443 answers, but not with Hallway's certificate, and its owner isn't visible to you (perhaps root's); `sudo lsof -nP -iTCP:443 -sTCP:LISTEN` names it");
+  if (p443 === 'other') holders.push({ port: 443, kind: 'standard', pid: null, process: null, command: null, addresses: [] });
+  // a container tool's port forward: `docker ps` may name the container (read-only, a few seconds at most)
+  const conflicts = await conflictsOf(holders, platform.id, deps.container ?? containerOn(deps.query, env, f.helperDirs, deps.userHome), deps.userHome);
   const { conflicts: admin } = await portConflicts(platform, [{ port: 2019, what: "a Caddy admin API's default port" }]);
   if (admin.length) warnings.push(`${admin[0]}: another Caddy is probably running. Hallway's Caddy doesn't use port 2019 and leaves that one alone, but it mustn't hold 80 or 443.`);
   if (caddyPath && caddyVersion && !versionAtLeast(caddyVersion, MIN_CADDY)) warnings.push(`Caddy ${caddyVersion} (${caddyPath}) is older than ${MIN_CADDY.join('.')}, which Hallway needs (it can't put the admin API on a private socket)`);
@@ -269,7 +320,7 @@ export async function gatherFacts(deps: SetupDeps, opts: SetupOptions & { trust:
       cfg.proxy.scheme === scheme &&
       publicUrl('x', cfg.proxy) === publicUrl('x', { scheme, publicPort }),
   };
-  return { platform: platform.id, tier, previous, base, custom, dashboard, httpsPort, httpPort, dnsPort, scheme, publicPort, lowPorts, forwards: want, tld, caddy, dnsmasq, conflicts, warnings, stops, env: fenv, found, done };
+  return { platform: platform.id, tier, previous, base, custom, dashboard, httpsPort, httpPort, dnsPort, scheme, publicPort, lowPorts, forwards: want, tld, caddy, dnsmasq, conflicts, chosenPort, warnings, stops, env: fenv, found, done };
 }
 
 const safe = (f: () => boolean) => {
@@ -329,6 +380,10 @@ export type Step =
 export interface Plan {
   /** Reasons not to go ahead at all. */
   refusals: string[];
+  /** The refusals that are ports someone else holds (D71), as data for the dashboard; their text is in `refusals`. */
+  conflicts?: PortConflict[];
+  /** When only 443/80 are in the way: Caddy's own port, which links can carry instead (`--port`), and the command. */
+  alt?: { port: number; command: string } | null;
   warnings: string[];
   steps: Step[];
 }
@@ -340,6 +395,8 @@ export interface PlanActions {
   startDnsmasq(): Promise<void>;
   /** Load exactly the forwarders the tier wants (macOS), removing any others. */
   forwardersUp(): Promise<void>;
+  /** Remove every forwarder (links on Caddy's own ports, D71). */
+  removeForwarders(): Promise<void>;
   removeDnsmasq(): Promise<void>;
   setConfig(): Promise<void>;
   verify(): Promise<void>;
@@ -347,7 +404,7 @@ export interface PlanActions {
 }
 
 const noop = async () => {};
-export const NO_ACTIONS: PlanActions = { writeCaddy: noop, startCaddy: noop, writeDnsmasq: noop, startDnsmasq: noop, forwardersUp: noop, removeDnsmasq: noop, setConfig: noop, verify: noop, isTrusted: async () => false };
+export const NO_ACTIONS: PlanActions = { writeCaddy: noop, startCaddy: noop, writeDnsmasq: noop, startDnsmasq: noop, forwardersUp: noop, removeForwarders: noop, removeDnsmasq: noop, setConfig: noop, verify: noop, isTrusted: async () => false };
 
 /** Setup's steps, from the facts. Pure (the actions are only called when it runs). */
 export function planSetup(facts: Facts, platform: Platform, home: string, a: PlanActions = NO_ACTIONS): Plan {
@@ -363,8 +420,17 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
 
   if (facts.tld?.verdict === 'refuse') refusals.push(`${facts.base}: ${facts.tld.reason}.`);
   else if (facts.tld?.verdict === 'warn') warnings.push(`${facts.base}: ${facts.tld.reason}.`);
-  for (const c of facts.conflicts)
-    refusals.push(`${c}. Hallway won't fight it: stop it${/:443|:80|\b(443|80)\b/.test(c) ? " (a container tool such as Docker Desktop, Rancher Desktop, Colima or Lima forwarding 80/443 is the usual culprit: turn that port forward off)" : ', or pick other ports in config.yaml (proxy.httpsPort, proxy.httpPort, domain.dnsPort)'}, then run \`hallway setup\` again.`);
+  // one message per process, whatever ports it holds (D71); then, when only 443/80 are in the way, Caddy's own port
+  for (const c of facts.conflicts) refusals.push(formatConflict(c, '    '));
+  const standardOnly = facts.conflicts.length > 0 && facts.conflicts.every((c) => c.kind === 'standard');
+  const altPort = facts.scheme === 'https' ? facts.httpsPort : facts.httpPort;
+  const alt = standardOnly ? { port: altPort, command: `hallway setup --trust ${facts.tier} --port ${altPort}` } : null;
+  if (facts.conflicts.length) {
+    // said once, after the last of them
+    const again = '    Then run `hallway setup` again.';
+    const coexist = alt ? `\n    ${altPortText(alt.port, facts.scheme === 'https' ? 443 : 80, alt.command, publicUrl(`<app>.${facts.base}`, { scheme: facts.scheme, publicPort: alt.port }))}` : '';
+    refusals[refusals.length - 1] += `\n${again}${coexist}`;
+  }
 
   // the helpers
   const helper = (tool: 'caddy' | 'dnsmasq', found: string | null, install: { cmd: string[] } | { advice: string }) => {
@@ -389,7 +455,10 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
     facts.tier === 'system' ? recipe(() => f.trust(facts.env)) : facts.tier === 'user' && f.userTrust ? recipe(() => f.userTrust!(facts.env)) : null;
   const redirect = facts.lowPorts === 'redirect' && f.redirect ? recipe(() => f.redirect!(facts.env)) : null;
   const resolver = facts.custom ? recipe(() => f.resolver(facts.env)) : null;
-  if (facts.lowPorts === 'none' && facts.tier === 'system') warnings.push(`proxy.publicPort is proxy.httpsPort (${facts.httpsPort}), so nothing is put on 443 and links carry :${facts.httpsPort}. Remove proxy.publicPort from config.yaml for plain https:// links.`);
+  if (facts.chosenPort) {
+    const std = facts.scheme === 'https' ? 443 : 80;
+    warnings.push(`Links carry Caddy's own port, :${facts.publicPort}, and nothing is put on ${facts.scheme === 'https' ? '443 and 80' : '80'}. \`hallway setup --port ${std}\` moves them to ${std} once nothing else holds it.`);
+  }
 
   const routes = `${facts.custom ? `*.${facts.base}` : '*.localhost'} to your apps and ${link(facts.dashboard)} to the dashboard`;
   steps.push({
@@ -450,6 +519,8 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
     const r = f.unresolver({ ...facts.env, base: facts.found.oldResolver });
     removals.push({ kind: 'run', why: r.why, recipe: r });
   }
+  if (facts.lowPorts !== 'sockets' && facts.found.forwarders.length)
+    removals.push({ kind: 'hallway', why: `Stop and remove the ${f.userServiceNoun}s launchd holds loopback 443 and 80 for (${facts.found.forwarders.join(', ')}): links carry :${facts.publicPort} now`, action: a.removeForwarders });
   if (!facts.custom && facts.found.dnsmasq) removals.push({ kind: 'hallway', why: `Stop and remove Hallway's dnsmasq (${f.userServiceNoun} hallway.dnsmasq): *.localhost needs no DNS`, action: a.removeDnsmasq });
   if (removals.length && facts.previous && facts.previous !== facts.tier)
     warnings.push(`Moving from ${tierText(facts.platform, facts.previous).name} to ${name}: what the old tier added is removed${removals.some((s) => s.kind === 'run' && s.recipe.cmds.some((c) => c.sudo)) ? ' (that needs sudo, this once)' : ''}.`);
@@ -465,7 +536,7 @@ export function planSetup(facts: Facts, platform: Platform, home: string, a: Pla
   });
   const through = facts.lowPorts === 'sockets' ? " through launchd's socket" : facts.lowPorts === 'redirect' ? ' through the redirect' : '';
   steps.push({ kind: 'hallway', why: `Check ${link(facts.dashboard)} answers${through}${facts.scheme === 'https' ? ", with Hallway's certificate" : ''}`, action: a.verify });
-  return { refusals, warnings, steps };
+  return { refusals, warnings, steps, conflicts: facts.conflicts, alt };
 }
 
 /** The plan, for people (`--print`, and before running). */
@@ -535,7 +606,18 @@ export const cmdLine = (c: Cmd, isRoot = false) => [...(c.sudo && !isRoot ? ['su
 // Running it
 // ---------------------------------------------------------------------------------------------------------------
 
-export class SetupError extends Error {}
+/** Setup stopped: why (D71), so the dashboard says the right thing, and for ports, what holds them. */
+export class SetupError extends Error {
+  reason: SetupStopReason;
+  conflicts: PortConflict[];
+  altPort: number | null;
+  constructor(message: string, reason: SetupStopReason = 'failed', more: { conflicts?: PortConflict[]; altPort?: number | null } = {}) {
+    super(message);
+    this.reason = reason;
+    this.conflicts = more.conflicts ?? [];
+    this.altPort = more.altPort ?? null;
+  }
+}
 
 /** How long one command may take. sudo's password prompt counts, so it's generous; a hung GUI prompt still ends. */
 export const COMMAND_TIMEOUT_MS = 5 * 60_000;
@@ -588,7 +670,7 @@ export async function runPlan(plan: Plan, deps: Pick<SetupDeps, 'out' | 'exec' |
     for (const c of s.recipe.cmds) {
       deps.out(`   $ ${cmdLine(c, deps.isRoot)}\n`);
       const code = await exec(c.sudo && !deps.isRoot ? ['sudo', ...c.argv] : c.argv, { quiet: c.quiet });
-      if (code !== 0 && !c.mayFail) throw new SetupError(`that failed (exit ${code}); nothing after it ran. Fix it and run the command again: it skips what's already done`);
+      if (code !== 0 && !c.mayFail) throw new SetupError(`that failed (exit ${code}); nothing after it ran. Fix it and run the command again: it skips what's already done`, s.dialog ? 'dialog' : 'failed');
     }
   }
 }
@@ -662,6 +744,9 @@ export function setupActions(deps: SetupDeps, facts: Facts): PlanActions {
     },
     async forwardersUp() {
       await deps.services().forwardersUp(facts.forwards);
+    },
+    async removeForwarders() {
+      await deps.services().removeForwarders();
     },
     async removeDnsmasq() {
       await deps.services().removeLabel('hallway.dnsmasq');
@@ -889,18 +974,30 @@ export const captureExec =
  * and only when the plan has no sudo step (moving off System-wide certificate has some: that's for a terminal). macOS
  * may still show its own trust dialog (User certificate): that one is the user's, on their screen. Throws SetupError with why not.
  */
-export async function setupUnattended(deps: SetupDeps, trust: Trust): Promise<void> {
-  if (deps.platform.fronting.unsupported) throw new SetupError(deps.platform.fronting.unsupported);
-  if (trust === 'system') throw new SetupError('System-wide certificate needs an administrator: run `hallway setup --trust system` in a terminal');
-  const facts = await gatherFacts(deps, { trust });
+export async function setupUnattended(deps: SetupDeps, trust: Trust, port?: number): Promise<{ dashboardUrl: string; appUrl: string }> {
+  if (deps.platform.fronting.unsupported) throw new SetupError(deps.platform.fronting.unsupported, 'refused');
+  if (trust === 'system') throw new SetupError('System-wide certificate needs an administrator: run `hallway setup --trust system` in a terminal', 'sudo');
+  let facts: Facts;
+  try {
+    facts = await gatherFacts(deps, { trust, port });
+  } catch (e) {
+    if (e instanceof UsageError) throw new SetupError(e.message, 'refused');
+    throw e;
+  }
   const plan = planSetup(facts, deps.platform, deps.store.home, setupActions(deps, facts));
-  if (plan.refusals.length) throw new SetupError(plan.refusals.join(' '));
+  // nothing has changed yet: the facts are read-only (D67, D71)
+  if (plan.refusals.length) {
+    const ports = !!plan.conflicts?.length && plan.refusals.length === plan.conflicts.length;
+    throw new SetupError(plan.refusals.join(' '), ports ? 'ports' : 'refused', { conflicts: plan.conflicts, altPort: ports ? (plan.alt?.port ?? null) : null });
+  }
   const sudo = plan.steps.filter((s) => !s.done && s.kind === 'run' && s.recipe.cmds.some((c) => c.sudo));
   if (sudo.length && !deps.isRoot)
-    throw new SetupError(`this needs sudo once (${sudo.map((s) => s.why.replace(/ \(.*\)$/, '')).join('; ')}), so it runs in a terminal: \`hallway setup --trust ${trust}\``);
+    throw new SetupError(`this needs sudo once (${sudo.map((s) => s.why.replace(/ \(.*\)$/, '')).join('; ')}), so it runs in a terminal: \`hallway setup --trust ${trust}\``, 'sudo');
   for (const w of plan.warnings) deps.out(`! ${w}\n`);
   const ahead = promptsAhead(plan, deps.platform, deps.isRoot);
   deps.out(`${ahead}\n\n`);
   await runPlan(plan, deps);
-  deps.out(`\nDone. The dashboard is at ${publicUrl(facts.dashboard, { scheme: facts.scheme, publicPort: facts.publicPort })}.\n`);
+  const link = (host: string) => publicUrl(host, { scheme: facts.scheme, publicPort: facts.publicPort });
+  deps.out(`\nDone. The dashboard is at ${link(facts.dashboard)}.\n`);
+  return { dashboardUrl: link(facts.dashboard), appUrl: link(`<app>.${facts.base}`) };
 }

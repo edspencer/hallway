@@ -195,10 +195,12 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
   api.post('/fronting/setup', async (c) => {
     try {
       const body = await jsonBody(c);
-      const trust = (body as { trust?: unknown } | null)?.trust;
+      const { trust, port } = (body ?? {}) as { trust?: unknown; port?: unknown };
       if (trust !== 'user' && trust !== 'none') throw new ValidationError(trust === 'system' ? 'System-wide certificate needs an administrator, so it runs in a terminal: `hallway setup --trust system`' : 'trust must be "user" or "none"');
+      // `--port` (D71): which ports this tier allows is setup's to say; here only that it's a port
+      if (port !== undefined && port !== null && !(typeof port === 'number' && Number.isInteger(port) && port > 0 && port < 65536)) throw new ValidationError('port must be a port number, such as 443 or 4443');
       if (!providers.first('fronting')) return fail(c, 503, { error: 'local domains are not available in this daemon' });
-      const job = providers.first('turnOnFronting', trust);
+      const job = providers.first('turnOnFronting', trust, typeof port === 'number' ? port : undefined);
       if (!job) return fail(c, 503, { error: "this daemon can't run setup; run `hallway setup` in a terminal" });
       if ('refused' in job) return fail(c, job.status, { error: job.refused });
       return c.json(job, 202);

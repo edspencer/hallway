@@ -49,14 +49,16 @@ Bookmarks
   bookmark ls [group] [--json] | bookmark rm <group> <url|number> | bookmark edit <group>
 
 Fronted mode (https://<app>.localhost, or your own domain)
-  setup [--trust user|system|none] [--domain BASE] [--print] [--yes]
+  setup [--trust user|system|none] [--domain BASE] [--port N] [--print] [--yes]
                                     Run Caddy for your apps on https://<app>.localhost. Asks which tier:
                                     user = User certificate (recommended): trusted for your account only, no admin;
                                     system = System-wide certificate: every account, needs admin (and --domain);
                                     none = No HTTPS: plain HTTP, nothing asks for anything.
                                     Shows the plan and asks before it runs anything. --print shows the plan and
                                     runs nothing; --yes doesn't ask (needed without a terminal). Run it again
-                                    with another --trust to switch tier.
+                                    with another --trust to switch tier. --port 4443 puts links on Caddy's own
+                                    port when something else holds 443 (https://<app>.localhost:4443);
+                                    --port 443 moves them back.
   teardown [--uninstall-packages] [--print] [--yes]
                                     Undo setup and go back to http://localhost:<port> links. Asks first, like setup.
 
@@ -137,11 +139,12 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
         return machineFacts(platform, defaultRunner);
       },
       // the dashboard's Turn on (D65): User certificate or No HTTPS only, refused if the plan has a sudo step
-      runSetup: async (trust, out) => {
+      runSetup: async (trust, out, port) => {
         const [{ setupUnattended, captureExec }, { Services }, { defaultRunner }, os] = await Promise.all([import('./proxy/setup.js'), import('./services/index.js'), import('./platform/index.js'), import('node:os')]);
-        await setupUnattended(
+        return setupUnattended(
           { store, platform, services: () => new Services({ store, platform }), env: process.env, userHome: os.homedir(), query: defaultRunner, out, exec: captureExec(out), isRoot: process.getuid?.() === 0, confirm: { yes: true } },
           trust,
+          port,
         );
       },
       proxyStatus: proxy.status,

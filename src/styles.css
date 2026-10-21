@@ -3064,3 +3064,75 @@ kbd {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* something else holds 443/80 (D71): who, where, its own fix, and Caddy's port as the way to coexist */
+.hw-ports .hw-run-words {
+  gap: 8px;
+}
+.hw-ports-one {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.hw-ports-proc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12.5px;
+}
+.hw-ports-proc code {
+  max-width: 100%;
+  font-size: 11.5px;
+  color: var(--hw-text-subtle);
+  overflow-wrap: anywhere;
+}
+.hw-ports-where {
+  font-size: 12.5px;
+}
+.hw-ports-where--exposed {
+  color: var(--hw-text);
+}
+.hw-ports-where--exposed::before {
+  content: '⚠ ';
+  color: var(--hw-unhealthy);
+}
+.hw-ports-fix-head {
+  margin-top: 2px;
+  color: var(--hw-text);
+}
+.hw-ports-fix {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+.hw-ports-fix code,
+.hw-ports-alt code {
+  overflow-wrap: anywhere;
+}
+.hw-ports-alt {
+  align-self: stretch;
+  padding-top: 8px;
+  border-top: 1px solid var(--hw-line);
+}
+.hw-ports-alt strong {
+  font-size: 13px;
+}
+.hw-ports-back {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--hw-radius-small);
+  background: var(--hw-bg-sunken);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hw-text-muted);
+}

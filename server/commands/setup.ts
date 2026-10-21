@@ -1,4 +1,4 @@
-// `hallway setup [--trust user|system|none] [--domain BASE] [--print] [--yes]` and `hallway teardown [--uninstall-packages] [--print] [--yes]`:
+// `hallway setup [--trust user|system|none] [--domain BASE] [--port N] [--print] [--yes]` and `hallway teardown [--uninstall-packages] [--print] [--yes]`:
 // fronted mode and its undo (docs/03-networking.md, "Setup"; D47, D65). The work is in server/proxy/setup.ts; this turns
 // a Ctx into its dependencies, including the terminal it asks on (the tier, D65; Continue?, D67).
 import os from 'node:os';
@@ -49,15 +49,19 @@ function deps(ctx: Ctx, flags: Record<string, string>): SetupDeps {
 }
 
 export async function setup(ctx: Ctx, args: string[], flags: Record<string, string>, rest?: string[]): Promise<number> {
-  check('setup', flags, ['trust', 'domain', 'print', 'yes'], args, 0, rest);
+  check('setup', flags, ['trust', 'domain', 'port', 'print', 'yes'], args, 0, rest);
   const trust = flags.trust;
+  // the port links carry (D71): 443 (80 for No HTTPS), or Caddy's own; which of those this tier allows is checked
+  // once the tier is known
+  const port = flags.port === undefined ? undefined : Number(flags.port);
+  if (port !== undefined && !(Number.isInteger(port) && port > 0 && port < 65536)) throw new UsageError(`--port is a port number, such as 443 or 4443, not '${flags.port}'`);
   if (trust !== undefined && !TIERS.includes(trust as Trust)) throw new UsageError(`--trust is user, system or none, not '${trust}'`);
   const domain = flags.domain?.toLowerCase().replace(/\.$/, '');
   if (domain && domain !== 'localhost' && trust && trust !== 'system') throw new UsageError(`--domain needs --trust system: a custom domain needs the system resolver pointed at it, which needs an administrator (--trust ${trust} uses *.localhost)`);
   if (domain !== undefined && !HOSTNAME.test(domain)) throw new UsageError(`--domain must be a host name such as myname.internal, not '${flags.domain}'`);
   if (domain && SLUG.test(domain) && domain !== 'localhost') throw new UsageError(`--domain needs at least two labels (e.g. ${domain}.internal), so that apps can live under it`);
   try {
-    const code = await runSetup(deps(ctx, flags), { domain, print: !!flags.print, trust: trust as Trust | undefined });
+    const code = await runSetup(deps(ctx, flags), { domain, print: !!flags.print, trust: trust as Trust | undefined, port });
     // the daemon pushes Caddy's config from now on: one left running an older version after an upgrade would push that
     // version's (D70). Only once setup has run: never before the plan was agreed to, or when it was refused (D67).
     if (code === 0 && !flags.print) await restartStaleDaemon(ctx).catch((e) => ctx.err(`hallway: couldn't restart the daemon: ${(e as Error).message}\n`));

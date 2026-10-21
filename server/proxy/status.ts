@@ -7,11 +7,12 @@
 // run on request and cached for a few seconds, never on every `/api/state`.
 import os from 'node:os';
 import path from 'node:path';
-import type { FrontingCheck, FrontingInfo, FrontingSetupJob, HallwayConfig, Trust } from '../../shared/api.js';
+import type { FrontingCheck, FrontingInfo, FrontingSetupJob, HallwayConfig, PortConflict, SetupStopReason, Trust } from '../../shared/api.js';
 import type { Platform } from '../platform/index.js';
 import type { StateProvider } from '../providers.js';
 import type { Store } from '../store/index.js';
 import { publicUrl } from './names.js';
+import { chosenCaddyPorts } from './setup.js';
 import { type MachineFacts, RECOMMENDED_TIER, currentTier, tierOptions } from './tiers.js';
 
 /** Every path under the home directory in `text`, as `~/…` (either separator: on Windows a message may use both). */
@@ -31,6 +32,9 @@ export function frontingInfo(cfg: HallwayConfig, platform: Pick<Platform, 'front
     suggested: offered ? RECOMMENDED_TIER : null,
     admin,
     tiers: offered ? tierOptions(platform.id!, cfg, admin) : [],
+    caddyPort: cfg.proxy.httpsPort,
+    // on Caddy's own port by choice (D71): the dashboard offers the way back
+    standardPort: cfg.mode === 'fronted' && chosenCaddyPorts(platform, cfg) ? (cfg.proxy.scheme === 'http' ? 80 : 443) : null,
     unsupported: platform.fronting.unsupported ?? null,
     mode: cfg.mode,
     trust: cfg.mode === 'fronted' ? currentTier(cfg) : null,
@@ -48,7 +52,7 @@ export interface FrontingProviderOptions {
   machine?: () => Promise<MachineFacts>;
   /** Run setup, unattended, in a tier that needs no administrator (server/proxy/setup.ts `setupUnattended`), writing
    *  what it prints to `out`. Absent: the dashboard can't turn local domains on (an older or a test daemon). */
-  runSetup?: (trust: Trust, out: (s: string) => void) => Promise<void>;
+  runSetup?: (trust: Trust, out: (s: string) => void, port?: number) => Promise<{ dashboardUrl: string; appUrl: string } | void>;
   /** The proxy's status (server/proxy/index.ts), for its last push error. */
   proxyStatus?: () => { pushError: string | null };
   /** Doctor's networking checks; run only in fronted mode. */
@@ -66,24 +70,32 @@ export function frontingProvider({ store, platform, machine, runSetup, proxyStat
     (m) => (who = m),
     () => {},
   );
-  let job: FrontingSetupJob = { state: 'idle', trust: null, log: '', error: null };
+  let job: FrontingSetupJob = { state: 'idle', trust: null, port: null, log: '', error: null, reason: null };
   return {
     name: 'fronting',
     // the push error names Caddy's socket in full: shown as people see paths (`~/.hallway/…`), like the checks do
     fronting: () => frontingInfo(store.currentConfig(), platform, tildifyText(proxyStatus?.().pushError ?? null), who),
     frontingSetup: () => ({ ...job, log: tildifyText(job.log) ?? '' }),
-    turnOnFronting: (trust) => {
+    turnOnFronting: (trust, port) => {
       if (platform.fronting.unsupported) return { refused: platform.fronting.unsupported, status: 400 };
       if (trust === 'system') return { refused: 'System-wide certificate needs an administrator, so it runs in a terminal: `hallway setup --trust system`', status: 400 };
       if (!runSetup) return { refused: "this daemon can't run setup; run `hallway setup` in a terminal", status: 503 };
       if (job.state === 'running') return { refused: `setup is already running (${job.trust})`, status: 409 };
-      job = { state: 'running', trust, log: '', error: null };
+      job = { state: 'running', trust, port: port ?? null, log: '', error: null, reason: null };
       const mine = job;
-      runSetup(trust, (s) => (mine.log += s)).then(
-        () => (mine.state = 'done'),
+      runSetup(trust, (s) => (mine.log += s), port).then(
+        (urls) => {
+          mine.state = 'done';
+          if (urls) Object.assign(mine, urls);
+        },
         (e) => {
           mine.state = 'failed';
           mine.error = tildifyText((e as Error).message);
+          // setup's SetupError says why (D71); anything else is a plain failure
+          const x = e as { reason?: SetupStopReason; conflicts?: PortConflict[]; altPort?: number | null };
+          mine.reason = x.reason ?? 'failed';
+          if (x.conflicts?.length) mine.conflicts = x.conflicts;
+          if (x.altPort) mine.altPort = x.altPort;
         },
       );
       return { ...job };

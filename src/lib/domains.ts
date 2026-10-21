@@ -1,6 +1,6 @@
 // Local domains (fronted mode, D47; D63): when the dashboard offers them, and how it sums up doctor's checks once
 // they're on. Pure, tested under node.
-import type { FrontingCheck, FrontingInfo, FrontingSetupJob, StateResponse, TierOption, Trust } from '../../shared/api.js';
+import type { FrontingCheck, FrontingInfo, FrontingSetupJob, PortConflict, SetupStopReason, StateResponse, TierOption, Trust } from '../../shared/api.js';
 
 /** The website's page on fronted mode: what it is, what setup does, and how to undo it. */
 export const FRONTED_DOCS = 'https://hallway.edspencer.net/networking/fronted-mode/';
@@ -20,7 +20,7 @@ export function initialTier(tiers: TierOption[]): Trust | null {
 }
 
 /** A Turn on, as the dashboard follows it. */
-export type TurnOnState = { trust: Trust; job: FrontingSetupJob | null; error: string | null };
+export type TurnOnState = { trust: Trust; port?: number | null; job: FrontingSetupJob | null; error: string | null };
 
 /** Where a Turn on is: running (until the daemon says otherwise, including before its first answer), done or failed. */
 export function turnOnPhase(run: TurnOnState | null): 'running' | 'done' | 'failed' | null {
@@ -36,11 +36,47 @@ export function runningWords(trust: Trust, macos: boolean): { title: string; det
   return { title: 'Turning on…', detail: trust === 'none' ? 'Starting Caddy for plain HTTP.' : 'Starting Caddy and trusting its certificate in your NSS database.' };
 }
 
-/** What the panel says when a Turn on stopped, before the command to run instead. A cancelled or unanswered Touch ID
- *  dialog looks like any other failure from here, so on a Mac it's named as the likely cause, not asserted. */
-export function failedWords(trust: Trust, macos: boolean): { title: string; detail: string } {
-  if (trust === 'user' && macos) return { title: 'Setup stopped', detail: 'If the Touch ID prompt was cancelled or went unanswered, run it in a terminal instead:' };
+/** What the panel says when a Turn on stopped, before the command to run instead. The daemon says why (D71): only a
+ *  failure of the step that raises the dialog names a cancelled or unanswered Touch ID prompt (as the likely cause,
+ *  not asserted: it looks like any other failure from here). An older daemon says nothing, and gets the old words. */
+export function failedWords(trust: Trust, macos: boolean, reason: SetupStopReason | null = null): { title: string; detail: string } {
+  if (trust === 'user' && macos && (reason === 'dialog' || reason === null)) return { title: 'Setup stopped', detail: 'If the Touch ID prompt was cancelled or went unanswered, run it in a terminal instead:' };
+  if (reason === 'sudo') return { title: 'Setup stopped', detail: 'It needs sudo this once, so it runs in a terminal:' };
+  if (reason === 'refused') return { title: 'Setup stopped before changing anything', detail: 'Once that’s sorted out, turn it on again, or run it in a terminal:' };
   return { title: 'Setup stopped', detail: 'Run it in a terminal instead to see every step:' };
+}
+
+/** Ports, as people say them: `443`, `443 and 80`. */
+const portList = (ports: readonly number[]) => (ports.length < 2 ? String(ports[0]) : `${ports.slice(0, -1).join(', ')} and ${ports[ports.length - 1]}`);
+
+/** A conflict's headline (D71): `Ports 443 and 80 are taken by Rancher Desktop`. */
+export function conflictHeadline(c: PortConflict): string {
+  const ports = c.ports.length > 1 ? `Ports ${portList(c.ports)} are` : `Port ${c.ports[0]} is`;
+  const who = c.tool ? c.tool.name : c.pid ? (c.process?.trim() ?? 'another process') : 'a process you can’t see';
+  return `${ports} taken by ${who}`;
+}
+
+/** Which process, for the line under the headline: `ssh, pid 7090` (and the container, when Docker named it). */
+export function conflictProcess(c: PortConflict): string | null {
+  if (!c.pid) return null;
+  const p = `${c.process?.trim() || 'a process'}, pid ${c.pid}`;
+  return c.container ? `${p}, for the container ${c.container}` : p;
+}
+
+/** Where it listens, for people: `*` is every address, which other machines can reach. */
+export function conflictWhere(c: PortConflict): { text: string; exposed: boolean } | null {
+  if (!c.addresses.length) return null;
+  const all = c.addresses.some((a) => a === '*' || a === '0.0.0.0' || a === '::');
+  const where = all ? `every address (${c.addresses.join(', ')})` : c.addresses.join(', ');
+  return { text: c.exposed ? `Listening on ${where}: reachable from your network, not just this machine` : `Listening on ${where}`, exposed: c.exposed };
+}
+
+/** The address an app gets on another port: `https://<app>.localhost` → `https://<app>.localhost:4443`. */
+export function withPort(url: string, port: number): string {
+  const m = /^(https?:\/\/[^/:]+)(:\d+)?(.*)$/.exec(url);
+  if (!m) return url;
+  const standard = url.startsWith('https:') ? 443 : 80;
+  return `${m[1]}${port === standard ? '' : `:${port}`}${m[3]}`;
 }
 
 /** The last lines of setup's output, for the dialog while it runs. */
