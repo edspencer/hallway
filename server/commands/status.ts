@@ -91,7 +91,7 @@ function printObserved(ctx: Ctx, observed: ObservedListener[]) {
       observed.map((o) => [
         String(o.port),
         o.id,
-        o.identity.label ?? o.identity.name ?? o.identity.displayName ?? o.title ?? '-',
+        o.identity.label ?? o.name,
         o.identity.projectDir ?? o.identity.cwd ? show((o.identity.projectDir ?? o.identity.cwd)!) : '-',
         ...(sup ? [o.identity.supervisor ? `${o.identity.supervisor.manager}: ${o.identity.supervisor.label}` : '-'] : []),
         o.identity.command ?? o.identity.process ?? '-',

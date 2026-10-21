@@ -12,7 +12,8 @@ import type { Observation } from '../server/scanner/types.ts';
 import { slugify, suggestSlug } from '../server/scanner/claim.ts';
 import { type FilterOptions, EMPTY_IGNORE, noiseReason } from '../server/scanner/filter.ts';
 import { gitInfo, guessFramework, identify, projectName, projectRoot, readmeTitle, repoName } from '../server/scanner/identify.ts';
-import { ObservedStore, labelListeners, normaliseCommand, observationId, recordBoot } from '../server/scanner/observations.ts';
+import { labelListeners } from '../server/scanner/describe.ts';
+import { ObservedStore, normaliseCommand, observationId, recordBoot } from '../server/scanner/observations.ts';
 import { htmlFavicon, htmlTitle, sniff } from '../server/scanner/sniff.ts';
 import { createScanner } from '../server/scanner/index.ts';
 import { type Platform, type ProcessInfo, type RawListener, currentPlatform } from '../server/platform/index.ts';
@@ -75,7 +76,7 @@ describe('noise filtering', () => {
     assert.equal(noiseReason(L(40903), opts({ osEphemeral: { from: 32768, to: 60999 }, includeEphemeralPorts: true })), null);
     assert.equal(noiseReason(L(32767), opts({ osEphemeral: { from: 32768, to: 60999 } })), null);
     assert.equal(noiseReason(L(5432, 'postgres'), opts()), 'daemon');
-    assert.equal(noiseReason(L(6000, 'com.docker.backend'), opts()), 'daemon');
+    assert.equal(noiseReason(L(6000, 'dockerd'), opts()), 'daemon');
     assert.equal(noiseReason(L(7000, 'ControlCenter'), opts()), 'daemon');
     assert.equal(noiseReason(L(4255), opts()), 'self');
     assert.equal(noiseReason(L(5555, 'node', 999), opts()), 'self');
@@ -125,7 +126,8 @@ describe('identification', () => {
     assert.equal(guessFramework(['/usr/bin/python3', '-m', 'http.server', '4567'], null), 'python-http');
     assert.equal(guessFramework(['node', '/x/node_modules/.bin/vite', '--port', '5173'], null), 'vite');
     assert.equal(guessFramework(['python', 'manage.py', 'runserver'], null), 'django');
-    assert.equal(guessFramework(['node', 'dist/index.js'], REPO), 'astro');
+    // a development tool in devDependencies isn't what `node dist/index.js` runs (D73)
+    assert.equal(guessFramework(['node', 'dist/index.js'], REPO), null);
     assert.equal(guessFramework(['node', 'dist/index.js'], path.join(TMP, 'plain')), null);
   });
 
@@ -305,7 +307,7 @@ describe('HTTP sniff', () => {
       }),
     );
     try {
-      assert.deepEqual(await sniff('127.0.0.1', s.port), { status: 302, title: 'Redirecting', favicon: '/f.png' });
+      assert.deepEqual(await sniff('127.0.0.1', s.port), { status: 302, title: 'Redirecting', favicon: '/f.png', contentType: 'text/html', location: '/login', tls: false });
       assert.equal(host, `localhost:${s.port}`);
     } finally {
       await s.close();
@@ -393,7 +395,7 @@ describe('a whole scan over a fake platform', () => {
       assert.equal(wa.cwd, WT_A);
       assert.deepEqual(wa.addresses, ['127.0.0.1', '::1']);
       assert.equal(wa.http?.title, 'A');
-      assert.equal(wa.project?.framework, 'astro');
+      assert.equal(wa.project?.framework, null, 'astro is only a devDependency, and the command isn\'t running it (D73)');
       assert.equal(wa.orphan, true);
       assert.deepEqual(r.other.map((l) => l.port), [tcp.port]);
       assert.deepEqual([...r.known.keys()], [known.port]);

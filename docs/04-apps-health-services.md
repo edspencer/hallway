@@ -84,11 +84,15 @@ named it — what is it?"*
      tool helpers live there)
    - entries in `ignore.yaml` (ports, process names, directories)
    - a built-in list of known non-web daemons: `postgres`, `mysqld`, `redis-server`, `mongod`, `sshd`, `rapportd`,
-     `ControlCenter`, `com.docker.*`, etc.
+     `ControlCenter`, `dockerd`, etc. (by process name: a Postgres *container* is forwarded by its tool's process, so it
+     is shown, as the container's; Docker Desktop's `com.docker.backend` and `vpnkit` are forwarders, not noise, D73)
    - Hallway's own daemon and Caddy
    - ports belonging to declared/discovered apps (these enrich the app instead)
 3. **HTTP sniff:** `GET /` with a 2 s timeout. If it speaks HTTP at all (any status), it is a web app; record status,
-   `<title>`, and favicon link. If not, put it in a collapsed "other listeners" group, not the main list.
+   content type, a redirect's `Location`, `<title>`, and favicon link. A port that hangs up on plain HTTP, or answers
+   400 saying it wants HTTPS (Go's servers, nginx), is asked again over TLS, any certificate accepted (D73). What it
+   answered becomes a kind, shown on every row: **Web page** (HTML), **API** (JSON or plain text), **Needs sign-in**
+   (401/403, or a redirect to a login page), **Redirects to …**, **Error**, **Nothing at /** (a 404), or **Not HTTP**.
 4. **Identify** — command lines are often useless (`node dist/index.js`), so the **working directory is the primary
    identifier**:
    - cwd: `lsof -a -p <pid> -d cwd -Fn`
@@ -109,9 +113,25 @@ named it — what is it?"*
    - git: `git -C <dir> rev-parse --show-toplevel`, `--abbrev-ref HEAD`, `log -1 --format=%cI`; **worktree
      detection** by comparing `--git-dir` with `--git-common-dir` (they differ in a worktree; the common dir points at
      the parent repository)
-   - framework guess from the command and dependencies (vite, astro, next, remix, sveltekit, express, fastify, hono,
-     flask, django, rails…) — used for an icon and for service-command hints
-   - bind address: `127.0.0.1`/`::1` vs `*` (exposed on the network: other devices on the LAN can reach it)
+   - framework guess from what the command runs (vite, astro, next, remix, sveltekit, django's `runserver`, rails…),
+     else a server library in the project's runtime `dependencies` (express, fastify, hono, koa, nest) — never a
+     development tool the process isn't running (D73: vite in `devDependencies` doesn't make a `tsx` server vite)
+   - bind address: `127.0.0.1`/`::1` vs `*` (**on your network**: other devices on the LAN can reach it)
+   - **what's really listening** (D73): a **port forwarder** (Rancher Desktop's, Colima's or Lima's `ssh`, Docker
+     Desktop's backend, OrbStack, Podman's `gvproxy`, `docker-proxy`, an SSH tunnel, `kubectl port-forward`) isn't the
+     app. Its tool is named from the process and command line, and the tool's own CLIs are asked, read-only and in the
+     tool's own context, what's behind each port: `docker ps` / `nerdctl ps` / `podman ps` (container name and image),
+     `kubectl get svc` (a LoadBalancer or NodePort service). A cluster's own ports (6443 API server, 10250 kubelet,
+     10257 controller manager, 10259 scheduler, 10010 the runtime's streaming server…) are named by number; a port
+     that no listed container and no service has, from a tool whose cluster answered, is the cluster's too. Forwarders
+     are never orphaned (their tool supervises them). A **desktop application**'s own ports are named by the app (its
+     `.app` bundle, its launchd `application.<bundle id>` label, its sandbox container, `/opt/<App>`, `Program Files`).
+     A package run from **npx's cache or a global install** (`npx local-review` in some repository; a globally
+     installed service) is that tool, not the project it runs in. The **script** a runtime runs (`node rig/a.mjs`)
+     tells apart several servers in one checkout.
+   - **what to call it**: the container or Kubernetes service; the desktop app; a tool's page title or package; the
+     project's name, unless it says nothing (`service`, `app`, `api`…), when the page's title does better; with no
+     project, the supervisor or executable, unless that says nothing either (`ssh`), then the title
 5. **Label worktree siblings.** Several listeners from worktrees of the same repository are shown as `repo @ branch`
    so they are distinguishable (the motivating incident had three copies of one dashboard on 4666/4670/4671).
 6. **Persist** to `state/observed.json`, keyed by a **stable observation id** = hash(project root + port + normalised

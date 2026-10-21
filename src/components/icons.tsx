@@ -82,3 +82,64 @@ export const FingerprintIcon = () =>
       <path d="M13.2 10.6c-.1.9-.3 1.8-.6 2.6" />
     </>,
   );
+
+// The observed tray's groups and rows (D73): what kind of thing is listening
+/** A branch: a project in a repository. */
+export const BranchIcon = () =>
+  svg(
+    <>
+      <circle cx="4.5" cy="3.5" r="1.5" />
+      <circle cx="4.5" cy="12.5" r="1.5" />
+      <circle cx="11.5" cy="5.5" r="1.5" />
+      <path d="M4.5 5v6M11.5 7c0 2.5-3 2.5-6.2 4.3" />
+    </>,
+  );
+/** A window: an app on this machine. */
+export const WindowIcon = () =>
+  svg(
+    <>
+      <rect x="2" y="3" width="12" height="10" rx="2" />
+      <path d="M2 6h12M4.3 4.5h.1M6 4.5h.1" />
+    </>,
+  );
+/** A box: a container. */
+export const BoxIcon = () =>
+  svg(
+    <>
+      <path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" />
+      <path d="M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4" />
+    </>,
+  );
+/** A ship's wheel: Kubernetes. */
+export const WheelIcon = () =>
+  svg(
+    <>
+      <circle cx="8" cy="8" r="4.6" />
+      <circle cx="8" cy="8" r="1.4" />
+      <path d="M8 1.6v4.9M8 9.5v4.9M1.6 8h4.9M9.5 8h4.9M3.5 3.5l3.5 3.5M9 9l3.5 3.5M12.5 3.5L9 7M7 9l-3.5 3.5" />
+    </>,
+  );
+/** A cog: a desktop app's internals. */
+export const CogIcon = () =>
+  svg(
+    <>
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 1.8v2M8 12.2v2M14.2 8h-2M3.8 8h-2M12.4 3.6L11 5M5 11l-1.4 1.4M12.4 12.4L11 11M5 5L3.6 3.6" />
+    </>,
+  );
+/** A tunnel: an SSH forward. */
+export const TunnelIcon = () =>
+  svg(
+    <>
+      <path d="M2 13V8a6 6 0 0 1 12 0v5" />
+      <path d="M5 13V8.5a3 3 0 0 1 6 0V13M1.5 13h13" />
+    </>,
+  );
+/** A question: something unidentified. */
+export const QuestionIcon = () =>
+  svg(
+    <>
+      <circle cx="8" cy="8" r="6.2" />
+      <path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4M8 11.6v.1" />
+    </>,
+  );

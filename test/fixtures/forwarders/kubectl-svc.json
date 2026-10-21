@@ -1,0 +1,10 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {"metadata": {"name": "kubernetes", "namespace": "default"}, "spec": {"type": "ClusterIP", "ports": [{"port": 443, "protocol": "TCP"}]}},
+    {"metadata": {"name": "traefik", "namespace": "kube-system"}, "spec": {"type": "LoadBalancer", "ports": [{"port": 80, "nodePort": 31080, "protocol": "TCP"}, {"port": 443, "nodePort": 31443, "protocol": "TCP"}]}},
+    {"metadata": {"name": "storybook", "namespace": "design"}, "spec": {"type": "LoadBalancer", "ports": [{"port": 6006, "protocol": "TCP"}]}},
+    {"metadata": {"name": "metrics", "namespace": "ops"}, "spec": {"type": "NodePort", "ports": [{"port": 9090, "nodePort": 30090, "protocol": "TCP"}, {"port": 53, "nodePort": 30053, "protocol": "UDP"}]}}
+  ],
+  "kind": "List"
+}

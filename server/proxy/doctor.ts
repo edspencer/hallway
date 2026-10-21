@@ -205,14 +205,14 @@ export async function networkChecks(deps: NetDeps): Promise<NetCheck[]> {
     if (root && firefoxInstalled(platform, deps.env))
       add({ id: 'firefox', status: 'warn', message: 'Firefox keeps its own certificate store', fix: 'in about:config, set security.enterprise_roots.enabled to true (or import the root from ' + show(paths.rootCert) + ')' });
   }
-  // trusted as browsers check it (D72): a real verification of the served certificate, not "the root is in a store"
+  // trusted as browsers check it (D73): a real verification of the served certificate, not "the root is in a store"
   if (https && root && f.osTrust && tier !== 'none' && out.some((c) => c.id === 'redirect' && c.status === 'pass')) {
     const v = await f.osTrust({ host: dashboard, port: pub }, tier, fenv, deps.query);
     if (v.trusted === true) add({ id: 'os-trust', status: 'pass', message: `${url}'s certificate is trusted by ${v.how} (if a browser still warns, quit and reopen it: Chrome can remember an error from before)` });
     else if (v.trusted === false) add({ id: 'os-trust', status: 'fail', message: `${url}'s certificate isn't trusted by ${v.how}: ${v.cause}. Browsers will warn`, fix: `\`hallway setup --trust ${tier}\` (it trusts Hallway's root again)` });
     else add({ id: 'os-trust', status: 'warn', message: `couldn't check ${url}'s certificate with ${v.how}: ${v.cause}` });
   }
-  // a browser its organisation set to ignore certificates added to the OS (D72)
+  // a browser its organisation set to ignore certificates added to the OS (D73)
   if (https && f.browserPolicies && tier !== 'none') {
     const policies = await f.browserPolicies(os.userInfo().username, deps.query).catch(() => []);
     const w = policyWarning(policies, tier);

@@ -452,7 +452,7 @@ describe("doctor's networking checks per tier (D65)", () => {
     }
   });
 
-  test('a browser set by its organisation to ignore certificates you add is a ✗ for the certificate tiers, not for No HTTPS (D72)', async () => {
+  test('a browser set by its organisation to ignore certificates you add is a ✗ for the certificate tiers, not for No HTTPS (D73)', async () => {
     const s = await tmpStore();
     const [httpsPort, httpPort] = [await freePort(), await freePort()];
     const platform = { ...quiet, fronting: { ...quiet.fronting, browserPolicies: async () => [{ browser: 'Chrome', file: '/Library/Managed Preferences/com.google.Chrome.plist' }] } };
