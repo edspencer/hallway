@@ -1,5 +1,17 @@
 # hallway
 
+## 0.9.0
+
+### Minor Changes
+
+- [#50](https://github.com/edspencer/hallway/pull/50) [`2854dd3`](https://github.com/edspencer/hallway/commit/2854dd34ce57898513a5d9873f154aca507b99d8) Thanks [@edspencer](https://github.com/edspencer)! - When something else already holds port 443 or 80 (Rancher Desktop's Traefik, a Docker container, Colima, OrbStack, nginx…), `hallway setup` and the dashboard's Turn on now say so once, name the tool, and give its own fix (for Rancher Desktop: untick "Enable Traefik" in Preferences → Kubernetes), and say when it's reachable from your network. The dashboard no longer blames a cancelled Touch ID prompt for a stop that had nothing to do with it.
+  
+  To leave the other tool running, `hallway setup --port 4443` (or **Use port 4443 instead** in the dashboard) puts local domains on Caddy's own port: `https://hallway.localhost:4443`, `https://<app>.localhost:4443`, with every link Hallway gives following. `hallway setup --port 443` (or **Move to port 443** in the Local domains dialog) moves them back once 443 is free. `hallway doctor` names what holds 443/80 and which port links carry.
+
+### Patch Changes
+
+- [#52](https://github.com/edspencer/hallway/pull/52) [`eafc10a`](https://github.com/edspencer/hallway/commit/eafc10aad67d20e6fb9388edcc815339490661ee) Thanks [@edspencer](https://github.com/edspencer)! - `hallway setup` and `hallway doctor` now check that the certificate is trusted the way browsers check it (Apple's curl with no CA given on macOS; the system store or Chrome's NSS database on Linux), so a "Done" or an all-clear no longer hides a certificate error. After setup has trusted the certificate, it and the dashboard say to quit and reopen a browser that showed a warning before (Chrome can remember the old result). On a Mac whose organisation sets Chrome or Edge to ignore certificates you add (`CAPlatformIntegrationEnabled`), setup, the dashboard and doctor say so up front.
+
 ## 0.8.0
 
 ### Minor Changes
