@@ -39,6 +39,9 @@ export function nonProjectDir(dir: string, home = os.homedir()): boolean {
   if (d === home || d === path.dirname(d)) return true;
   if (WINDOWS_SYSTEM.test(dir) || WINDOWS_SYSTEM.test(d)) return true;
   const under = (p: string) => d === p || d.startsWith(p.endsWith(path.sep) ? p : p + path.sep);
+  // a home directory can itself be below a system directory (a service account's in /var/lib): what's in it is the
+  // user's, so only ~/Library is ruled out there
+  if (home !== path.dirname(home) && under(home)) return under(path.join(home, 'Library'));
   return PLACES.includes(d) || [...PREFIXES, path.join(home, 'Library')].some(under);
 }
 

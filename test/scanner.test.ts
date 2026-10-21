@@ -12,7 +12,8 @@ import type { Observation } from '../server/scanner/types.ts';
 import { slugify, suggestSlug } from '../server/scanner/claim.ts';
 import { type FilterOptions, EMPTY_IGNORE, noiseReason } from '../server/scanner/filter.ts';
 import { gitInfo, guessFramework, identify, projectName, projectRoot, readmeTitle, repoName } from '../server/scanner/identify.ts';
-import { ObservedStore, labelListeners, normaliseCommand, observationId, recordBoot } from '../server/scanner/observations.ts';
+import { labelListeners } from '../server/scanner/describe.ts';
+import { ObservedStore, normaliseCommand, observationId, recordBoot } from '../server/scanner/observations.ts';
 import { htmlFavicon, htmlTitle, sniff } from '../server/scanner/sniff.ts';
 import { createScanner } from '../server/scanner/index.ts';
 import { type Platform, type ProcessInfo, type RawListener, currentPlatform } from '../server/platform/index.ts';
@@ -75,7 +76,7 @@ describe('noise filtering', () => {
     assert.equal(noiseReason(L(40903), opts({ osEphemeral: { from: 32768, to: 60999 }, includeEphemeralPorts: true })), null);
     assert.equal(noiseReason(L(32767), opts({ osEphemeral: { from: 32768, to: 60999 } })), null);
     assert.equal(noiseReason(L(5432, 'postgres'), opts()), 'daemon');
-    assert.equal(noiseReason(L(6000, 'com.docker.backend'), opts()), 'daemon');
+    assert.equal(noiseReason(L(6000, 'dockerd'), opts()), 'daemon');
     assert.equal(noiseReason(L(7000, 'ControlCenter'), opts()), 'daemon');
     assert.equal(noiseReason(L(4255), opts()), 'self');
     assert.equal(noiseReason(L(5555, 'node', 999), opts()), 'self');
@@ -305,7 +306,7 @@ describe('HTTP sniff', () => {
       }),
     );
     try {
-      assert.deepEqual(await sniff('127.0.0.1', s.port), { status: 302, title: 'Redirecting', favicon: '/f.png' });
+      assert.deepEqual(await sniff('127.0.0.1', s.port), { status: 302, title: 'Redirecting', favicon: '/f.png', contentType: 'text/html', location: '/login', tls: false });
       assert.equal(host, `localhost:${s.port}`);
     } finally {
       await s.close();
