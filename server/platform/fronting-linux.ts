@@ -192,7 +192,8 @@ export const linuxFronting: Fronting = {
   // store, as the system's curl reads it
   async osTrust(target, tier, env, run) {
     if (tier === 'user') {
-      const ok = await linuxFronting.userTrusted!(env, run);
+      // the database may have been made since the facts were gathered (setup makes it before the trust step): look again
+      const ok = await linuxFronting.userTrusted!({ ...env, tools: { ...env.tools, nssdb: env.tools.nssdb || fs.existsSync(nssDir(env.userHome)) } }, run);
       return ok ? { trusted: true, how: "Chrome's NSS database (~/.pki/nssdb)" } : { trusted: false, how: "Chrome's NSS database (~/.pki/nssdb)", cause: "Hallway's root isn't in it" };
     }
     const r = await run('curl', curlTrustArgs(target.host, target.port));

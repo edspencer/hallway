@@ -44,6 +44,21 @@ describe('what each platform asks', () => {
     const none = await linuxFronting.osTrust!({ host: 'hallway.localhost', port: 443 }, 'system', env as never, async () => ({ code: 127, stdout: '', stderr: '' }));
     assert.equal(none.trusted, null);
   });
+  test("Linux: User certificate's NSS database is looked for again, since setup may have just made it", async () => {
+    const { tmpDir, rmTmp } = await import('./fixture.ts');
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const home = tmpDir('hw-nss-');
+    try {
+      fs.mkdirSync(path.join(home, '.pki', 'nssdb'), { recursive: true });
+      fs.writeFileSync(path.join(home, 'root.crt'), '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n');
+      const e = { ...env, userHome: home, rootCert: path.join(home, 'root.crt'), tools: { ...env.tools, certutil: '/usr/bin/certutil', nssdb: false } };
+      const v = await linuxFronting.osTrust!({ host: 'hallway.localhost', port: 4443 }, 'user', e as never, async () => ({ code: 0, stdout: '-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n', stderr: '' }));
+      assert.equal(v.trusted, true);
+    } finally {
+      rmTmp(home);
+    }
+  });
   test("Linux: User certificate is Chrome's NSS database (no certutil: not trusted)", async () => {
     const v = await linuxFronting.osTrust!({ host: 'hallway.localhost', port: 4443 }, 'user', env as never, async () => ({ code: 0, stdout: '', stderr: '' }));
     assert.deepEqual([v.trusted, v.how], [false, "Chrome's NSS database (~/.pki/nssdb)"]);
