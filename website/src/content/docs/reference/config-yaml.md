@@ -25,7 +25,7 @@ proxy:
   caddy: null                   # the Caddy binary; default: `caddy` on your PATH, else Homebrew's
   httpsPort: 4443               # the loopback port Caddy serves HTTPS on (as you)
   httpPort: 4480                # the loopback port Caddy serves HTTP on (a redirect to HTTPS)
-  publicPort: 443               # the port in links (setup sets 4443/4480 on Linux for the user/none tiers)
+  publicPort: 443               # the port in links (4443/4480: Caddy's own; `hallway setup --port` sets it)
   trust: null                   # user | system | none: the tier `hallway setup` set up (written by setup)
   scheme: https                 # https | http (the none tier)
 
@@ -75,7 +75,7 @@ dashboard:
 | `proxy.caddy` | `caddy` on your `PATH`, else Homebrew's | The Caddy binary (2.7 or later). <span class="ms ms--shipped">v1</span> |
 | `proxy.httpsPort` | `4443` | The loopback port Caddy, running as you, serves HTTPS on. <span class="ms ms--shipped">v1</span> |
 | `proxy.httpPort` | `4480` | The loopback port Caddy serves HTTP on: a redirect to HTTPS, or the apps themselves with `scheme: http`. <span class="ms ms--shipped">v1</span> |
-| `proxy.publicPort` | `443` | The port in links: 443 (or 80 with `scheme: http`), which `hallway setup` hands to Caddy's ports. On Linux, setup sets it to `httpsPort` (User certificate) or `httpPort` (No HTTPS), since nothing holds 443 or 80 there, and links then carry the port. See [Fronted mode](/networking/fronted-mode/#three-tiers). <span class="ms ms--shipped">v1</span> |
+| `proxy.publicPort` | `443` | The port in links: 443 (or 80 with `scheme: http`), which `hallway setup` hands to Caddy's ports. On Linux, setup sets it to `httpsPort` (User certificate) or `httpPort` (No HTTPS), since nothing holds 443 or 80 there, and links then carry the port. `hallway setup --port 4443` sets it to Caddy's port in any tier, for when something else holds 443, and `--port 443` back. See [Fronted mode](/networking/fronted-mode/#three-tiers). <span class="ms ms--shipped">v1</span> |
 | `proxy.trust` | none | The [tier](/networking/fronted-mode/#three-tiers) `hallway setup` set up, written by setup: `user` trusts Hallway's certificate for your account only (no admin), `system` for every account (admin; custom domains need it), `none` serves plain HTTP. A setup from before the tiers counts as `system`. Change it by running `hallway setup --trust …`, not by hand. <span class="ms ms--shipped">v1</span> |
 | `proxy.scheme` | `https` | The scheme in links. `http` is the `none` tier: Caddy serves plain HTTP and redirects nothing. Written by setup. <span class="ms ms--shipped">v1</span> |
 | `probe.intervalSeconds` | `60` | Seconds between health probes (±10% jitter). |

@@ -328,6 +328,12 @@ privileges (`server/proxy/setup.ts`; the tiers in `server/proxy/tiers.ts`; the p
   `HOMEBREW_NO_ENV_HINTS`, so its output doesn't bury setup's.)
 - **The forwarders run Hallway's own CLI**, so, like the daemon's job, they must point at an installed one, never
   npx's cache (D61): on macOS setup refuses from npx before it changes anything.
+- **Something else on 443/80** (D71): setup stops before it changes anything and names it once per process, with the
+  tool when its command line says (Rancher Desktop, Docker Desktop, Colima, OrbStack, Podman, Lima, nginx, Apache,
+  another Caddy), that tool's own fix, whether it listens on every address, and, when only 443/80 are in the way,
+  `hallway setup --port 4443`: links on Caddy's own port, nothing put on 443/80 (`proxy.publicPort`, kept on re-runs;
+  `--port 443` moves back). The dashboard gets the same as data (`reason: 'ports'`, `conflicts`, `altPort`), with
+  **Use port 4443 instead** and, once on, **Move to port 443**.
 - `hallway setup --domain <base>`: also checks the TLD (below), writes `generated/dnsmasq.conf`, starts the
   `hallway.dnsmasq` user job, and (**sudo**) installs the resolver; `config.yaml` gets `domain.base`.
 - Every step is printed before it runs: `[Hallway]` steps (its own files and user-level jobs), `[you]` (Homebrew;

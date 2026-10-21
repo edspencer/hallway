@@ -377,6 +377,79 @@ try {
       assert.deepEqual(doctorFails(['redirect', 'ca']), []);
     });
 
+  step('D71: something else on 443 and 80 → named once, then links on Caddy\'s own port (--port 4443), then back');
+  {
+    // from nothing, so that none of our own forwarders hold 80 when the squatter binds it
+    must('teardown', '--yes');
+    // every address, like Rancher Desktop's Traefik. On macOS as the user (visible to lsof, so named with its pid); on
+    // Linux only root can, so it's someone else's, found by its socket
+    const pidFile = path.join(tmp, 'squatter2.pid');
+    const code = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); const net = require('node:net'); for (const p of [443, 80]) net.createServer(s => s.end()).listen(p, '0.0.0.0')`;
+    const squatter = darwin ? spawn(process.execPath, ['-e', code], { stdio: 'inherit' }) : spawn('sudo', ['-n', process.execPath, '-e', code], { stdio: 'inherit' });
+    await until('the squatter on 443 and 80', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0 && sh('nc', ['-z', '127.0.0.1', '80']).code === 0, 10000);
+    await sleep(1500);
+    try {
+      await check('setup stops before changing anything, with one message for both ports and the way to coexist', async () => {
+        const before = fs.readFileSync(path.join(data, 'config.yaml'), 'utf8');
+        const r = hw('setup', '--yes', '--trust', 'system');
+        assert.notEqual(r.code, 0);
+        assert.match(r.out, darwin ? /Ports 443 and 80 are taken by node: node \(pid \d+: .*\), listening on \*, so reachable from your network/ : /Ports? 443( and 80)? (is|are) taken by a process you can't see/);
+        assert.match(r.out, /Or leave it running and give Hallway's links Caddy's own port, 4443: `hallway setup --trust system --port 4443`/);
+        assert.match(r.out, /Setup stopped before doing anything/);
+        if (darwin) assert.equal((r.out.match(/Hallway won't fight it/g) ?? []).length, 1, 'one message for both ports');
+        assert.equal(fs.readFileSync(path.join(data, 'config.yaml'), 'utf8'), before, 'config.yaml unchanged');
+      });
+      await check('--port 4443: links carry the port, nothing on 443/80 of ours, doctor says which port', async () => {
+        const out = must('setup', '--yes', '--trust', 'system', '--port', '4443');
+        assert.match(out, /Links carry Caddy's own port, :4443/);
+        const r = await until('the dashboard on :4443', async () => {
+          const x = curl('https://hallway.localhost:4443/api/health');
+          return status(x) === 200 ? x : null;
+        }, 15000);
+        assert.ok(r);
+        assert.match(fs.readFileSync(path.join(data, 'config.yaml'), 'utf8'), /publicPort: 4443/);
+        if (darwin) assert.ok(!fs.existsSync(agent('hallway.forward.https')) && !fs.existsSync(agent('hallway.forward.http')), 'no forwarders');
+        else assert.notEqual(sh('sudo', ['nft', 'list', 'table', 'inet', 'hallway']).code, 0, 'no redirect');
+        const s = await until('links with :4443', async () => {
+          const x = await (await fetch('http://localhost:4255/api/state')).json();
+          return x.apps.find((a) => a.slug === 'review').url === 'https://review.localhost:4443' ? x : null;
+        }, 10000);
+        assert.equal(s.fronting.standardPort, 443);
+        assert.match(await (await fetch('http://localhost:4255/llms.txt')).text(), /review\.localhost:4443/);
+        assert.deepEqual(doctorFails(['caddy', 'caddy-service', 'caddy-config', 'redirect', 'ca', 'ports-80-443']), []);
+        const doc = hw('doctor', '--json');
+        assert.match(doc.out, /links carry Caddy's own port, :4443/);
+        assert.equal(status(curl(`https://review.localhost:4443/`)), 200);
+      });
+      await check('--port 443 while it is still taken: stopped, nothing changed', async () => {
+        const r = hw('setup', '--yes', '--port', '443');
+        assert.notEqual(r.code, 0);
+        assert.match(r.out, /Setup stopped before doing anything/);
+        assert.match(fs.readFileSync(path.join(data, 'config.yaml'), 'utf8'), /publicPort: 4443/);
+      });
+    } finally {
+      if (darwin) squatter.kill();
+      else sh('sudo', ['-n', 'kill', fs.readFileSync(pidFile, 'utf8').trim()]);
+      squatter.kill();
+    }
+    await until('443 and 80 to be free again', async () => sh('nc', ['-z', '127.0.0.1', '443']).code !== 0, 10000);
+    await sleep(500);
+    await check('--port 443 once it is free: back to plain https:// links, in the same tier', async () => {
+      const out = must('setup', '--yes', '--port', '443');
+      assert.match(out, /Tier: System-wide certificate \(--trust system\), as set up now/);
+      const r = await until('the dashboard on 443', async () => {
+        const x = curl('https://hallway.localhost/api/health');
+        return status(x) === 200 ? x : null;
+      }, 15000);
+      assert.ok(r);
+      assert.doesNotMatch(fs.readFileSync(path.join(data, 'config.yaml'), 'utf8'), /publicPort: 4443/);
+      await until('links without a port', async () => {
+        const x = await (await fetch('http://localhost:4255/api/state')).json();
+        return x.apps.find((a) => a.slug === 'review').url === 'https://review.localhost';
+      }, 10000);
+    });
+  }
+
   step('criterion 11: teardown leaves nothing behind; the dashboard keeps working directly');
   must('teardown', '--yes');
   await check('no files, jobs, redirect or trusted root left', async () => {

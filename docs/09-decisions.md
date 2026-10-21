@@ -1642,3 +1642,84 @@ Five treatments were built and compared (branch `tiers-design`, not merged); he 
 as a LaunchAgent, brought up macOS's Touch ID dialog for `security add-trusted-cert` into the login keychain, and
 local domains came up afterwards (`11-research-notes.md`, "Fronted mode, HMR and the upgrade restart on a real desktop
 Mac"). This was D65's open "does the dialog appear when a LaunchAgent triggers it" (Q-USER-TRUST).
+
+### D71 — Something else on 443/80: named with its tool's own fix, and links on Caddy's own port to coexist (`--port`) (2026-10-21; amends D48, D65, D70)
+
+The author's work Mac (managed, 0.8.0, 2026-10-21): the dashboard's **Turn on** for User certificate showed "Setup
+stopped" with two near-identical paragraphs, one per port ("Port 443 (HTTPS) is held by ssh (pid 7090: ssh:
+~/Library/Application Support/rancher-desktop/lima/0/ssh…), listening on \*. Hallway won't fight it: …"), the second
+starting with a lower-case "port 80", followed by "If the Touch ID prompt was cancelled or went unanswered, run it in a
+terminal instead". The holder was **Rancher Desktop**: its Lima VM's `ssh` forwards the k3s **Traefik** ingress on
+`*:80` and `*:443` (Traefik is on by default). The Touch ID line was false (no dialog had been shown), the advice was
+generic, and the only way forward was to turn off something the user may need. Work machines commonly have one of
+these (Rancher Desktop, Docker Desktop publishing 80/443, Colima, OrbStack, Podman, Lima, a local nginx).
+
+- **One message per process (or per recognised tool), whatever ports it holds** (`server/proxy/conflicts.ts`): 443 and
+  80 from the same `ssh` are one entry; nginx's master and workers, or Docker's two `docker-proxy`s, are one. Each is a
+  `PortConflict` (`shared/api.ts`): ports, process, PID, command line (with `~`), addresses, `exposed` (listening
+  beyond loopback, `*` included: reachable from the network, and said so), the tool, the container, and the fix as a
+  list.
+- **The tool, from the process name and command line**, first match wins: Rancher Desktop (`rancher-desktop` in the
+  path), Colima (`.colima`), OrbStack, Docker Desktop (`Docker.app`, `com.docker.*`, `vpnkit`; on Linux `docker-proxy`
+  / `dockerd` as "Docker"), Podman (`gvproxy`), Lima (`limactl`, `.lima/`), nginx, Apache (`httpd`, `apache2`), another
+  Caddy. Rancher and Colima come before Lima, which they run. Its fix is its own: Rancher Desktop, Preferences →
+  Kubernetes → untick "Enable Traefik" (or "Enable Kubernetes"), or `rdctl set --kubernetes.options.traefik=false`
+  (wording and flag checked against docs.rancherdesktop.io, 2026-10-21); the container tools, the container, named
+  when a read-only `docker ps --filter publish=<port>` can tell (4 s at most; Docker Desktop's, Rancher's and
+  OrbStack's CLI directories are searched, since a LaunchAgent's PATH lacks them), else that command to find it; nginx
+  and Apache, `brew services stop` / `apachectl` / `systemctl`; anything unrecognised, `kill <pid>` or moving it; a
+  holder nobody can see, `sudo lsof`. A container named by Docker beats Rancher's Traefik advice: then the container is
+  the cause.
+- **Setup stopped before changing anything — checked, and now tested.** The facts are read-only (lsof/ps, a TLS probe,
+  `docker ps`), and a refusal returns before D67's question and before any step, in `hallway setup` and in the
+  dashboard's `setupUnattended` alike. `test/conflicts.test.ts` runs both against the Rancher fixture with a service
+  manager and an `exec` that record any change: none.
+- **The error says why** (`SetupError.reason`, `FrontingSetupJob.reason`: `ports`, `refused`, `sudo`, `dialog`,
+  `failed`), with `conflicts` and `altPort` for `ports`. The dashboard shows the Touch ID line only for `dialog` (the
+  failing step was the one marked `dialog`, D67), or for an older daemon that sends no reason. For `ports` it shows
+  the conflicts as structured content in D70's style: the headline ("Ports 443 and 80 are taken by Rancher Desktop"),
+  the process and command, a ⚠ line when it's exposed, "To free them:" with the fix, then **Use port 4443 instead**,
+  **Try again** and OK.
+- **The way to coexist: links on Caddy's own port** (`hallway setup --port <n>`). Caddy already listens on
+  `proxy.httpsPort` (4443) and `proxy.httpPort` (4480) as the user; only the step that puts 443/80 in front of it (launchd's
+  sockets on macOS, the nftables redirect on Linux) needs those ports. `--port 4443` skips that step (and removes
+  forwarders a previous run installed), and setup writes `proxy.publicPort: 4443` through the Store, so every link
+  follows, as Linux's User certificate already did (D65): `publicUrl` for the API's URLs, `FrontingInfo`, the banner,
+  `hallway open`, `/llms.txt`, MCP, the fallback page, setup and doctor. Caddy's HTTP→HTTPS redirect already carries
+  the public port.
+  - **The flag.** `--port` takes the standard port (443; 80 for No HTTPS) or Caddy's own (`httpsPort`; `httpPort` for No
+    HTTPS); anything else is a usage error saying to change `proxy.httpsPort` instead, so Caddy's port is configured in
+    one place. On Linux, `--port 443` with User certificate or No HTTPS is refused (nothing unprivileged can hold 443;
+    System-wide certificate can). The API takes the same as `POST /api/fronting/setup {"trust", "port"}`.
+  - **Remembered without a new field.** The choice is "publicPort is Caddy's port where the tier would have had
+    443/80" (`chosenCaddyPorts`: macOS, every tier; Linux, System-wide certificate; plus D47's hand-set
+    `publicPort: httpsPort` from before the tiers). Re-running `hallway setup` without `--port` keeps it (a re-run
+    mustn't walk back into the conflict), and so does switching tier. Linux's User certificate always carries 4443, so
+    it isn't a choice there, and moving to System-wide certificate still gets the redirect.
+  - **Switching back is one command or one click:** `hallway setup --port 443` (the plan's warning, the conflict
+    message and doctor all say so), or **Move to port 443** in the header's dialog (`FrontingInfo.standardPort`; User
+    certificate and No HTTPS only, since the daemon never runs System-wide certificate). If 443 is still taken, the
+    same conflict message appears there, without the offer of the port it's already on.
+  - **doctor** names the holders in every tier that puts something on 443/80 (`ports-80-443`, now for launchd's
+    sockets too, not only the redirect), with the tool's fix and `--port`; on Caddy's port by choice, an info line
+    (`public-port`) saying which port links carry and whether 443 is free yet.
+- **Rejected:**
+  - **fighting for the port** (stopping the other tool, or binding over it with `SO_REUSEPORT`): Hallway doesn't own
+    it, and the other tool's users would lose their ingress without being asked.
+  - **binding 443 on another loopback address, e.g. `127.0.0.2`.** macOS configures only `127.0.0.1` on `lo0` (unlike
+    Linux, which routes all of 127/8): another address needs `sudo ifconfig lo0 alias 127.0.0.2`, which doesn't survive
+    a reboot (so a root LaunchDaemon, exactly what D65 removed). More decisively, browsers resolve `*.localhost`
+    themselves to `127.0.0.1` and `::1` only, so `https://review.localhost` would never reach `127.0.0.2`, and a
+    wildcard listener (Rancher's `*:443`) would still take connections to it. A custom domain could point there, but
+    that's System-wide certificate's resolver, which needs root.
+  - **only `[::1]:443`** when the other tool holds only IPv4 `*:443`: browsers race both families for `localhost`
+    names, so some connections would reach Traefik; and whether launchd may bind a specific address beside another
+    process's wildcard is unverified.
+  - **a port of our own choosing other than Caddy's** (`--port 8443` moving Caddy): two places to configure one
+    number; `proxy.httpsPort` already does it.
+  - **a new config field** (`proxy.ports: standard | caddy`): `publicPort` already says it, and a second field could
+    disagree with it.
+- **Unverified on a real Mac:** the whole of this on the author's managed Mac (Rancher Desktop's real `lsof`/`ps`
+  output beyond the one message he saw; `docker ps` from the LaunchAgent daemon's environment; `--port 4443` in Safari
+  and Chrome with the User certificate; Move to port 443 after turning Traefik off). CI's macOS job runs setup against
+  a dummy listener on 443 and then `--port 4443` for real.

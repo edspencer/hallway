@@ -24,6 +24,7 @@ hallway setup --trust user               # User certificate
 hallway setup --trust system             # System-wide certificate
 hallway setup --trust none               # No HTTPS (plain HTTP)
 hallway setup --domain myname.internal   # under your own domain (System-wide certificate)
+hallway setup --port 4443                # links on Caddy's own port, when something else holds 443
 ```
 
 On macOS, install Hallway first (`npm i -g hallway`): setup installs jobs that run the installed `hallway`, so it
@@ -223,6 +224,58 @@ the same checks):
   loopback only, the resolver entry in place, and both `<base>` and a name under it resolving to your machine.
 
 ## Troubleshooting
+
+### Port 443 is already in use
+
+`hallway setup` (and the dashboard's **Turn on**) stops before it changes anything when another program holds port
+443 or 80, and names it: the tool when its command line says which (Rancher Desktop, Docker Desktop, Colima,
+OrbStack, Podman, Lima, nginx, Apache, another Caddy), the process and its PID, and whether it listens on every address
+(`*`), which means other machines on your network can reach it too. Hallway won't fight it for the port. Either free
+the port, or leave it running and give Hallway's links Caddy's own port.
+
+**Free the port**, then run `hallway setup` again (or press **Try again**):
+
+- **Rancher Desktop.** Its Kubernetes runs the Traefik ingress, which holds 80 and 443 on every address (you'll see
+  an `ssh` process under `~/Library/Application Support/rancher-desktop/lima/`). Open **Preferences → Kubernetes** and
+  untick **Enable Traefik** (or untick **Enable Kubernetes** if you don't use it). From a terminal:
+
+  ```sh
+  rdctl set --kubernetes.options.traefik=false
+  ```
+
+- **Docker Desktop, Colima, OrbStack, Podman.** A container publishes the port. Hallway names it when `docker ps` can;
+  otherwise list them, then stop it or publish it on another port (e.g. `-p 8443:443`):
+
+  ```sh
+  docker ps --filter publish=443
+  docker stop <name>
+  ```
+
+  With Colima's or OrbStack's Kubernetes, a service of type LoadBalancer on 443 does the same: `kubectl get svc -A`
+  lists them.
+- **Lima.** A port forward from a VM: `limactl list` names them; stop what publishes 443 inside it, or
+  `limactl stop <name>`.
+- **nginx or Apache.** `brew services stop nginx` (or `httpd`), `sudo apachectl stop` for macOS's own Apache; on
+  Linux, `sudo systemctl stop nginx` (or `apache2`). Or move their `listen 443` to another port.
+
+**Or use Caddy's own port.** Hallway's Caddy already listens on 4443 (and 4480), as you, on loopback; only the step
+that puts 443 and 80 in front of it needs those ports. Skip it, and links carry the port:
+
+```sh
+hallway setup --trust user --port 4443
+```
+
+The dashboard is then `https://hallway.localhost:4443`, and each app `https://<app>.localhost:4443`. Every link
+Hallway gives (the dashboard, `hallway open`, the agent guide, MCP, doctor) carries the port. The dashboard's
+**Use port 4443 instead** button does the same. Once the other tool lets go of 443, move back with one command (or
+**Move to port 443** in the header's Local domains dialog):
+
+```sh
+hallway setup --port 443
+```
+
+`hallway doctor` says which port links carry and whether 443 is free yet. On Linux, User certificate and No HTTPS
+always carry the port (nothing unprivileged can hold 443 there), so this only applies to System-wide certificate.
 
 ### Nothing answers on 443 (macOS)
 
