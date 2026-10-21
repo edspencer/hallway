@@ -22,7 +22,7 @@ export function observationId(root: string | null, port: number, normalisedComma
 }
 
 /** Runtimes and shells that say nothing about what they run: `node` alone doesn't name a server. */
-const RUNTIMES = /^(node|nodejs|bun|deno|python[\d.]*|ruby|java|php|perl|dotnet|sh|bash|zsh|dash|fish|env|npm|npx|pnpm|yarn|uv|tsx)(\.exe)?$/i;
+export const RUNTIMES = /^(node|nodejs|bun|deno|python[\d.]*|ruby|java|php|perl|dotnet|sh|bash|zsh|dash|fish|env|npm|npx|pnpm|yarn|uv|tsx)(\.exe)?$/i;
 
 /**
  * A supervisor's label, shortened to what it names: `homebrew.mxcl.<formula>` and other reverse-DNS launchd labels

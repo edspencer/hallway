@@ -1,4 +1,4 @@
-// Trusted the way browsers check it (D72): curl's verdict by exit code, the commands each platform asks (Apple's curl
+// Trusted the way browsers check it (D73): curl's verdict by exit code, the commands each platform asks (Apple's curl
 // with no CA given on macOS; Chrome's NSS database or the system's curl on Linux), the browsers an organisation set to
 // ignore certificates you add (managed preferences), and when setup says to quit and reopen a browser.
 import { describe, test } from 'node:test';
@@ -65,7 +65,7 @@ describe('what each platform asks', () => {
   });
 });
 
-describe('a browser set by its organisation to ignore certificates you add (D72)', () => {
+describe('a browser set by its organisation to ignore certificates you add (D73)', () => {
   test('managed preferences, machine-wide and per user; only files that exist are read', async () => {
     assert.deepEqual(managedPrefsFiles('com.google.Chrome', 'someone'), ['/Library/Managed Preferences/com.google.Chrome.plist', '/Library/Managed Preferences/someone/com.google.Chrome.plist']);
     const read: string[] = [];

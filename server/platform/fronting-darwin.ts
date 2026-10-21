@@ -37,11 +37,11 @@ port ${dnsPort}
 
 const root = { sudo: true } as const;
 
-/** Apple's curl: it verifies against the keychains' trust settings, as Safari and Chrome do (verified, D65, D72);
+/** Apple's curl: it verifies against the keychains' trust settings, as Safari and Chrome do (verified, D65, D73);
  *  Homebrew's brings its own CA list, so it's never the one asked. */
 export const APPLE_CURL = '/usr/bin/curl';
 
-/** Browsers whose managed preferences can turn off certificates added to the keychains (D72). */
+/** Browsers whose managed preferences can turn off certificates added to the keychains (D73). */
 export const POLICY_BROWSERS = [
   { browser: 'Chrome', domain: 'com.google.Chrome' },
   { browser: 'Edge', domain: 'com.microsoft.Edge' },
@@ -53,7 +53,7 @@ export const managedPrefsFiles = (domain: string, user: string, base = '/Library
 /** `plutil -extract CAPlatformIntegrationEnabled raw -o - <file>`: the policy is off. */
 export const policyOff = (code: number, stdout: string) => code === 0 && /^(false|0|NO)$/i.test(stdout.trim());
 
-/** The browsers set to ignore certificates added to the keychains, read from managed preferences (D72). */
+/** The browsers set to ignore certificates added to the keychains, read from managed preferences (D73). */
 export async function darwinBrowserPolicies(user: string, run: Runner, base?: string, exists: (f: string) => boolean = fs.existsSync): Promise<BrowserPolicy[]> {
   const out: BrowserPolicy[] = [];
   for (const b of POLICY_BROWSERS)

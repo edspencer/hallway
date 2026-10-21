@@ -1,4 +1,4 @@
-// Listeners that belong to something installed rather than to a project (D72): a desktop application's internal ports
+// Listeners that belong to something installed rather than to a project (D73): a desktop application's internal ports
 // (Rancher Desktop's, an authenticator's, an IDE's helpers), and a package run as a tool in someone else's directory
 // (`npx local-review` in a repository it reviews). Pure: everything comes from the command line, the launchd label and
 // the working directory.
@@ -34,9 +34,9 @@ export function desktopApp(command: string | null, supervisor: Supervisor | null
   const bundleId = label ?? (container && /\./.test(container) ? container.replace(/^[A-Z0-9]{10}\./, '') : null);
   if (bundle && !inProject(bundle[1])) return { name: bundle[2], bundleId };
   if (bundleId) return { name: bundleName(bundleId), bundleId };
-  const exe = cmd.trim().split(/\s+/)[0] ?? '';
-  const linux = /^\/(?:opt|snap)\/([^/]+)\//.exec(exe);
-  if (linux && !['homebrew', 'local'].includes(linux[1]) && !inProject(exe)) return { name: linux[1], bundleId: null };
+  // the command, not its first word: install directories have spaces (`/opt/Example Chat/example-chat`)
+  const linux = /^\/(?:opt|snap)\/([^/]+)\//.exec(cmd.trim());
+  if (linux && !['homebrew', 'local'].includes(linux[1]) && !inProject(cmd.trim())) return { name: linux[1], bundleId: null };
   const win = /^[a-z]:\\(?:program files(?: \(x86\))?\\(?:[^\\]+\\)?|users\\[^\\]+\\appdata\\local\\programs\\)([^\\]+)\\/i.exec(cmd.replace(/^"/, ''));
   if (win) return { name: win[1], bundleId: null };
   return null;

@@ -1,7 +1,7 @@
-// The observed tray, grouped (D72): your projects (one group per repository, its worktrees and branches together),
+// The observed tray, grouped (D73): your projects (one group per repository, its worktrees and branches together),
 // apps on this machine, what each container tool forwards (a cluster's own components folded away), desktop apps'
 // internal ports (folded away), and anything else. Pure, so it's tested under node.
-import type { HttpAnswer, ObservedListener } from '../../shared/api';
+import type { HttpAnswer, ObservedListener } from '../../shared/api.js';
 
 export type TrayGroupKind = 'projects' | 'apps' | 'forwarded' | 'internal' | 'other';
 
@@ -37,6 +37,13 @@ const ANSWER_ORDER: Record<HttpAnswer['kind'], number> = { page: 0, 'sign-in': 1
 
 export const byAnswer = (a: ObservedListener, b: ObservedListener) => ANSWER_ORDER[a.answer.kind] - ANSWER_ORDER[b.answer.kind] || a.port - b.port;
 
+/** What a folded group holds, in a few words: its sets' headings, else its rows' names. */
+export function foldSummary(g: TrayGroup): string {
+  const titles = g.sets.map((s) => s.title).filter((t): t is string => !!t);
+  const names = titles.length ? titles : [...new Set(g.rows.map((o) => rowName(o)))];
+  return names.length > 4 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ');
+}
+
 /** What the machine is called in headings. */
 export function machineWord(platform: string | null | undefined): string {
   return platform === 'darwin' ? 'this Mac' : platform === 'win32' ? 'this PC' : 'this computer';
@@ -66,7 +73,7 @@ export function trayGroups(observed: readonly ObservedListener[], platform?: str
   const projects = new Map<string, TraySet>();
   const apps: ObservedListener[] = [];
   const tools = new Map<string, { name: string; containers: ObservedListener[]; cluster: ObservedListener[] }>();
-  const internal = new Map<string, TraySet>();
+  const internal: ObservedListener[] = [];
   const other: ObservedListener[] = [];
 
   for (const o of observed) {
@@ -90,19 +97,20 @@ export function trayGroups(observed: readonly ObservedListener[], platform?: str
         tools.set(id, t);
         break;
       }
-      case 'internal': {
-        const app = o.identity.app;
-        const k = app?.name ?? 'unknown';
-        const s = internal.get(k) ?? { key: `app:${k}`, title: app?.name ?? 'Unknown app', detail: app?.bundleId ?? null, rows: [], folded: false };
-        s.rows.push(o);
-        internal.set(k, s);
+      case 'internal':
+        internal.push(o);
         break;
-      }
       default:
         other.push(o);
     }
   }
 
+  // a repository whose rows share one branch says it once, in its heading
+  for (const s of projects.values()) {
+    const branches = new Set(s.rows.map((o) => o.identity.branch));
+    const [only] = branches;
+    if (branches.size === 1 && only && s.rows.length > 1) s.detail = `@ ${only}`;
+  }
   const out: TrayGroup[] = [];
   if (projects.size) out.push(group('projects', 'projects', 'Your projects', 'Dev servers in your repositories', [...projects.values()]));
   if (apps.length) out.push(group('apps', 'apps', `Apps on ${machine}`, 'Tools and services you run', [{ key: 'apps', title: null, detail: null, rows: apps, folded: false }]));
@@ -113,12 +121,13 @@ export function trayGroups(observed: readonly ObservedListener[], platform?: str
     const what = id === 'ssh' ? 'Ports forwarded over SSH' : id === 'kubectl' ? 'kubectl port-forward' : id === 'kubernetes' ? 'The cluster’s own components' : t.cluster.length && t.containers.length ? 'Containers and Kubernetes' : t.cluster.length ? 'Kubernetes' : 'Containers';
     out.push(group(`forwarded:${id}`, 'forwarded', t.name, what, sets));
   }
-  if (internal.size) out.push(group('internal', 'internal', 'App internals', `Ports desktop apps open for themselves`, [...internal.values()], true));
+  // one set, each row named by its app: a heading per app would only repeat the name
+  if (internal.length) out.push(group('internal', 'internal', 'App internals', 'Ports desktop apps open for themselves', [{ key: 'internal', title: null, detail: null, rows: internal, folded: false }], true));
   if (other.length) out.push(group('other', 'other', 'Other', 'Couldn’t tell what these are', [{ key: 'other', title: null, detail: null, rows: other, folded: false }], !other.some((o) => o.answer.kind === 'page')));
   return out;
 }
 
-/** What it answers, in a word or three (D72). */
+/** What it answers, in a word or three (D73). */
 export function answerText(a: HttpAnswer): string {
   switch (a.kind) {
     case 'page':
@@ -152,9 +161,16 @@ export function shortLocation(loc: string): string {
 /** Worth an Open button: it answers HTTP with something a browser shows. */
 export const openable = (o: ObservedListener) => o.answer.kind === 'page' || o.answer.kind === 'sign-in' || o.answer.kind === 'redirect';
 
-/** The words for "exposed" (D72): where it can be reached from. */
+/** The words for "exposed" (D73): where it can be reached from. */
 export function exposureWords(machine: string) {
   return { label: 'On your network', detail: `Other devices can reach it: it listens on every network interface, not just ${machine}.` };
+}
+
+/** What a row is called outside a repository's set: a forward nothing could name says so, rather than repeating its
+ *  tool and port. */
+export function rowName(o: ObservedListener): string {
+  const v = o.identity.via;
+  return v && !v.container && !v.kubernetes && o.name === `${v.tool.name} :${o.port}` ? 'Unidentified forward' : o.name;
 }
 
 /** The line under a row's name: what's behind it, or where it runs. */
@@ -165,9 +181,75 @@ export function rowContext(o: ObservedListener, tildify: (p: string) => string):
   if (via?.kubernetes && !via.kubernetes.system) return via.kubernetes.namespace ? `service in ${via.kubernetes.namespace}` : 'Kubernetes service';
   if (via?.host) return `via ${via.host}`;
   if (via) return null;
-  if (id.app) return null;
+  if (id.app) return id.app.bundleId;
   const dir = id.projectDir ?? id.cwd;
-  if (id.tool) return dir && dir !== '/' ? `${id.tool}, in ${tildify(dir)}` : id.tool;
+  const where = id.repo ? id.repo + (id.branch ? ` @ ${id.branch}` : '') : dir && dir !== '/' ? tildify(dir) : null;
+  if (id.tool) return where ? `${id.tool}, in ${where}` : id.tool;
   if (dir && dir !== '/') return tildify(dir);
   return id.supervisor ? id.supervisor.label : null;
+}
+
+/** A row's heading inside its set, and what goes under it. */
+export interface RowLabel {
+  title: string;
+  /** The title is a branch or a script: set in the monospaced face. */
+  mono: boolean;
+  /** The rest of what tells it apart: the package in a monorepo, the branch, the image… */
+  detail: string | null;
+}
+
+/**
+ * How each row in a set is headed (D73). In a repository's set, what tells its rows apart: the package (a monorepo's
+ * `mcp`), else the branch (a checkout and its worktrees), else, for several servers in one checkout, the script each
+ * runs (`rig/a.mjs`). Elsewhere, the row's name and its context.
+ */
+export function rowLabels(set: TraySet, tildify: (p: string) => string = (p) => p): Map<string, RowLabel> {
+  const out = new Map<string, RowLabel>();
+  if (!set.key.startsWith('repo:') && !set.key.startsWith('dir:')) {
+    for (const o of set.rows) out.set(o.id, { title: rowName(o), mono: false, detail: rowContext(o, tildify) });
+    return out;
+  }
+  const sub = (o: ObservedListener) => (o.name !== set.title ? o.name : null);
+  const together = new Map<string, number>();
+  const key = (o: ObservedListener) => `${sub(o) ?? ''}\0${o.identity.branch ?? ''}`;
+  for (const o of set.rows) together.set(key(o), (together.get(key(o)) ?? 0) + 1);
+  const shared = set.detail?.startsWith('@ ') ? set.detail.slice(2) : null;
+  for (const o of set.rows) {
+    const branch = o.identity.branch === shared ? null : o.identity.branch;
+    const script = o.identity.script ?? null;
+    const crowded = (together.get(key(o)) ?? 0) > 1;
+    if (crowded && script) out.set(o.id, { title: script, mono: true, detail: [sub(o), branch && `@ ${branch}`].filter(Boolean).join(' ') || null });
+    else if (sub(o)) out.set(o.id, { title: sub(o)!, mono: false, detail: branch ? `@ ${branch}` : null });
+    else if (branch) out.set(o.id, { title: branch, mono: true, detail: null });
+    else out.set(o.id, { title: o.name, mono: false, detail: script });
+  }
+  return out;
+}
+
+/**
+ * Everything a row can be found by, most telling first (the filter weights the first field): its name, then port,
+ * page title, group, repository, branch, script, tool, desktop app, container and image, Kubernetes service,
+ * forwarder, directory and process. One place, so the filter (and search, later) index the same things.
+ */
+export function searchFields(o: ObservedListener, group?: Pick<TrayGroup, 'title'> | null, short: (p: string | null) => string | null = (p) => p): (string | number | null | undefined)[] {
+  const id = o.identity;
+  const via = id.via;
+  return [
+    rowName(o),
+    o.port,
+    o.title,
+    group?.title,
+    id.repo,
+    id.branch,
+    id.script,
+    id.tool,
+    id.app?.name,
+    via?.container?.name,
+    via?.container?.image,
+    via?.kubernetes?.name,
+    via?.tool.name,
+    short(id.projectDir ?? id.cwd),
+    id.process,
+    answerText(o.answer),
+  ];
 }

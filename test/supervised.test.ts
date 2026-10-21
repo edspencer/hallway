@@ -163,7 +163,7 @@ describe('a scan of the three misreported shapes (macOS output)', () => {
       const by = (port: number) => all.find((o) => o.port === port)!;
 
       const s = by(svc.port);
-      // its project is called `service`, which says nothing: the page's title names it (D72)
+      // its project is called `service`, which says nothing: the page's title names it (D73)
       assert.equal(s.label, 'Service');
       assert.equal(s.orphan, false);
       assert.deepEqual(toIdentity(s).supervisor, { manager: 'launchd', label: 'com.example.service' });

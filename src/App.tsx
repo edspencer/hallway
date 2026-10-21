@@ -13,12 +13,13 @@ import { Header } from './components/Header';
 import { Help } from './components/Help';
 import { LocalDomainsDialog, LocalDomainsPanel, type TurnOn } from './components/LocalDomains';
 import { LostBanner } from './components/Lost';
-import { ObservedTray, listenerName } from './components/Observed';
+import { ObservedTray } from './components/Observed';
 import { ProblemBanner } from './components/Problems';
 import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
 import { TIER_LABEL, type TurnOnState, checksSummary, domainsView, hostOfUrl } from './lib/domains';
 import { matchScore } from './lib/filter';
+import { openable, searchFields, trayGroups } from './lib/tray';
 import { displayUrl, homeDir, hostOf } from './lib/format';
 import { countStates, isScanning, subtitle } from './lib/status';
 import { useLive } from './live';
@@ -61,10 +62,10 @@ function findAll(state: StateResponse, q: string, home: string | null) {
     const s = matchScore(q, { fields: [a.name, a.slug, a.config?.port, a.url ? displayUrl(a.url) : null, subtitle(a), short(a.config?.project?.dir), short(id?.projectDir ?? id?.cwd), id?.repo, id?.branch, ...(a.config?.tags ?? [])] });
     if (s) (apps.set(a.slug, s), hits.push({ kind: 'app', key: a.slug, url: a.url, score: s }));
   }
+  const groupOf = new Map(trayGroups(state.observed, state.daemon.platform).flatMap((g) => g.rows.map((o) => [o.id, g] as const)));
   for (const o of state.observed) {
-    const id = o.identity;
-    const s = matchScore(q, { fields: [listenerName(o), o.port, o.title, short(id.projectDir ?? id.cwd), id.repo, id.branch, id.process] });
-    if (s) (observed.set(o.id, s), o.http && hits.push({ kind: 'observed', key: o.id, url: `http://localhost:${o.port}`, score: s }));
+    const s = matchScore(q, { fields: searchFields(o, groupOf.get(o.id), (p) => short(p) ?? null) });
+    if (s) (observed.set(o.id, s), openable(o) && hits.push({ kind: 'observed', key: o.id, url: o.url, score: s }));
   }
   for (const g of state.bookmarks) {
     const set = new Set<number>();
@@ -260,7 +261,7 @@ export function App() {
       ) : null,
     observed: () =>
       isScanning(state) && observed.length > 0 ? (
-        <ObservedTray key="observed" observed={observed} home={home} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
+        <ObservedTray key="observed" observed={observed} home={home} platform={state.daemon.platform} lead={!state.apps.length} takenSlugs={takenSlugs} notify={toasts.push} />
       ) : null,
     bookmarks: () =>
       hasBookmarks ? <Bookmarks key="bookmarks" groups={state.bookmarks} visible={found?.bookmarks} filtering={!!found} iconVersion={live.iconVersion} notify={toasts.push} /> : null,

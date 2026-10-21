@@ -1,4 +1,4 @@
-// Port forwarders (D72): a listener held by a container tool's VM (Rancher Desktop's and Colima's Lima `ssh`, Docker
+// Port forwarders (D73): a listener held by a container tool's VM (Rancher Desktop's and Colima's Lima `ssh`, Docker
 // Desktop's backend, OrbStack, Podman's gvproxy, `docker-proxy`), `kubectl port-forward` or an SSH tunnel isn't the app:
 // it carries the port for something else. This names the tool from the process name and command line (pure), and
 // asks the tool's own CLI, read-only, which container or Kubernetes service is behind each port (`lookupBehind`).
@@ -227,7 +227,9 @@ function toolDirs(id: ForwarderTool, home: string): string[] {
  * `nerdctl ps` (Rancher Desktop has one or the other, depending on its engine), `podman ps`, and `kubectl get svc` in
  * the tool's own context (never the current one, which may be a real cluster). Read-only, a few seconds at most each,
  * once per scan and only for tools that are forwarding something. Ports that are a cluster's own components, and that
- * no container publishes, are named by their number.
+ * no container publishes, are named by their number; a port that's neither a listed container's nor a service's, from
+ * a tool whose cluster answered, is the cluster's too. Without the CLIs (no docker, no kubectl), forwarded ports stay
+ * unnamed, but are still the tool's.
  */
 export async function lookupBehind(vias: Map<number, ListenerVia>, opts: BehindOptions = {}): Promise<void> {
   const run = opts.run ?? ((cmd, args, o) => runCommand(cmd, args, { timeoutMs: o?.timeoutMs }));
@@ -244,23 +246,25 @@ export async function lookupBehind(vias: Map<number, ListenerVia>, opts: BehindO
       const dirs = toolDirs(id, home);
       // the tool's own directories first, then PATH
       const find = (name: string) => findTool(name, dirs.join(path.delimiter), []) ?? findTool(name, env.PATH, []);
-      const ask = async (cli: string | null, args: string[], context?: string) => {
-        if (!cli) return '';
+      // null: no such CLI, or it couldn't answer (no daemon, a stopped VM); '' is a list with nothing in it
+      const ask = async (cli: string | null, args: string[], context?: string): Promise<string | null> => {
+        if (!cli) return null;
         if (context) {
           const r = await run(cli, ['--context', context, ...args], { timeoutMs });
           if (r.ok) return r.stdout;
         }
         const r = await run(cli, args, { timeoutMs });
-        return r.ok ? r.stdout : '';
+        return r.ok ? r.stdout : null;
       };
       const json = ['ps', '--format', '{{json .}}'];
       const outputs = await Promise.all([
         ask(find('docker'), json, DOCKER_CONTEXT[id]),
-        id === 'rancher-desktop' || id === 'lima' || id === 'colima' ? ask(find('nerdctl'), json) : '',
-        id === 'podman' ? ask(find('podman'), ['ps', '--format', 'json']) : '',
+        id === 'rancher-desktop' || id === 'lima' || id === 'colima' ? ask(find('nerdctl'), json) : null,
+        id === 'podman' ? ask(find('podman'), ['ps', '--format', 'json']) : null,
       ]);
+      const listed = outputs.some((o) => o !== null);
       const published = new Map<number, Published>();
-      for (const out of outputs) for (const p of parseContainers(out)) if (!published.has(p.port)) published.set(p.port, p);
+      for (const out of outputs) for (const p of parseContainers(out ?? '')) if (!published.has(p.port)) published.set(p.port, p);
       for (const port of ports) {
         const c = published.get(port);
         if (c) vias.get(port)!.container = { name: c.name, image: c.image };
@@ -276,6 +280,9 @@ export async function lookupBehind(vias: Map<number, ListenerVia>, opts: BehindO
       for (const port of left) {
         const s = services.get(port);
         if (s) vias.get(port)!.kubernetes = { name: s.name, namespace: s.namespace, system: false };
+        // the tool's containers were listed and none publishes it, nor does a service, and the tool runs a cluster:
+        // it's the cluster's (Rancher Desktop's k3s has ports of its own beyond the well-known ones)
+        else if (listed) vias.get(port)!.kubernetes = { name: 'component', namespace: null, system: true };
       }
     }),
   );

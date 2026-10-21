@@ -18,7 +18,7 @@ import { type LostAppInput, type LostRecord, LostStore, computeLost } from './lo
 import type { ProviderRegistry } from './providers.js';
 import { isListening } from './services/ports.js';
 import { type Observation, type Scanner, createScanner, fallbackName, noiseReason, suggestSlug } from './scanner/index.js';
-import { answerOf, nameOf, openUrlOf, roleOf } from './scanner/describe.js';
+import { answerOf, nameOf, openUrlOf, roleOf, scriptOf } from './scanner/describe.js';
 import type { Store } from './store/index.js';
 
 export interface LiveOptions {
@@ -70,6 +70,7 @@ export function toIdentity(o: Observation): ListenerIdentity {
     via: o.via ?? null,
     app: o.app ?? null,
     tool: o.tool ?? null,
+    script: scriptOf(o.argv, o.cwd),
   };
 }
 

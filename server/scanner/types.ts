@@ -49,11 +49,11 @@ export interface Observation {
     commonDir: string;
     remote: string | null;
   } | null;
-  /** It forwards the port for a container, a Kubernetes service or an SSH tunnel (D72). Absent before 0.9. */
+  /** It forwards the port for a container, a Kubernetes service or an SSH tunnel (D73). Absent before 0.9. */
   via?: ListenerVia | null;
-  /** The desktop application it belongs to (D72). */
+  /** The desktop application it belongs to (D73). */
   app?: ListenerApp | null;
-  /** A package run as a tool (npx, a global install), not the project in its working directory (D72). */
+  /** A package run as a tool (npx, a global install), not the project in its working directory (D73). */
   tool?: string | null;
   /** What to call it: the project name, or `repo @ branch` when worktrees of one repository are running side by side. */
   label: string;

@@ -13,7 +13,7 @@ export interface Sniff {
   contentType?: string | null;
   /** A redirect's `Location`, as sent. */
   location?: string | null;
-  /** It answered over HTTPS (D72). */
+  /** It answered over HTTPS (D73). */
   tls?: boolean;
 }
 
@@ -108,7 +108,7 @@ function attempt(secure: boolean, address: string, port: number, timeoutMs: numb
  * `GET /` on `address`:`port`. Resolves with what it learned, or null if the listener doesn't speak HTTP (or didn't
  * answer within the timeout). Never follows redirects: a 302 to a login page is a web app. A listener that only speaks
  * HTTPS (it hung up on plain HTTP, or answered 400 saying it wants TLS) is asked again over TLS, any certificate
- * accepted (D72), and its answer is marked `tls`.
+ * accepted (D73), and its answer is marked `tls`.
  */
 export async function sniff(address: string, port: number, { timeoutMs = 2000 } = {}): Promise<Sniff | null> {
   const plain = await attempt(false, address, port, timeoutMs);

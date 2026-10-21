@@ -126,7 +126,8 @@ describe('identification', () => {
     assert.equal(guessFramework(['/usr/bin/python3', '-m', 'http.server', '4567'], null), 'python-http');
     assert.equal(guessFramework(['node', '/x/node_modules/.bin/vite', '--port', '5173'], null), 'vite');
     assert.equal(guessFramework(['python', 'manage.py', 'runserver'], null), 'django');
-    assert.equal(guessFramework(['node', 'dist/index.js'], REPO), 'astro');
+    // a development tool in devDependencies isn't what `node dist/index.js` runs (D73)
+    assert.equal(guessFramework(['node', 'dist/index.js'], REPO), null);
     assert.equal(guessFramework(['node', 'dist/index.js'], path.join(TMP, 'plain')), null);
   });
 
@@ -394,7 +395,7 @@ describe('a whole scan over a fake platform', () => {
       assert.equal(wa.cwd, WT_A);
       assert.deepEqual(wa.addresses, ['127.0.0.1', '::1']);
       assert.equal(wa.http?.title, 'A');
-      assert.equal(wa.project?.framework, 'astro');
+      assert.equal(wa.project?.framework, null, 'astro is only a devDependency, and the command isn\'t running it (D73)');
       assert.equal(wa.orphan, true);
       assert.deepEqual(r.other.map((l) => l.port), [tcp.port]);
       assert.deepEqual([...r.known.keys()], [known.port]);

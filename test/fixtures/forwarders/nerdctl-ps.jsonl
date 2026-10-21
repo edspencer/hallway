@@ -1,0 +1,1 @@
+{"Command":"\"/usr/bin/docker-entrypoint.sh minio server /data\"","CreatedAt":"2026-10-21 09:00:00 +0000 UTC","ID":"b1c2d3e4f5a6","Image":"docker.io/minio/minio:latest","Platform":"linux/arm64","Names":"minio","Ports":"0.0.0.0:9001->9001/tcp","Status":"Up","Runtime":"io.containerd.runc.v2","Size":"","Labels":"nerdctl/name=minio"}

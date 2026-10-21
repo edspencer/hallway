@@ -62,7 +62,7 @@ export interface ScannerOptions {
   identityTtlMs?: number;
   homeDir?: string;
   now?: () => number;
-  /** Runs the container tools' CLIs (`docker ps`, `nerdctl ps`, `kubectl get svc`) for forwarded ports (D72). */
+  /** Runs the container tools' CLIs (`docker ps`, `nerdctl ps`, `kubectl get svc`) for forwarded ports (D73). */
   query?: QueryRunner;
   env?: NodeJS.ProcessEnv;
 }
@@ -244,7 +244,7 @@ function toObserved(l: Listener, id: CachedIdentity, http: Sniff | null, t: numb
     argv: info.argv,
     cwd: info.cwd,
     startedAt: info.startTime === null ? null : new Date(info.startTime).toISOString(),
-    // a container tool's forwarder and a desktop app's helper are supervised by their tool, whatever their parent (D72)
+    // a container tool's forwarder and a desktop app's helper are supervised by their tool, whatever their parent (D73)
     orphan: info.orphan && !via && !app,
     supervisor: info.supervisor ?? null,
     via,

@@ -1,123 +1,279 @@
-// The observed tray, "Found running — not yet named" (docs/05-ui.md): what the scanner found listening that isn't
-// declared or discovered. Each row can be claimed (an inline form writes apps/<slug>.yaml), ignored (by port, process
-// or directory: ignore.yaml) or opened. Listeners that don't speak HTTP sit in a collapsed list below.
+// The observed tray, "Found running — not yet named" (docs/05-ui.md; D73): what the scanner found listening that isn't
+// declared or discovered, grouped by what it is. Your projects (a repository's checkouts and worktrees together), apps
+// on this machine, what each container tool forwards (its cluster's own ports folded away), desktop apps' internal
+// ports (folded) and anything else. Every row says what it answers (a web page, an API, a sign-in…); only what a
+// browser can show gets Open. Each row can be claimed (an inline form writes apps/<slug>.yaml) or ignored (by port,
+// process or directory: ignore.yaml).
 import { useEffect, useRef, useState } from 'react';
 import type { Expected, IgnoreRequest, ObservedListener } from '../../shared/api';
 import { claim, ignore } from '../api';
-import { ORPHANED_HINT, SLUG, duration, exposedHint, shorten, slugify, supervisedBy, tildify } from '../lib/format';
-import { ChevronIcon, ExternalIcon } from './icons';
+import { ORPHANED_HINT, SLUG, duration, exposedHint, slugify, supervisedBy, tildify } from '../lib/format';
+import { type RowLabel, type TrayGroup, type TraySet, answerText, exposureWords, foldSummary, machineWord, openable, rowLabels, trayGroups } from '../lib/tray';
+import { BoxIcon, BranchIcon, ChevronIcon, CogIcon, ExternalIcon, GlobeIcon, QuestionIcon, TunnelIcon, WheelIcon, WindowIcon } from './icons';
 import { TipBadge } from './Tip';
 
 export interface ObservedProps {
   observed: ObservedListener[];
   home: string | null;
+  /** The daemon's platform: "Apps on this Mac" or "this computer". */
+  platform: string | null;
   /** No apps yet: the tray leads the page and says what it's for. */
   lead: boolean;
   takenSlugs: Set<string>;
   notify(text: string, tone?: 'ok' | 'error'): void;
 }
 
-/** The project's name; else, for a listener in `/`, ~ or a prefix, its supervisor or executable; else the page's title. */
-export const listenerName = (o: ObservedListener) => o.identity.name ?? o.identity.displayName ?? o.title ?? o.identity.process ?? `Port ${o.port}`;
-const openUrl = (o: ObservedListener) => `http://localhost:${o.port}`;
+interface Ctx {
+  home: string | null;
+  machine: string;
+  takenSlugs: Set<string>;
+  notify: ObservedProps['notify'];
+}
 
-export function ObservedTray({ observed, home, lead, takenSlugs, notify }: ObservedProps) {
-  const http = observed.filter((o) => o.http);
-  const other = observed.filter((o) => !o.http);
+/** Which folded groups and sets were opened, remembered in this browser. */
+const OPEN_KEY = 'hallway.tray.open';
+function useOpen(key: string, folded: boolean): [boolean, (v: boolean) => void] {
+  const read = () => {
+    try {
+      const v = (JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}') as Record<string, boolean>)[key];
+      return typeof v === 'boolean' ? v : !folded;
+    } catch {
+      return !folded;
+    }
+  };
+  const [open, setOpen] = useState(read);
+  const set = (v: boolean) => {
+    setOpen(v);
+    try {
+      const all = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}') as Record<string, boolean>;
+      if (v === !folded) delete all[key];
+      else all[key] = v;
+      localStorage.setItem(OPEN_KEY, JSON.stringify(all));
+    } catch {
+      /* private mode: not remembered */
+    }
+  };
+  return [open, set];
+}
+
+export function ObservedTray({ observed, home, platform, lead, takenSlugs, notify }: ObservedProps) {
+  const groups = trayGroups(observed, platform);
+  const machine = machineWord(platform);
+  const pages = observed.filter((o) => o.answer.kind === 'page').length;
+  const ctx: Ctx = { home, machine, takenSlugs, notify };
   return (
     <section className="hw-section hw-observed" aria-labelledby="hw-observed-title">
       <header className="hw-section-head">
         <h2 id="hw-observed-title" className="hw-sign">
           Found running <span className="hw-sign-dash">—</span> not yet named
         </h2>
-        <span className="hw-section-count">{http.length}</span>
+        <span className="hw-section-count">{observed.length}</span>
+        <span className="hw-tray-pages">{pages ? `${pages} web page${pages === 1 ? '' : 's'}` : 'no web pages'}</span>
       </header>
-      {lead && http.length > 0 && (
+      {lead && pages > 0 && (
         <p className="hw-observed-lead">
-          We found {http.length === 1 ? 'a web server' : `${http.length} web servers`} running. Name the ones you care about, and they become doors.
+          We found {pages === 1 ? 'a web page' : `${pages} web pages`} being served. Name the ones you care about, and they become doors.
         </p>
       )}
-      {http.length > 0 ? (
-        <ul className="hw-observed-list">
-          {http.map((o) => (
-            <ObservedRow key={o.id} o={o} home={home} takenSlugs={takenSlugs} notify={notify} />
+      <ExposedNote observed={observed} machine={machine} />
+      {groups.map((g) => (
+        <Group key={g.key} g={g} ctx={ctx} />
+      ))}
+    </section>
+  );
+}
+
+/** "On your network", said once in words wherever something is (D73). */
+function ExposedNote({ observed, machine }: { observed: ObservedListener[]; machine: string }) {
+  const n = observed.filter((o) => o.identity.exposed).length;
+  if (!n) return null;
+  const w = exposureWords(machine);
+  return (
+    <p className="hw-tray-exposed-note">
+      <span className="hw-tray-exposed">
+        <GlobeIcon />
+        {w.label}
+      </span>
+      <span>
+        {w.detail} {n === 1 ? 'One listener here does.' : `${n} listeners here do.`} Bind a server to <code>127.0.0.1</code> to keep it to yourself.
+      </span>
+    </p>
+  );
+}
+
+function GroupIcon({ g }: { g: TrayGroup }) {
+  if (g.kind === 'projects') return <BranchIcon />;
+  if (g.kind === 'apps') return <WindowIcon />;
+  if (g.kind === 'internal') return <CogIcon />;
+  if (g.kind === 'other') return <QuestionIcon />;
+  if (g.key === 'forwarded:ssh') return <TunnelIcon />;
+  if (g.key === 'forwarded:kubernetes' || g.key === 'forwarded:kubectl') return <WheelIcon />;
+  return <BoxIcon />;
+}
+
+function Group({ g, ctx }: { g: TrayGroup; ctx: Ctx }) {
+  const [open, setOpen] = useOpen(g.key, g.folded);
+  const id = `hw-tray-${g.key.replace(/[^a-z0-9]+/gi, '-')}`;
+  const summary = foldSummary(g);
+  return (
+    <section className="hw-tray-group" aria-labelledby={id}>
+      <h3 className="hw-tray-head" id={id}>
+        <span className="hw-tray-head-icon">
+          <GroupIcon g={g} />
+        </span>
+        <span className="hw-tray-head-title">{g.title}</span>
+        <span className="hw-tray-head-blurb">{g.blurb}</span>
+        <span className="hw-tray-head-count">{g.rows.length}</span>
+      </h3>
+      {open ? (
+        <div className="hw-tray-card">
+          {g.sets.map((s) => (
+            <Set key={s.key} s={s} ctx={ctx} />
           ))}
-        </ul>
+          {g.folded && (
+            <button type="button" className="hw-tray-fold hw-tray-fold--hide" aria-expanded="true" onClick={() => setOpen(false)}>
+              Hide {g.title.toLowerCase()}
+            </button>
+          )}
+        </div>
       ) : (
-        <p className="hw-quiet">Nothing else is serving web pages right now.</p>
-      )}
-      {other.length > 0 && (
-        <details className="hw-other">
-          <summary>
-            <ChevronIcon /> {other.length} other listener{other.length === 1 ? '' : 's'} <span className="hw-quiet-inline">(not HTTP)</span>
-          </summary>
-          <ul>
-            {other.map((o) => (
-              <li key={o.id}>
-                <span className="hw-num hw-other-port">:{o.port}</span>
-                <span className="hw-other-proc">{o.identity.process ?? 'unknown process'}</span>
-                <span className="hw-other-dir">{o.identity.projectDir ?? o.identity.cwd ? tildify((o.identity.projectDir ?? o.identity.cwd)!, home) : ''}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
+        <button type="button" className="hw-tray-card hw-tray-fold" aria-expanded="false" onClick={() => setOpen(true)}>
+          <span className="hw-tray-fold-text">
+            {summary || g.blurb}
+            <span className="hw-tray-fold-n">
+              {' '}
+              · {g.rows.length} port{g.rows.length === 1 ? '' : 's'}
+            </span>
+          </span>
+          <ChevronIcon />
+        </button>
       )}
     </section>
   );
 }
 
-function ObservedRow({ o, home, takenSlugs, notify }: { o: ObservedListener; home: string | null; takenSlugs: Set<string>; notify: ObservedProps['notify'] }) {
+function Set({ s, ctx }: { s: TraySet; ctx: Ctx }) {
+  const [open, setOpen] = useOpen(s.key, s.folded);
+  const labels = rowLabels(s, (p) => tildify(p, ctx.home));
+  if (!open)
+    return (
+      <button type="button" className="hw-tray-fold hw-tray-fold--set" aria-expanded="false" onClick={() => setOpen(true)}>
+        <span className="hw-tray-fold-text">
+          <strong>{s.title}</strong>
+          <span className="hw-tray-fold-n">
+            {s.detail ? ` · ${s.detail}` : ''} · {s.rows.length} port{s.rows.length === 1 ? '' : 's'}
+          </span>
+        </span>
+        <ChevronIcon />
+      </button>
+    );
+  return (
+    <div className={`hw-tray-set${s.title ? ' has-title' : ''}`}>
+      {s.title && (
+        <div className="hw-tray-set-head">
+          <strong>{s.title}</strong>
+          {s.detail && <span className={s.detail.startsWith('@ ') ? 'hw-tray-set-detail hw-tray-mono' : 'hw-tray-set-detail'}>{s.detail}</span>}
+          {s.rows.length > 1 && <span>{s.rows.length} running</span>}
+          {s.folded && (
+            <button type="button" className="hw-tray-set-hide" aria-expanded="true" onClick={() => setOpen(false)}>
+              Hide
+            </button>
+          )}
+        </div>
+      )}
+      <ul className="hw-tray-rows">
+        {s.rows.map((o) => (
+          <ObservedRow key={o.id} o={o} label={labels.get(o.id)!} ctx={ctx} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The row's tile: the page's favicon when it has one, else a glyph for what it is. */
+function RowIcon({ o }: { o: ObservedListener }) {
+  const [broken, setBroken] = useState(false);
+  let icon: string | null = null;
+  try {
+    icon = o.favicon && !broken ? new URL(o.favicon, o.url).toString() : null;
+  } catch {
+    icon = null;
+  }
+  const via = o.identity.via;
+  const glyph =
+    o.role === 'project' ? <BranchIcon /> : o.role === 'app' ? <WindowIcon /> : o.role === 'internal' ? <CogIcon /> : o.role === 'cluster' ? <WheelIcon /> : via?.tool.id === 'ssh' ? <TunnelIcon /> : o.role === 'forwarded' ? <BoxIcon /> : <QuestionIcon />;
+  return (
+    <span className={`hw-tray-tile hw-tray-tile--${o.answer.kind}`} aria-hidden="true">
+      {icon ? <img src={icon} alt="" onError={() => setBroken(true)} /> : glyph}
+    </span>
+  );
+}
+
+/** What it answers: a mark (● page, ◆ API, ■ sign-in, — redirect, ○ nothing or not HTTP), the words, HTTPS. */
+function Answer({ o }: { o: ObservedListener }) {
+  const a = o.answer;
+  return (
+    <span className={`hw-tray-answer hw-tray-answer--${a.kind}`} title={a.status ? `GET / answered HTTP ${a.status}${a.tls ? ' over HTTPS' : ''}` : 'It took the connection but didn’t answer HTTP'}>
+      <span className="hw-tray-answer-mark" aria-hidden="true" />
+      {answerText(a)}
+      {a.tls && a.kind !== 'not-http' ? <span className="hw-tray-answer-tls">HTTPS</span> : null}
+    </span>
+  );
+}
+
+function ObservedRow({ o, label, ctx }: { o: ObservedListener; label: RowLabel; ctx: Ctx }) {
   const [mode, setMode] = useState<'idle' | 'claim' | 'ignore'>('idle');
   const id = o.identity;
-  const dir = id.projectDir ?? id.cwd;
-  const name = listenerName(o);
   const since = id.startedAt ?? o.firstSeen;
   const age = since ? duration(Date.now() - Date.parse(since)) : null;
-
+  // the supervisor is worth saying for what you run, not for a tool's or a desktop app's own ports
+  const supervisor = id.supervisor && (o.role === 'app' || o.role === 'project' || o.role === 'other') ? id.supervisor : null;
   return (
-    <li className={`hw-observed-row${mode !== 'idle' ? ' is-open' : ''}`}>
-      <div className="hw-observed-main">
-        <span className="hw-plate hw-observed-plate">{o.port}</span>
-        <div className="hw-observed-text">
-          <div className="hw-observed-name">
-            <strong>{name}</strong>
-            {dir ? (
-              <span className="hw-observed-dir">
-                {tildify(dir, home)}
-                {id.branch ? <span className="hw-observed-branch"> @ {id.branch}</span> : null}
-              </span>
-            ) : id.command ? (
-              // another user's or an elevated process (or, on Windows, a 32-bit one): its directory can't be read
-              <span className="hw-observed-dir" title={`Hallway couldn't read this process's working directory, so this is its command line:\n${id.command}`}>
-                {shorten(id.command, 72)}
-              </span>
-            ) : null}
+    <li className={`hw-tray-row${mode !== 'idle' ? ' is-open' : ''}${o.answer.kind === 'not-http' ? ' is-quiet' : ''}`}>
+      <div className="hw-tray-main">
+        <RowIcon o={o} />
+        <div className="hw-tray-text">
+          <div className="hw-tray-name">
+            <strong className={label.mono ? 'hw-tray-mono' : undefined} title={label.title}>
+              {label.title}
+            </strong>
+            <span className="hw-tray-port">:{o.port}</span>
           </div>
-          <div className="hw-observed-meta">
+          <div className="hw-tray-meta">
+            <Answer o={o} />
+            {label.detail && (
+              <span className="hw-tray-detail" title={label.detail}>
+                {label.detail}
+              </span>
+            )}
             {age && <span>up {age}</span>}
-            {id.framework && <span>{id.framework}</span>}
-            {o.title && o.title !== name && <span className="hw-observed-title">“{o.title}”</span>}
-            {id.supervisor && <span className="hw-supervisor" title="The service manager that keeps it running">{supervisedBy(id.supervisor)}</span>}
+            {supervisor && (
+              <span className="hw-supervisor" title="The service manager that keeps it running">
+                {supervisedBy(supervisor)}
+              </span>
+            )}
             {id.orphaned && <TipBadge text="orphaned" tip={ORPHANED_HINT} />}
-            {id.exposed && <TipBadge text="exposed" tone="warn" tip={exposedHint(id.bindAddress, o.port)} />}
+            {id.exposed && <TipBadge text={exposureWords(ctx.machine).label} tone="warn" tip={exposedHint(id.bindAddress, o.port)} />}
           </div>
         </div>
-        <div className="hw-observed-actions">
-          <button type="button" className="hw-btn hw-btn--primary" aria-expanded={mode === 'claim'} onClick={() => setMode(mode === 'claim' ? 'idle' : 'claim')}>
+        <div className="hw-tray-actions">
+          {openable(o) && (
+            <a className="hw-btn hw-tray-open" href={o.url} data-nav="observed" data-url={o.url} target="_blank" rel="noreferrer" aria-label={`Open ${label.title} on port ${o.port}`}>
+              Open <ExternalIcon />
+            </a>
+          )}
+          <button type="button" className="hw-btn hw-btn--quiet hw-tray-more" aria-expanded={mode === 'claim'} onClick={() => setMode(mode === 'claim' ? 'idle' : 'claim')}>
             Claim
           </button>
           <div className="hw-menu-wrap">
-            <button type="button" className="hw-btn" aria-haspopup="menu" aria-expanded={mode === 'ignore'} onClick={() => setMode(mode === 'ignore' ? 'idle' : 'ignore')}>
+            <button type="button" className="hw-btn hw-btn--quiet hw-tray-more" aria-haspopup="menu" aria-expanded={mode === 'ignore'} onClick={() => setMode(mode === 'ignore' ? 'idle' : 'ignore')}>
               Ignore <span aria-hidden="true">▾</span>
             </button>
-            {mode === 'ignore' && <IgnoreMenu o={o} home={home} onDone={() => setMode('idle')} notify={notify} />}
+            {mode === 'ignore' && <IgnoreMenu o={o} home={ctx.home} onDone={() => setMode('idle')} notify={ctx.notify} />}
           </div>
-          <a className="hw-btn hw-btn--quiet" href={openUrl(o)} data-nav="observed" data-url={openUrl(o)} target="_blank" rel="noreferrer" aria-label={`Open ${name} on port ${o.port}`}>
-            Open <ExternalIcon />
-          </a>
         </div>
       </div>
-      {mode === 'claim' && <ClaimForm o={o} takenSlugs={takenSlugs} onDone={() => setMode('idle')} notify={notify} />}
+      {mode === 'claim' && <ClaimForm o={o} takenSlugs={ctx.takenSlugs} onDone={() => setMode('idle')} notify={ctx.notify} />}
     </li>
   );
 }
@@ -151,7 +307,7 @@ function IgnoreMenu({ o, home, onDone, notify }: { o: ObservedListener; home: st
       <button type="button" role="menuitem" disabled={!o.identity.process} onClick={() => go('process', `every ${o.identity.process} process`)}>
         This process <span className="hw-num">{o.identity.process ?? 'unknown'}</span>
       </button>
-      <button type="button" role="menuitem" disabled={!dir} onClick={() => go('dir', tildify(dir!, home))}>
+      <button type="button" role="menuitem" disabled={!dir || dir === '/'} onClick={() => go('dir', tildify(dir!, home))}>
         This directory <span className="hw-num">{dir ? tildify(dir, home) : 'unknown'}</span>
       </button>
     </div>
@@ -165,7 +321,7 @@ const EXPECTED: { v: Expected; label: string; hint: string }[] = [
 ];
 
 function ClaimForm({ o, takenSlugs, onDone, notify }: { o: ObservedListener; takenSlugs: Set<string>; onDone(): void; notify: ObservedProps['notify'] }) {
-  const initialName = o.identity.name ?? o.identity.displayName ?? o.title ?? '';
+  const initialName = o.name;
   const [slug, setSlug] = useState(o.suggestedSlug ?? (slugify(initialName) || `port-${o.port}`));
   const [name, setName] = useState(initialName);
   const [expected, setExpected] = useState<Expected>('adhoc');
