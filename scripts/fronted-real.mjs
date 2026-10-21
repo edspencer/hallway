@@ -381,15 +381,14 @@ try {
   {
     // from nothing, so that none of our own forwarders hold 80 when the squatter binds it
     must('teardown', '--yes');
-    // On macOS as the user (visible to lsof, so named with its pid), on loopback: the runner refuses a user's wildcard
-    // bind on 443 (EADDRINUSE with nothing listening on 127.0.0.1:443; perhaps another user's socket on a specific
-    // address). On Linux every address, like Rancher Desktop's Traefik, as root: someone else's, found by its socket
+    // every address, like Rancher Desktop's Traefik, as root: someone else's, found by its socket or (macOS, where lsof
+    // can't see root's) by connecting. As the user, macOS's runner refuses both 127.0.0.1:443 (EACCES) and 0.0.0.0:443
+    // (EADDRINUSE with nothing listening), though a real Mac let Rancher Desktop's ssh have *:443
     const pidFile = path.join(tmp, 'squatter2.pid');
     // launchd lets go of the forwarders' sockets a moment after teardown: wait for that, and retry while it does
     await until('443 and 80 to be free after teardown', async () => sh('nc', ['-z', '127.0.0.1', '443']).code !== 0 && sh('nc', ['-z', '127.0.0.1', '80']).code !== 0, 15000);
-    const code = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); const net = require('node:net'); const end = Date.now() + 20000; const hold = (p) => net.createServer(s => s.end()).on('error', (e) => { if (e.code !== 'EADDRINUSE' || Date.now() > end) throw e; setTimeout(() => hold(p), 500); }).listen(p, ${JSON.stringify(darwin ? '127.0.0.1' : '0.0.0.0')}); for (const p of [443, 80]) hold(p)`;
-    if (darwin) process.stdout.write(sh('sudo', ['-n', 'lsof', '-nP', '-iTCP:443', '-iTCP:80']).out.replace(/^/gm, '    lsof| '));
-    const squatter = darwin ? spawn(process.execPath, ['-e', code], { stdio: 'inherit' }) : spawn('sudo', ['-n', process.execPath, '-e', code], { stdio: 'inherit' });
+    const code = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); const net = require('node:net'); const end = Date.now() + 20000; const hold = (p) => net.createServer(s => s.end()).on('error', (e) => { if (e.code !== 'EADDRINUSE' || Date.now() > end) throw e; setTimeout(() => hold(p), 500); }).listen(p, '0.0.0.0'); for (const p of [443, 80]) hold(p)`;
+    const squatter = spawn('sudo', ['-n', process.execPath, '-e', code], { stdio: 'inherit' });
     await until('the squatter on 443 and 80', async () => sh('nc', ['-z', '127.0.0.1', '443']).code === 0 && sh('nc', ['-z', '127.0.0.1', '80']).code === 0, 25000);
     await sleep(1500);
     try {
@@ -397,10 +396,9 @@ try {
         const before = fs.readFileSync(path.join(data, 'config.yaml'), 'utf8');
         const r = hw('setup', '--yes', '--trust', 'system');
         assert.notEqual(r.code, 0);
-        assert.match(r.out, darwin ? /Ports 443 and 80 are taken by node: node \(pid \d+: .*\), listening on 127\.0\.0\.1\. Hallway won't fight it for the ports\./ : /Ports? 443( and 80)? (is|are) taken by a process you can't see/);
+        assert.match(r.out, /Ports? 443( and 80)? (is|are) taken by a process you can't see/);
         assert.match(r.out, /Or leave it running and give Hallway's links Caddy's own port, 4443: `hallway setup --trust system --port 4443`/);
         assert.match(r.out, /Setup stopped before doing anything/);
-        if (darwin) assert.equal((r.out.match(/Hallway won't fight it/g) ?? []).length, 1, 'one message for both ports');
         assert.equal(fs.readFileSync(path.join(data, 'config.yaml'), 'utf8'), before, 'config.yaml unchanged');
       });
       await check('--port 4443: links carry the port, nothing on 443/80 of ours, doctor says which port', async () => {
@@ -432,8 +430,7 @@ try {
         assert.match(fs.readFileSync(path.join(data, 'config.yaml'), 'utf8'), /publicPort: 4443/);
       });
     } finally {
-      if (darwin) squatter.kill();
-      else sh('sudo', ['-n', 'kill', fs.readFileSync(pidFile, 'utf8').trim()]);
+      sh('sudo', ['-n', 'kill', fs.readFileSync(pidFile, 'utf8').trim()]);
       squatter.kill();
     }
     await until('443 and 80 to be free again', async () => sh('nc', ['-z', '127.0.0.1', '443']).code !== 0, 10000);

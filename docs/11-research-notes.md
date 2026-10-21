@@ -938,5 +938,10 @@ Read 2026-10-14. Relevant internals:
   Newer Rancher Desktop releases may forward with `limactl hostagent` instead of `ssh`; both match `rancher-desktop`
   in the path. **Unverified on macOS:** the others' real output.
 - **Links on Caddy's port** (`--port 4443`) are the same configuration Linux's User certificate has run in CI since
-  D65; on macOS only the forwarders are skipped. CI's macOS fronted job now holds 443 with a dummy listener, checks
-  the message, then runs `--port 4443` and back. Unverified in Safari on a real Mac.
+  D65; on macOS only the forwarders are skipped. CI's fronted jobs now hold 443 and 80 with a dummy listener (root's,
+  on every address), check the message, then run `--port 4443` and back. Unverified in Safari on a real Mac.
+- **GitHub's macOS runner (macos-latest, 2026-10-21) won't let a user hold 443:** `listen(443, '127.0.0.1')` is EACCES
+  and `listen(443, '0.0.0.0')` EADDRINUSE with nothing listening there (lsof as root shows only outbound connections).
+  Yet Rancher Desktop's ssh held `*:443` as the user on the author's Mac, so this differs between machines;
+  unexplained. The CI squatter runs as root instead, so the user-visible, named-tool path is covered by the fixtures,
+  not by CI.

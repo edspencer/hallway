@@ -1721,5 +1721,5 @@ these (Rancher Desktop, Docker Desktop publishing 80/443, Colima, OrbStack, Podm
     disagree with it.
 - **Unverified on a real Mac:** the whole of this on the author's managed Mac (Rancher Desktop's real `lsof`/`ps`
   output beyond the one message he saw; `docker ps` from the LaunchAgent daemon's environment; `--port 4443` in Safari
-  and Chrome with the User certificate; Move to port 443 after turning Traefik off). CI's macOS job runs setup against
-  a dummy listener on 443 and then `--port 4443` for real.
+  and Chrome with the User certificate; Move to port 443 after turning Traefik off). CI's fronted jobs run setup against
+  a root listener on every address's 443 and 80, then `--port 4443` for real, then back.
