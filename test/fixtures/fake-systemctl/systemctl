@@ -89,8 +89,10 @@ async function supervise(unit) {
     fs.mkdirSync(path.dirname(u.out), { recursive: true });
     const out = fs.openSync(u.out, 'a');
     const err = fs.openSync(u.err, 'a');
-    // the unit's environment only, as systemd gives it (env -i)
-    const child = spawn(u.argv[0], u.argv.slice(1), { cwd: u.cwd, env: u.env, stdio: ['ignore', out, err], detached: true });
+    // the unit's environment, plus what systemd's user manager gives every unit (HOME, USER, LOGNAME): without HOME, a
+    // job's os.homedir() falls back to the passwd entry, which on a test box is somebody's real home
+    const manager = Object.fromEntries(['HOME', 'USER', 'LOGNAME'].filter((k) => env[k] !== undefined).map((k) => [k, env[k]]));
+    const child = spawn(u.argv[0], u.argv.slice(1), { cwd: u.cwd, env: { ...manager, ...u.env }, stdio: ['ignore', out, err], detached: true });
     const started = await new Promise((res) => {
       child.once('spawn', () => res(true));
       child.once('error', (e) => {

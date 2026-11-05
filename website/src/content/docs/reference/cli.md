@@ -8,6 +8,8 @@ The binary is `hallway`. (A short alias, `hw`, has been proposed but not decided
 
 **Exit codes:** `0` success, `1` error, `2` usage error (the usage is printed). The daemon's `service` commands add
 `3`, not running, and `4`, not installed: the codes `systemctl status` uses, shared by the author's other local tools.
+`hallway update` adds `5`, this install can't update itself (it prints what to run instead), `6`, the update failed
+and was rolled back, and `7`, the rollback failed too; `75` means Hallway is busy.
 
 Every command takes **`--data-dir <dir>`**, the [data home](/reference/data-home/) for that run (`$HALLWAY_HOME` does
 the same; default `~/.hallway`).
@@ -20,7 +22,8 @@ Each command is marked with the milestone it belongs to. Everything on this page
 | --- | --- | --- |
 | `hallway` / `hallway serve [--port N] [--quiet]` | Run the daemon in the foreground (the default command): the dashboard and API on `http://localhost:<port>`, 127.0.0.1 only. The port is `--port`, else `$PORT`, else `port:` in `config.yaml`, else 4255. Its first line is always `Hallway <version>: <url>`, then the data home. On a terminal a banner comes first (on stderr), and it says whether local domains are on (and how to turn them on) and, from `npx`, how to keep it running; `--quiet` (`-q`) prints just the first line. If Hallway is already running on the port, it says where and exits 0. | <span class="ms ms--v0">v0</span> |
 | `hallway open` | Open the dashboard in your browser (`https://hallway.localhost`, or your domain's, in fronted mode). | <span class="ms ms--v0">v0</span> |
-| `hallway service install [--json]` | Generate and load the daemon's service, so it runs at every login: `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux, the scheduled task `\hallway.daemon` on Windows (best effort; starts at logon). Idempotent. | <span class="ms ms--v0">v0</span> |
+| `hallway service install [--port <n>] [--json]` | Generate and load the daemon's service, so it runs at every login: `~/Library/LaunchAgents/hallway.daemon.plist` on macOS, `~/.config/systemd/user/hallway-daemon.service` on Linux, the scheduled task `\hallway.daemon` on Windows (best effort; starts at logon). Idempotent: run over a running daemon, it restarts it. `--port` sets `port:` in `config.yaml`. | <span class="ms ms--v0">v0</span> |
+| `hallway service install --refresh` | Rewrite the installed service in this version's format, keeping its data home, and restart it. Exits 4 if it isn't installed. `hallway update` runs it with the new version. | <span class="ms ms--shipped">v2</span> |
 | `hallway service start [--json]` | Start the installed service and wait until the dashboard answers; if it doesn't, print the last 20 lines of its logs. | <span class="ms ms--shipped">v2</span> |
 | `hallway service stop [--force] [--json]` | Stop it until `hallway service start`, or your next login or boot, whichever comes first. It isn't disabled: use `hallway service uninstall` to keep it off. While Hallway is busy (see `hallway busy`) it refuses and exits 75; `--force` stops it anyway. | <span class="ms ms--shipped">v2</span> |
 | `hallway service restart [--force] [--json]` | Restart the daemon's service (its definition rewritten first if it changed). Refuses while Hallway is busy, as `stop` does. | <span class="ms ms--v0">v0</span> |
@@ -28,6 +31,7 @@ Each command is marked with the milestone it belongs to. Everything on this page
 | `hallway service logs [-n N] [-f]` | The daemon's logs: the last 50 lines, or `N`; `-f` keeps printing. The same as `hallway logs daemon`. | <span class="ms ms--shipped">v2</span> |
 | `hallway service uninstall [--json]` | Stop it and remove it. The data home and the logs stay. | <span class="ms ms--v0">v0</span> |
 | `hallway busy [--json]` | Whether the running daemon is busy: setting up local domains from the dashboard, or starting, stopping or restarting an app. Exits 0 if not, 75 if it is, 3 if it isn't running. For scripts that restart Hallway. | <span class="ms ms--shipped">v2</span> |
+| `hallway update [--check] [--to <version\|tag>] [--yes] [--force] [--json]` | Install the newest Hallway with the package manager it came from, restart the daemon on it, and roll back if it doesn't answer. `--check` only says what's available. Exits 5 when this install can't update itself (it prints what to run), 6 when it rolled back, 7 when the rollback failed too, 75 when Hallway is busy. See [Updating](/getting-started/installation/#updating). | <span class="ms ms--shipped">v2</span> |
 | `hallway --version`, `hallway --help` | | <span class="ms ms--v0">v0</span> |
 
 ## Apps and discovery
@@ -96,6 +100,6 @@ See [Thumbnails](/concepts/thumbnails/).
 
 | Command | Description | |
 | --- | --- | --- |
-| `hallway doctor [--json]` | Check the daemon, the data home, the services and fronted mode, with suggested fixes. Read-only. See [doctor](/networking/setup-and-doctor/#hallway-doctor). | <span class="ms ms--v0">v0</span>; fronted-mode checks <span class="ms ms--shipped">v1</span> |
+| `hallway doctor [--json] [--offline]` | Check this install (Node, how Hallway was installed, whether a newer version is out: `--offline` skips that), the daemon, the data home, the services and fronted mode, with suggested fixes. Read-only. See [doctor](/networking/setup-and-doctor/#hallway-doctor). | <span class="ms ms--v0">v0</span>; fronted-mode checks <span class="ms ms--shipped">v1</span> |
 
 Environment variables are on [their own page](/reference/environment/).

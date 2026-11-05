@@ -1963,3 +1963,64 @@ source and version; the only local change is `.js` import extensions.
   for people, and stderr is theirs too); growing `state/daemon.json` instead of the contract's file (a second
   location for the same facts, and the reference code reads `<home>/runtime.json`); counting the CLI's own operations
   through a lock file (a daemon restart doesn't cut them short, which is what busy is for).
+
+### D76 — `hallway update`, `service install --refresh` and `--port`, a reinstall that restarts, and doctor's contract checks (2026-11-05; amends D70, D74)
+
+The CLI contract's `update` and `doctor` ([edspencer/cli-contract](https://github.com/edspencer/cli-contract)
+`SPEC.md` 0.2, §1, §3, §5, §6 and §7; D74 has the background). The reference's eight `update` files (`semver.ts`,
+`install-method.ts`, `registry.ts`, `lock.ts`, `package-manager.ts`, `update-check.ts`, `health.ts`, `update.ts`)
+are copied into `server/contract/` beside D75's, each with its header; the only local change is `.js` import
+extensions. Their tests are ported too (`test/contract-*.test.ts`). Hallway's own part is `server/commands/update.ts`:
+the reference's `UpdateProduct`, its hooks written against Hallway's service code.
+
+- **`hallway update [--check] [--to <version|tag>] [--yes] [--force] [--json]`**, with `upgrade` a hidden alias, runs
+  the reference's §5 sequence unchanged: the lock (`<home>/update.lock`), how it was installed (§6: a checkout, npx's
+  cache, `HALLWAY_UPDATE_HINT` or a project's dependency exit 5 with the command to run instead), the registry, the
+  writability check, the busy check (D75), the question (`--yes` without a terminal), `npm cache add` for both
+  versions, stop, install, the new CLI's `service install --refresh`, the health check for the target version, and the
+  rollback (6, or 7 when that fails too). `--check` and the cache it writes, `<home>/update-check.json`, are what
+  `service status` repeats. There's no Docker image, so no `HALLWAY_IN_DOCKER`.
+- **The hooks are children, not calls.** The reference's `stop` and `refresh` hooks are synchronous and Hallway's
+  service manager isn't, so they run Hallway's CLI, as the reference's own fixture does: `stop` is `hallway update-jobs
+  pause` (this version's CLI), `refresh` is `<new cli> service install --refresh` and then `<new cli> update-jobs
+  resume`. `update-jobs` is internal, like `supervise` and `forward`: not in `--help`. Rejected: changing the
+  reference's hooks to async (a local change every later copy would have to carry, for one tool), and running the
+  service manager's commands synchronously from `update` (a second implementation of each manager's stop).
+- **What runs from the package is stopped before npm runs** (§7). `pause` stops the daemon's job without disabling it
+  and, **on Windows, every running job's supervisor**: each scheduled task runs `node <package>/cli.js supervise`
+  (D60), and Windows can't replace a file that's loaded. It records what it stopped in `state/update-paused.json`.
+  `resume`, run by the new CLI (or, on a rollback, the old one again), rewrites every app's job in its own format
+  (`regenerate`: running ones whose definition changed are restarted onto it) and starts the paused ones. On macOS and
+  Linux an app's job runs the app, not Hallway, so apps keep running unless their job changes; a macOS forwarder (D65)
+  runs Hallway's code but is restarted onto the new version by `service install --refresh` (D70). An app that won't
+  come back is reported, and doesn't roll Hallway back. **`update` says so up front**, before its question: which
+  apps it will stop and start (Windows), or that apps whose jobs change are restarted.
+- **`service install --refresh`** re-renders the daemon's job in this CLI's format, from what the job records, and
+  exits 4 when nothing is installed. The job records only its data home (`HALLWAY_HOME`, when it isn't the default);
+  so `service install --refresh` and `update`, without `--data-dir`, use the data home the installed job names, not the
+  invoking shell's `$HALLWAY_HOME` (`useRecordedHome`, `recordedDataHome`; each manager gained `readEnv`). The port is
+  config.yaml's, in that home (D44).
+- **`service install --port <n>`** writes `port:` to config.yaml, through the store, where the daemon and the CLI both
+  read it. The conformance runner installs that way (`service install --port {port}`). Rejected: putting `--port` in
+  the job's command line (config.yaml would disagree with the job, and the CLI looks on config.yaml's port).
+- **A reinstall over a running daemon restarts it, whatever its version** (§1: replace a running service, never leave
+  it serving; `systemctl --user enable --now` leaves an active unit alone). **This amends D70**, which restarted it only
+  when another version was answering: the case that matters is `update`'s rollback, where the refresh runs while the
+  failed version may still be up. A first install still starts it once, not twice (systemd's start limit).
+- **`service status --json` carries `update`** (`{ latest, updateAvailable, checkedAt }`, from the cache, only when it
+  was written for this version and is under a week old), and leaves it out, never null, otherwise; the prose repeats
+  the notice on stderr. `status` never asks the registry.
+- **`doctor` gains the contract's checks**: `node-engines` (this Node against `engines`), `install-method` (§6; npx's
+  cache is a warning), `unit` (the daemon's job runs this install of Hallway, not another), `running-version` (the
+  daemon answering is the version its job runs), `port` (the old `daemon` failure when something else holds the
+  port), and `update`: it asks the registry, says so on stderr when a newer version is out, and writes the same cache
+  (but never creates the data home: doctor stays read-only). `--offline` skips it, and a registry that can't be
+  reached is a warning, not a failure. **`doctor --json` now matches the contract's schema**: it carries `version`,
+  and an `info` line is `"status": "pass"` with `"info": true` (the schema has no `info`; the dashboard keeps it).
+- **Scoped flags** (§1): `--refresh`, `--check`, `--to`, `--offline` exit 2 on any command that can't act on them, as
+  every other flag already did (`check()` in `server/args.ts`).
+- **The conformance runner goes to ^0.2.0 with every update check on.** Nine run in each CI test job; `update-service`
+  and `update-rollback`, which need the real service manager, run in the services job on all three OSes
+  (`CI_REAL_SERVICE=1`). Locally they pass against `test/fixtures/fake-systemctl`, which now gives units `HOME`, `USER`
+  and `LOGNAME` as systemd's user manager does: without `HOME`, the daemon's `os.homedir()` fell back to the passwd
+  entry, and on a test box that's somebody's real home.

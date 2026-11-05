@@ -58,6 +58,17 @@ export function unitPath(text: string): string | null {
   return m ? m[1].replace(/\\(.)/g, (_, c) => (c === 'n' ? '\n' : c === 't' ? '\t' : c)).replace(/%%/g, '%') : null;
 }
 
+/** Every `Environment="K=V"` an existing unit sets. */
+export function unitEnv(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const m of text.matchAll(/^Environment="((?:[^"\\]|\\.)*)"$/gm)) {
+    const kv = m[1].replace(/\\(.)/g, (_, c) => (c === 'n' ? '\n' : c === 't' ? '\t' : c)).replace(/%%/g, '%');
+    const i = kv.indexOf('=');
+    if (i > 0) out[kv.slice(0, i)] = kv.slice(i + 1);
+  }
+  return out;
+}
+
 /** `systemctl --user show -p …` output: KEY=VALUE lines. */
 export function parseShow(text: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -121,6 +132,7 @@ export function systemdManager({ dir, run = defaultRunner }: SystemdOptions): Se
     file,
     render: renderUnit,
     readPath: unitPath,
+    readEnv: unitEnv,
     async write(spec) {
       const changed = writeIfChanged(file(spec.label), renderUnit(spec));
       if (changed) await systemctl(['daemon-reload']);

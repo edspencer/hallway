@@ -36,6 +36,20 @@ export interface ServiceManifest {
 
 export class ServiceError extends Error {}
 
+/**
+ * The data home the daemon's installed job records: `{ home }` with its `$HALLWAY_HOME`, or null when it sets none
+ * (the default home). Undefined when there's no job, or it can't be read.
+ */
+export function recordedDataHome(manager: ServiceManager): { home: string | null } | undefined {
+  let text: string;
+  try {
+    text = fs.readFileSync(manager.file(DAEMON_LABEL), 'utf8');
+  } catch {
+    return undefined;
+  }
+  return { home: manager.readEnv(text).HALLWAY_HOME || null };
+}
+
 /** The daemon's job doesn't exist: `service start`, `stop`, `restart` and `logs` exit 4 for it (the CLI contract). */
 export class NotInstalledError extends ServiceError {
   constructor() {
@@ -431,5 +445,68 @@ export class Services {
     const changed = await this.write(spec);
     this.writeManifest(spec);
     await this.manager.restart(spec, { reload: changed });
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // `hallway update` (D76): what runs from the package is stopped before npm replaces it, and started again after
+  // ---------------------------------------------------------------------------------------------------------------
+
+  /** Where `pauseForUpdate` records what it stopped, for `resumeAfterUpdate` (run by the new version's CLI). */
+  pausedFile() {
+    return path.join(dataPaths(this.store.home).state, 'update-paused.json');
+  }
+
+  /**
+   * The jobs other than the daemon's that run Hallway's own code and are running now: on Windows every job, since each
+   * task runs `node <package>/cli.js supervise` (D60), and a loaded file can't be replaced there. Elsewhere none: an
+   * app's job runs the app, and a macOS forwarder is restarted onto the new code by `service install --refresh`.
+   */
+  async jobsToPause(): Promise<string[]> {
+    if (this.manager.kind !== 'schtasks') return [];
+    const out: string[] = [];
+    for (const label of this.manager.list()) if (label !== DAEMON_LABEL && (await this.status(label)).running) out.push(label);
+    return out;
+  }
+
+  /** Stop the daemon's job (not disabled) and `jobsToPause()`'s, and record which. */
+  async pauseForUpdate(): Promise<{ daemon: boolean; paused: string[] }> {
+    const paused = await this.jobsToPause();
+    const st = await this.status(DAEMON_LABEL);
+    if (st.installed) await this.manager.stop(DAEMON_LABEL, { disable: false });
+    for (const label of paused) await this.manager.stop(label, { disable: false });
+    const f = this.pausedFile();
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify({ paused, at: this.now().toISOString() }) + '\n');
+    return { daemon: st.installed, paused };
+  }
+
+  /**
+   * After the install (or the rollback): every job rewritten in this version's format, the running ones whose
+   * definition changed restarted onto it (`regenerate`), and the ones `pauseForUpdate` stopped started again. The
+   * daemon's own job is `service install --refresh`'s, which runs first.
+   */
+  async resumeAfterUpdate(): Promise<{ regenerated: Awaited<ReturnType<Services['regenerate']>>; started: string[]; errors: string[] }> {
+    let paused: string[] = [];
+    try {
+      paused = (JSON.parse(fs.readFileSync(this.pausedFile(), 'utf8')) as { paused?: string[] }).paused ?? [];
+    } catch {
+      /* nothing was paused */
+    }
+    // the daemon is this version now, and its job unchanged since the refresh: regenerate leaves it alone
+    const regenerated = (await this.regenerate(undefined, { daemonVersion: VERSION })).filter((r) => r.label !== DAEMON_LABEL);
+    const errors = regenerated.filter((r) => r.error).map((r) => `${r.label}: ${r.error}`);
+    const started: string[] = [];
+    for (const label of paused) {
+      const slug = slugOfLabel(label);
+      try {
+        if (!slug) throw new ServiceError('not an app job');
+        await this.manager.start(this.appSpec(slug));
+        started.push(label);
+      } catch (e) {
+        errors.push(`${label}: couldn't start it again: ${(e as Error).message}`);
+      }
+    }
+    fs.rmSync(this.pausedFile(), { force: true });
+    return { regenerated, started, errors };
   }
 }

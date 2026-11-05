@@ -10,6 +10,7 @@ import { appLogs, followFiles, formatLogs } from '../services/logs.js';
 import { isListening, waitForPort } from '../services/ports.js';
 import { runApp } from '../services/run.js';
 import { appUrl } from '../views.js';
+import { readUpdateCheck, updateNotice, updateSummary } from '../contract/update-check.js';
 import { refuseIfBusy } from './busy.js';
 import { type Ctx, json, locateDaemon, show, table } from './context.js';
 
@@ -209,6 +210,7 @@ async function daemonReport(ctx: Ctx) {
   const manifest = st.installed ? svc.readManifest(DAEMON_LABEL) : null;
   const installedVersion = st.installed ? jobVersion(manifest?.program) : null;
   const logs = logFiles(ctx.home, 'daemon');
+  const update = updateSummary(ctx.home, { currentVersion: VERSION });
   const warnings: string[] = [];
   if (manifest?.node && !fs.existsSync(manifest.node.path))
     warnings.push(`the Node the service runs (${show(manifest.node.path)}) has gone; \`hallway service regenerate\` points it at this one`);
@@ -234,6 +236,8 @@ async function daemonReport(ctx: Ctx) {
     log: logs.out,
     logs,
     warnings,
+    // what the last `update --check` or `doctor` found, never asked afresh; left out, not null, with nothing to say
+    ...(update ? { update } : {}),
   };
 }
 
@@ -277,22 +281,34 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
   };
   switch (sub) {
     case 'install': {
-      check('service install', flags, ['json'], args, 0, rest);
+      check('service install', flags, ['json', 'port', 'refresh'], args, 0, rest);
       const svc = services();
       svc.refuseTransient(DAEMON_LABEL);
-      const port = svc.store.currentConfig().port;
       const before = await svc.status(DAEMON_LABEL);
-      if (!before.running && (await isListening(port)))
-        throw new Error(`port ${port} is already in use (is \`hallway serve\` running in a terminal?). Stop that first, or set another port: in config.yaml.`);
-      // after `npm i -g hallway@latest` the job file is usually unchanged (same path), so the daemon started by the old
-      // version would keep running its code: restart it when it isn't this version (D70). What it says beats its manifest.
+      // --refresh re-renders the job that's installed, in this CLI's format: what `update` hands over through (D76). The
+      // data home it records was adopted before this ran (server/cli.ts), and the port is config.yaml's, in that home.
+      if (flags.refresh && !before.installed) {
+        ctx.err(`hallway: Hallway's daemon isn't installed as a service, so there's nothing to refresh; install it with \`hallway service install\`.\n`);
+        if (flags.json) ctx.out(json({ ok: false, action: 'install', error: 'not installed', ...(await daemonReport(ctx)) }));
+        return NOT_INSTALLED;
+      }
+      const given = portFlag(flags.port);
+      const was = svc.store.currentConfig().port;
+      const port = given ?? was;
+      if (!(before.running && port === was) && (await isListening(port)))
+        throw new Error(`port ${port} is already in use (is \`hallway serve\` running in a terminal?). Stop that first, or ${given ? 'pick another --port' : 'set another port: in config.yaml'}.`);
+      // the daemon's port lives in config.yaml (D44), where the CLI looks for it too
+      if (given !== undefined && given !== was) await svc.store.patchConfig({ port: given });
+      // a daemon that's running is replaced, never left serving (the CLI contract's §1, D76): after `npm i -g
+      // hallway@latest` the job file is usually unchanged (same path), and `systemctl --user enable --now` leaves an
+      // active unit alone. Which version it was, for the message: what it says beats its manifest (D70).
       const running = before.running ? await ctx.daemon() : null;
       const from = running ? (running.version !== VERSION ? running.version : null) : before.running ? svc.staleVersion(DAEMON_LABEL) : null;
-      const r = await svc.installDaemon({ restart: !!from });
+      const r = await svc.installDaemon({ restart: before.running });
       const forwarders = await svc.restartStaleForwarders();
       const w = await waitForDaemon(ctx, port);
-      say(`Installed Hallway's daemon as a ${svc.manager.noun}: ${show(r.file)}\n`);
-      if (r.restarted) say(from ? `Restarted the daemon: ${from} → ${VERSION}.\n` : 'Restarted the daemon onto its new definition.\n');
+      say(`${flags.refresh ? 'Refreshed' : 'Installed'} Hallway's daemon as a ${svc.manager.noun}: ${show(r.file)}\n`);
+      if (r.restarted) say(from ? `Restarted the daemon: ${from} → ${VERSION}.\n` : r.changed ? 'Restarted the daemon onto its new definition.\n' : 'Restarted the daemon.\n');
       forwarded(say, forwarders);
       const extra = { restartedFrom: r.restarted ? from : null, forwarders };
       if (!w.ok) {
@@ -329,6 +345,10 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
         ...out.warnings.map((w) => `Warning:   ${w}`),
       ];
       ctx.out(lines.join('\n') + '\n');
+      // the last check's notice, repeated, on stderr (the CLI contract's §3)
+      const last = out.update?.updateAvailable ? readUpdateCheck(ctx.home) : null;
+      if (last)
+        ctx.err(`\n${updateNotice({ name: 'Hallway', current: VERSION, target: last.target, command: last.command ?? 'hallway update', changelog: last.changelog })}\n`);
       return code;
     }
     case 'start': {

@@ -68,6 +68,14 @@ export function plistPath(text: string): string | null {
   return m ? unxml(m[1]) : null;
 }
 
+/** The EnvironmentVariables an existing plist sets. */
+export function plistEnv(text: string): Record<string, string> {
+  const dict = /<key>EnvironmentVariables<\/key>\s*<dict>([\s\S]*?)<\/dict>/.exec(text)?.[1] ?? '';
+  const out: Record<string, string> = {};
+  for (const m of dict.matchAll(/<key>([^<]*)<\/key>\s*<string>([^<]*)<\/string>/g)) out[unxml(m[1])] = unxml(m[2]);
+  return out;
+}
+
 /** `launchctl print gui/<uid>/<label>`: the job's top-level `state`, `pid` and `last exit code`. */
 export function parseLaunchctlPrint(text: string): { state: string | null; pid: number | null; lastExitCode: number | null } {
   const top = (k: string) => new RegExp(`^\\t${k} = (.+)$`, 'm').exec(text)?.[1].trim() ?? null;
@@ -143,6 +151,7 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
     file,
     render: renderPlist,
     readPath: plistPath,
+    readEnv: plistEnv,
     async write(spec) {
       return writeIfChanged(file(spec.label), renderPlist(spec));
     },

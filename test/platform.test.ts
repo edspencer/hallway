@@ -4,6 +4,10 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { UnsupportedPlatformError, currentPlatform, platformFor } from '../server/platform/index.ts';
 import { parseLocalPortRange } from '../server/platform/linux.ts';
+import { plistEnv, renderPlist } from '../server/platform/launchd.ts';
+import { jobEnv, renderJob } from '../server/platform/schtasks.ts';
+import type { ServiceSpec } from '../server/platform/services.ts';
+import { renderUnit, unitEnv } from '../server/platform/systemd.ts';
 
 describe('platform', () => {
   test('macOS uses launchd LaunchAgents and lsof', () => {
@@ -56,4 +60,29 @@ describe('platform', () => {
     if (['darwin', 'linux', 'win32'].includes(process.platform)) assert.equal(currentPlatform().id, process.platform);
     else assert.throws(() => currentPlatform(), UnsupportedPlatformError);
   });
+});
+
+describe('readEnv: the environment a rendered job sets, read back (service install --refresh, D76)', () => {
+  const spec: ServiceSpec = {
+    label: 'hallway.daemon',
+    description: 'Hallway: the dashboard daemon',
+    program: ['/usr/bin/node', '/opt/hallway/dist/server/cli.js', 'serve', '--quiet'],
+    cwd: '/home/me/.hallway',
+    env: { PATH: '/usr/bin:/bin', HALLWAY_HOME: '/home/me/100% "odd" & <dir>\\x' },
+    runAtLoad: true,
+    keepAlive: true,
+    stdout: '/home/me/.hallway/logs/daemon.out.log',
+    stderr: '/home/me/.hallway/logs/daemon.err.log',
+    node: null,
+  };
+  for (const [name, render, read] of [
+    ['systemd', renderUnit, unitEnv],
+    ['launchd', renderPlist, plistEnv],
+    ['schtasks', renderJob, jobEnv],
+  ] as const)
+    test(name, () => {
+      assert.deepEqual(read(render(spec)), spec.env);
+      assert.deepEqual(read(render({ ...spec, env: { PATH: '/usr/bin' } })), { PATH: '/usr/bin' });
+      assert.deepEqual(read('not a job at all'), {});
+    });
 });

@@ -95,11 +95,13 @@ describe('service install after an upgrade (D70)', { skip: onWindows('systemd mo
     assert.match(fs.readFileSync(h.services.manifestFile(DAEMON_LABEL), 'utf8'), new RegExp(`"hallwayVersion": "${VERSION}"`));
   });
 
-  test('already this version: nothing restarted, nothing said about it', async () => {
+  test('already this version: restarted all the same, once, with no versions in the message (the CLI contract 0.2, D76)', async () => {
+    // a reinstall replaces a running daemon, never leaves it serving: `enable --now` alone wouldn't restart it
     const h = await linuxHarness({ version: VERSION });
     assert.equal(await service(h.ctx, ['install'], {}, undefined), 0, h.errors());
-    assert.deepEqual(restarts(h.calls), []);
-    assert.doesNotMatch(h.output(), /Restarted/);
+    assert.equal(restarts(h.calls).length, 1, h.calls.join('\n'));
+    assert.match(h.output(), /Restarted the daemon\.\n/);
+    assert.doesNotMatch(h.output(), /→/);
   });
 
   test("a restart that doesn't take (still the old version after the wait) is an error, not \"It's running\"", async () => {
@@ -145,13 +147,13 @@ describe('service install after an upgrade (D70)', { skip: onWindows('systemd mo
 
   test('doctor: a failure when the daemon is another version, with `hallway service restart`; nothing when it matches', async () => {
     const h = await linuxHarness();
-    const checks = await diagnose(h.ctx, h.run);
+    const checks = await diagnose(h.ctx, h.run, { offline: true });
     const v = checks.find((c) => c.id === 'daemon-version');
     assert.equal(v?.status, 'fail');
     assert.match(v!.message, new RegExp(`the daemon is running version ${OLD.replace(/\./g, '\\.')}, but this CLI is ${VERSION.replace(/\./g, '\\.')}`));
     assert.match(v!.fix!, /^`hallway service restart`/);
     const same = await linuxHarness({ version: VERSION });
-    assert.equal((await diagnose(same.ctx, same.run)).find((c) => c.id === 'daemon-version'), undefined);
+    assert.equal((await diagnose(same.ctx, same.run, { offline: true })).find((c) => c.id === 'daemon-version'), undefined);
   });
 });
 

@@ -33,6 +33,15 @@ export function jobPath(text: string): string | null {
   }
 }
 
+/** The environment a job file sets. */
+export function jobEnv(text: string): Record<string, string> {
+  try {
+    return (JSON.parse(text) as Partial<ServiceSpec>).env ?? {};
+  } catch {
+    return {};
+  }
+}
+
 const xml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 /** One argument on a Windows command line, quoted by the C runtime's rules (the inverse of splitCommandLine). */
 export function quoteArg(a: string): string {
@@ -191,6 +200,7 @@ export function schtasksManager({ dir, run = defaultRunner, ctx: given = {}, isA
     file,
     render: renderJob,
     readPath: jobPath,
+    readEnv: jobEnv,
     async write(spec) {
       const job = writeIfChanged(file(spec.label), renderJob(spec));
       const text = renderTask(spec, file(spec.label), ctx());

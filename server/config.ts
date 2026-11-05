@@ -55,6 +55,17 @@ export function useDataDir(dir: string, env: NodeJS.ProcessEnv = process.env) {
 }
 
 /**
+ * The data home an installed daemon's job records (its `$HALLWAY_HOME`, or null for the default), for `service install
+ * --refresh` and `update` without `--data-dir`: they act on the service that's installed, not on whatever the invoking
+ * shell's environment says (the CLI contract's §1, D76).
+ */
+export function useRecordedHome(recorded: string | null, env: NodeJS.ProcessEnv = process.env) {
+  if (recorded) env.HALLWAY_HOME = recorded;
+  else delete env.HALLWAY_HOME;
+  HOME = resolveHome(env);
+}
+
+/**
  * Where everything lives in a data home (docs/02-architecture.md, "Data home"). Human-editable files sit at the top;
  * machine-written data lives under state/, cache/, generated/, logs/ and backups/, and is never YAML.
  */

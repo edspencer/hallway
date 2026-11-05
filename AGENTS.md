@@ -87,8 +87,9 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events (D35, D38)
   busy.ts          what /api/busy counts: the dashboard's local-domains setup and app operations in flight (D75)
   contract/        copied from edspencer/cli-contract reference/ (each file's header says which version): exit codes,
-                   output, runtime.json (where the running daemon listens, the CLI's second place to look, D46) and
-                   the busy client (`hallway busy`, the 75 refusal; D75)
+                   output, runtime.json (where the running daemon listens, the CLI's second place to look, D46), the
+                   busy client (`hallway busy`, the 75 refusal; D75), and `update`'s sequence with what it needs:
+                   install-method, registry, semver, lock, package-manager, update-check, health (D76)
   forward.ts       `hallway forward <port>` (internal): the byte pipe launchd's sockets hand connections to (D65)
   hook.ts          `hallway hook check-command`: the optional PreToolUse hook that blocks bare dev-server starts (D51)
   platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) / Windows (win32.ts, D58) behind one interface; the

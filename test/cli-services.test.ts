@@ -73,7 +73,7 @@ describe('hallway run & co. (fake systemctl, real processes)', { skip: !linux &&
   let port = 0;
 
   test('doctor on a brand-new machine: warnings, not failures, and it creates nothing', async () => {
-    const r = await hallway(['doctor', '--json']);
+    const r = await hallway(['doctor', '--json', '--offline']);
     assert.equal(r.code, 0, r.stdout + r.stderr);
     const d = JSON.parse(r.stdout);
     assert.equal(d.ok, true);

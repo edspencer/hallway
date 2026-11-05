@@ -2,7 +2,7 @@
 // `hallway [command] …`: the command-line entry point (the package's bin; `npm run hallway -- …` from a checkout).
 // With no command it runs the daemon in the foreground (`serve`). The full command set is docs/07-cli.md; commands
 // arrive milestone by milestone (docs/08-roadmap.md).
-import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify, useDataDir } from './config.js';
+import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify, useDataDir, useRecordedHome } from './config.js';
 import { UsageError, check, parseArgs } from './args.js';
 import { DEFAULT_URL, agentGuide, readGuide, snippet } from './guide.js';
 
@@ -16,7 +16,11 @@ Daemon
           --quiet, -q      print just the "Hallway <version>: <url>" line: no banner, no hints (the
                            banner is only shown on a terminal anyway)
   open                              Open the dashboard in your browser.
-  service install [--json]          Run the daemon as a service (a LaunchAgent / systemd user unit).
+  service install [--port <n>] [--json]
+                                    Run the daemon as a service (a LaunchAgent / systemd user unit / scheduled
+                                    task). --port sets port: in config.yaml. Over a running daemon, it restarts it.
+  service install --refresh         Rewrite the installed service in this version's format, keeping its data
+                                    home, and restart it. Exits 4 if it isn't installed.
   service start | stop | restart [--force] [--json]
                                     Start it, or stop it until \`service start\` or the next login or boot
                                     (\`service uninstall\` keeps it off), or restart it. Stop and restart
@@ -84,14 +88,27 @@ Thumbnails
   thumbs disable                    Turn them off and delete the browser and the screenshots.
   thumbs refresh [slug]             Take the screenshots again now.  thumbs status: what's installed.
 
+Updating
+  update [--check] [--to <version|tag>] [--yes] [--force] [--json]
+                                    Install the newest Hallway with the package manager it came from, then restart
+                                    the daemon on it, and roll back if it doesn't answer. It restarts the apps whose
+                                    jobs the new version writes differently (on Windows, every running app).
+                                    --check says what's available and changes nothing; --to picks a version or a
+                                    dist-tag (the only way down); --yes doesn't ask (needed without a terminal);
+                                    --force doesn't wait while the daemon is busy. Exits 5 when this install can't
+                                    update itself (npx, a checkout, …) and prints what to run, 6 when it rolled
+                                    back, 7 when the rollback failed too, 75 when the daemon is busy.
+
 Other
-  doctor [--json]                   Check the daemon, the data home, the services and fronted mode, with fixes.
+  doctor [--json] [--offline]       Check this install, the daemon, the data home, the services and fronted mode,
+                                    with fixes; and whether a newer Hallway is out (--offline skips that).
   guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph
                                     for an agent instruction file (CLAUDE.md, AGENTS.md).
   --data-dir <dir>                  The data home for this command (default $HALLWAY_HOME, else ~/.hallway).
   --version | --help
 
-Exit codes: 0 ok, 1 error, 2 usage error, 3 not running, 4 not installed (the service commands), 75 busy.`;
+Exit codes: 0 ok, 1 error, 2 usage error, 3 not running, 4 not installed (the service commands), 5 can't update
+itself, 6 update rolled back, 7 rollback failed, 75 busy.`;
 
 /** Resolves with an exit code when there's nothing to run (Hallway already answers on the port), else undefined. */
 async function serve(flags: Record<string, string>): Promise<number | undefined> {
@@ -204,7 +221,8 @@ async function main(argv: string[]): Promise<number | undefined> {
   const parsed = parseArgs(argv);
   const { pos, flags } = parsed;
   // every command's, so it's taken here, before anything reads the data home, and not passed on
-  if (flags['data-dir'] !== undefined) {
+  const dataDirGiven = flags['data-dir'] !== undefined;
+  if (dataDirGiven) {
     if (!flags['data-dir']) throw new UsageError('--data-dir needs a directory');
     useDataDir(flags['data-dir']);
     delete flags['data-dir'];
@@ -219,6 +237,18 @@ async function main(argv: string[]): Promise<number | undefined> {
   }
   const [cmd = 'serve', ...args] = pos;
   const rest = parsed.rest;
+  // `service install --refresh` and `update` act on the daemon's installed job, in the data home it records, not the
+  // one this shell's $HALLWAY_HOME names; --data-dir still wins (D76)
+  if (!dataDirGiven && ((cmd === 'service' && args[0] === 'install' && flags.refresh) || cmd === 'update' || cmd === 'upgrade')) {
+    const [{ currentPlatform }, { recordedDataHome }, os] = await Promise.all([import('./platform/index.js'), import('./services/index.js'), import('node:os')]);
+    let recorded: { home: string | null } | undefined;
+    try {
+      recorded = recordedDataHome(currentPlatform().services({ env: process.env, home: os.homedir() }));
+    } catch {
+      /* no service manager here: nothing is installed */
+    }
+    if (recorded) useRecordedHome(recorded.home);
+  }
   const commands = () => import('./commands/index.js');
   switch (cmd) {
     case 'serve':
