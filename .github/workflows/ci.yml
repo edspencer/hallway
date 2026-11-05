@@ -63,9 +63,10 @@ jobs:
       # Packs the package, installs the tarball into a temp prefix and runs it as a user would (scripts/smoke-pack.mjs).
       - name: Smoke-test the npm package
         run: npm run smoke:pack
-      # The CLI contract's conformance runner (edspencer/cli-contract, D75): packs and installs the package the same
-      # way, then checks --version, --help, a bad flag, service status, busy and serve's first line against
-      # cli-contract.json, where every check is on.
+      # The CLI contract's conformance runner (edspencer/cli-contract, D75, D76): packs and installs the package the
+      # same way, then checks --version, --help, a bad flag, service status, busy and serve's first line against
+      # cli-contract.json, where every check is on; and `update` against a local registry serving this version and
+      # two built from it (the two update checks that need a real service manager run in the services job).
       - name: CLI contract conformance
         run: npx cli-conformance
 
@@ -79,7 +80,7 @@ jobs:
   services:
     name: Services (real ${{ matrix.os == 'macos-latest' && 'launchd' || matrix.os == 'windows-latest' && 'Task Scheduler' || 'systemd' }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +109,16 @@ jobs:
         env:
           HALLWAY_REAL_SERVICES: '1'
         run: node scripts/supervisors-real.mjs
+      # The CLI contract's two update checks that need a real service manager (D76): the daemon installed at this
+      # version, then `hallway update --yes` to a minor above it from a local registry (it must answer as that
+      # version, and `service status --json` agree), and to a build whose `serve` exits at once (it must roll back:
+      # exit 6, this version installed and answering again). The runner installs into its own npm prefix; the
+      # service is the runner's real one, under the real home, which is why these run only here.
+      - name: The update, through the real service manager (cli-conformance)
+        timeout-minutes: 15
+        env:
+          CI_REAL_SERVICE: '1'
+        run: npx cli-conformance --only update-service,update-rollback
 
   # ---------------------------------------------------------------------------------------------------------------
   # The Windows scanner for real (D59): as the runner's administrator, then as a new standard user through a scheduled
