@@ -172,7 +172,9 @@ try {
   // the control for the daemon's `service stop` above: an app's stop is durable, across logins too (D41)
   assert.equal(disabled('hallway.app.real-demo'), true, "an app's stop disables it");
   assert.match(hw('start', 'real-demo'), /real-demo started/);
-  assert.equal(disabled('hallway.app.real-demo'), false, 'start enables it again');
+  // launchd and Task Scheduler undo the disable; systemd enables a unit only if it starts at login, which a run
+  // without --persist doesn't
+  if (darwin || windows) assert.equal(disabled('hallway.app.real-demo'), false, 'start enables it again');
   assert.match(hw('restart', 'real-demo'), /real-demo restarted/);
 
   step('--persist: KeepAlive / Restart=always / the supervisor brings it back after a crash');
