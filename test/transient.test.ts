@@ -155,7 +155,7 @@ describe('doctor', () => {
   test("flags an existing job that runs Hallway from npx's cache", async () => {
     const { services, ctx, runner } = await setup('global/lib/node_modules/hallway');
     await services.installDaemon();
-    const check = async () => (await diagnose(ctx, runner.run)).filter((c) => c.id === 'job-transient' || (c.id === 'job' && c.message.startsWith(DAEMON_LABEL)));
+    const check = async () => (await diagnose(ctx, runner.run, { offline: true })).filter((c) => c.id === 'job-transient' || (c.id === 'job' && c.message.startsWith(DAEMON_LABEL)));
     assert.deepEqual((await check()).map((c) => c.id), ['job']);
     // as if it had been installed by `npx hallway service install` before this check existed
     const f = services.manifestFile(DAEMON_LABEL);

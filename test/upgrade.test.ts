@@ -147,13 +147,13 @@ describe('service install after an upgrade (D70)', { skip: onWindows('systemd mo
 
   test('doctor: a failure when the daemon is another version, with `hallway service restart`; nothing when it matches', async () => {
     const h = await linuxHarness();
-    const checks = await diagnose(h.ctx, h.run);
+    const checks = await diagnose(h.ctx, h.run, { offline: true });
     const v = checks.find((c) => c.id === 'daemon-version');
     assert.equal(v?.status, 'fail');
     assert.match(v!.message, new RegExp(`the daemon is running version ${OLD.replace(/\./g, '\\.')}, but this CLI is ${VERSION.replace(/\./g, '\\.')}`));
     assert.match(v!.fix!, /^`hallway service restart`/);
     const same = await linuxHarness({ version: VERSION });
-    assert.equal((await diagnose(same.ctx, same.run)).find((c) => c.id === 'daemon-version'), undefined);
+    assert.equal((await diagnose(same.ctx, same.run, { offline: true })).find((c) => c.id === 'daemon-version'), undefined);
   });
 });
 

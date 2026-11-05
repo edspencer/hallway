@@ -9,6 +9,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { makeCtx } from '../server/commands/index.ts';
+import { diagnose } from '../server/commands/doctor.ts';
 import { service } from '../server/commands/services.ts';
 import { VERSION } from '../server/config.ts';
 import { platformFor } from '../server/platform/index.ts';
@@ -108,7 +109,7 @@ async function setup() {
     const code = await service(ctx, args, flags, undefined);
     return { code, out, err };
   };
-  return { ...t, unit, state, calls, daemon, cmd };
+  return { ...t, unit, state, calls, daemon, cmd, ctx };
 }
 
 describe('the daemon as a service (the CLI contract, D74)', () => {
@@ -344,5 +345,16 @@ describe('service install --refresh, --port, and replacing a running daemon (the
     await assert.rejects(s.cmd(['status'], { refresh: '1' }), /service status doesn't take --refresh/);
     await assert.rejects(s.cmd(['start'], { force: '1' }), /service start doesn't take --force/);
     await assert.rejects(s.cmd(['install'], { force: '1' }), /service install doesn't take --force/);
+  });
+
+  test("doctor: the service's own Hallway is checked against this CLI's, and the running version against the installed one", async () => {
+    const s = await setup();
+    await s.cmd(['install']);
+    const checks = await diagnose(s.ctx, async () => ({ code: 1, stdout: '', stderr: '' }), { offline: true });
+    const unit = checks.find((c) => c.id === 'unit');
+    // the rig's job runs a Hallway of its own (lib/node_modules/hallway), not this checkout
+    assert.equal(unit?.status, 'warn');
+    assert.match(unit!.message, /runs Hallway .* from .*node_modules\/hallway, not this one/);
+    assert.equal(checks.find((c) => c.id === 'running-version')?.status, 'pass');
   });
 });

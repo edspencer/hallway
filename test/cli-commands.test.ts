@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { exitWatchdog, ROOT, tmpDir, rmTmp, stopChild } from './fixture.ts';
+import { loadSchema, validate } from './contract-helpers.ts';
 
 await exitWatchdog();
 
@@ -113,18 +114,26 @@ describe('scan, claim, ignore and status without a daemon', () => {
   });
 
   test('doctor --json: the data home and files pass; it exits 0 with only warnings', async () => {
-    const r = await hallway(['doctor', '--json']);
+    const r = await hallway(['doctor', '--json', '--offline']);
     const d = JSON.parse(r.stdout);
     const by = (id: string) => d.checks.find((c: { id: string }) => c.id === id);
     assert.equal(by('data-home').status, 'pass');
     // direct mode: an info line saying local domains are off, and how to turn them on (D63)
     // (on Windows, where setup refuses, it says why instead, with no command: D58)
     const windows = process.platform === 'win32';
-    assert.equal(by('networking').status, 'info');
+    // the contract's doctor.schema.json has no `info`: in --json it's a pass, marked as info (D76)
+    assert.equal(by('networking').status, 'pass');
+    assert.equal(by('networking').info, true);
+    assert.deepEqual(validate(loadSchema('doctor'), d), []);
+    assert.equal(d.version, JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version);
+    assert.equal(by('node-engines').status, 'pass');
+    assert.equal(by('install-method').status, 'pass');
+    assert.match(by('install-method').message, /checkout/);
+    assert.equal(by('update').status, 'skip');
     assert.match(by('networking').message, windows ? /^local domains \(fronted mode\) are off: .*Windows/ : /local domains are off .* https:\/\/hallway\.localhost/);
     if (windows) assert.equal(by('networking').fix, undefined);
     else assert.match(by('networking').fix, /hallway setup/);
-    const text = await hallway(['doctor']);
+    const text = await hallway(['doctor', '--offline']);
     assert.match(text.stdout, /^i local domains (\(fronted mode\) )?are off/m);
     assert.equal(r.code, d.ok ? 0 : 1);
   });

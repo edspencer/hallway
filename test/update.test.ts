@@ -9,6 +9,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { makeCtx } from '../server/commands/index.ts';
+import { diagnose } from '../server/commands/doctor.ts';
 import { update, updateJobs } from '../server/commands/update.ts';
 import { VERSION } from '../server/config.ts';
 import { readUpdateCheck } from '../server/contract/update-check.ts';
@@ -212,5 +213,46 @@ describe('hallway update, from this checkout (the tests run from one, which can\
     await assert.rejects(update(ctx, [], { to: '' }, undefined), /--to needs a version or a dist-tag/);
     const { busy } = await import('../server/commands/busy.ts');
     await assert.rejects(busy(ctx, [], { check: '1' }), /busy doesn't take --check/);
+  });
+});
+
+describe("doctor's update check (the CLI contract's §1, D76)", () => {
+  const run = async (registry: string, o: { offline?: boolean; home?: 'exists' | 'missing' } = {}) => {
+    const t = await tmpStore();
+    cleanups.push(t.cleanup);
+    const home = o.home === 'missing' ? path.join(t.home, 'not-yet') : t.home;
+    let err = '';
+    const ctx = makeCtx({ home, env: { ...process.env, npm_config_registry: registry, NO_COLOR: '1' }, err: (s) => void (err += s), out: () => {} });
+    const checks = await diagnose(ctx, async () => ({ code: 1, stdout: '', stderr: '' }), { offline: o.offline });
+    return { check: checks.find((c) => c.id === 'update'), err, home };
+  };
+
+  test('a newer version: a warning with the command for this install, the notice on stderr, the cache written for status', async () => {
+    const reg = await stubRegistry('99.0.0');
+    const r = await run(reg.url);
+    assert.equal(r.check?.status, 'warn');
+    assert.match(r.check!.message, /Hallway 99\.0\.0 is available/);
+    assert.match(r.check!.fix!, /git pull/, 'the tests run from a checkout');
+    assert.match(r.err, /Hallway 99\.0\.0 is available \(you have .*\)\.\n {2}Run: git pull/);
+    assert.equal(readUpdateCheck(r.home)?.updateAvailable, true);
+  });
+
+  test("up to date: a pass; a data home that doesn't exist yet isn't created for the cache", async () => {
+    const reg = await stubRegistry(VERSION);
+    const r = await run(reg.url, { home: 'missing' });
+    assert.equal(r.check?.status, 'pass');
+    assert.equal(fs.existsSync(r.home), false);
+    assert.equal(r.err, '');
+  });
+
+  test("the registry can't be reached: a warning, not a failure; --offline doesn't ask", async () => {
+    const reg = await stubRegistry('99.0.0');
+    const dead = await run('http://127.0.0.1:9');
+    assert.equal(dead.check?.status, 'warn');
+    assert.match(dead.check!.fix!, /--offline/);
+    const before = reg.asked.length;
+    const off = await run(reg.url, { offline: true });
+    assert.equal(off.check?.status, 'skip');
+    assert.equal(reg.asked.length, before);
   });
 });

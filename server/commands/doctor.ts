@@ -8,7 +8,13 @@ import os from 'node:os';
 import path from 'node:path';
 import type { StateResponse } from '../../shared/api.js';
 import { check } from '../args.js';
-import { VERSION } from '../config.js';
+import { ROOT, VERSION, packageRoot } from '../config.js';
+import { describeInstall, detectInstall, updateCommand } from '../contract/install-method.js';
+import { npmConfigGet, npmGlobalRoot } from '../contract/package-manager.js';
+import { RegistryError, resolveRegistry, resolveTarget } from '../contract/registry.js';
+import { compareVersions, isPrerelease, satisfiesEngines } from '../contract/semver.js';
+import { type UpdateCheck, updateNotice, writeUpdateCheck } from '../contract/update-check.js';
+import { PACKAGE_NAME, changelogUrl } from './update.js';
 import { type Runner, defaultRunner } from '../platform/index.js';
 import { DAEMON_LABEL, isForwardLabel, slugOfLabel } from '../services/index.js';
 import { isListening } from '../services/ports.js';
@@ -28,9 +34,31 @@ export interface Check {
 
 const MARK: Record<CheckStatus, string> = { pass: '✓', warn: '!', fail: '✗', skip: '-', info: 'i' };
 
-export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<Check[]> {
+export interface DiagnoseOptions {
+  /** Don't ask the registry for a newer version (`--offline`). */
+  offline?: boolean;
+  fetch?: typeof globalThis.fetch;
+  /** The bin this CLI was run as (`process.argv[1]`), for how it was installed. */
+  entry?: string;
+}
+
+export async function diagnose(ctx: Ctx, run: Runner = defaultRunner, opts: DiagnoseOptions = {}): Promise<Check[]> {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
+
+  // ---------------- this install: Node, how it was installed (the CLI contract's §1 and §6) ----------------
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { engines?: { node?: string } };
+  const engines = satisfiesEngines(process.versions.node, pkg.engines);
+  if (engines.ok === false)
+    add({ id: 'node-engines', status: 'fail', message: `this is Node ${process.versions.node}, and Hallway ${VERSION} needs Node ${pkg.engines?.node}`, fix: `install a Node that satisfies ${pkg.engines?.node} (nvm, fnm, volta or nodejs.org), then \`hallway service regenerate\`` });
+  else add({ id: 'node-engines', status: 'pass', message: `Node ${process.versions.node} satisfies ${pkg.engines?.node ?? 'any Node'}` });
+  const npm = { env: ctx.env };
+  const info = detectInstall({ packageName: PACKAGE_NAME, envPrefix: 'HALLWAY', entry: opts.entry ?? process.argv[1], env: ctx.env, npmGlobalRoot: () => npmGlobalRoot(npm), fs });
+  const how = describeInstall(info, PACKAGE_NAME);
+  if (info.method === 'npx')
+    add({ id: 'install-method', status: 'warn', message: `Hallway is running from ${how}, which can be deleted at any time; services can't run from there`, fix: '`npm i -g hallway`' });
+  else if (info.canUpdate) add({ id: 'install-method', status: 'pass', message: `installed as ${how}: \`hallway update\` updates it` });
+  else add({ id: 'install-method', status: 'pass', message: `installed as ${how}: \`hallway update\` can't update it, and says what to run instead` });
 
   // ---------------- the data home ----------------
   ctx.readOnly = true;
@@ -65,7 +93,7 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
     if (daemon.version !== VERSION)
       add({ id: 'daemon-version', status: 'fail', message: `the daemon is running version ${daemon.version}, but this CLI is ${VERSION}: it's still running the code it started with`, fix: '`hallway service restart` (or restart the `hallway serve` it runs in)' });
   } else if (await isListening(cfg.port))
-    add({ id: 'daemon', status: 'fail', message: `something that isn't Hallway is listening on its port, ${cfg.port}`, fix: 'stop it, or give Hallway another port: in config.yaml' });
+    add({ id: 'port', status: 'fail', message: `something that isn't Hallway is listening on its port, ${cfg.port}`, fix: 'stop it, or give Hallway another port: in config.yaml' });
   else add({ id: 'daemon', status: 'warn', message: `the daemon isn't running (nothing on http://localhost:${cfg.port})`, fix: '`hallway service install` runs it as a service' });
 
   let services: ReturnType<Ctx['services']> | null = null;
@@ -82,6 +110,33 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
       else if (!st.running)
         add({ id: 'daemon-service', status: 'fail', message: `the daemon's service is installed (${show(st.label)}) but not running${st.lastExitCode !== null ? ` (last exit status ${st.lastExitCode})` : ''}`, fix: '`hallway service restart`; its logs are in logs/daemon.err.log' });
       else add({ id: 'daemon-service', status: 'pass', message: `the daemon's service is running (pid ${st.pid})` });
+      // the job's own Hallway: still there, the same install as this CLI, and the version that's answering
+      const m = st.installed ? services.readManifest(DAEMON_LABEL) : null;
+      const jobCli = m?.program.find((p) => /cli\.js$/.test(p));
+      if (jobCli) {
+        const real = (p: string) => {
+          try {
+            return fs.realpathSync(p);
+          } catch {
+            return p;
+          }
+        };
+        const mine = real(path.join(ROOT, 'dist', 'server', 'cli.js'));
+        let installed: string | null = null;
+        try {
+          installed = JSON.parse(fs.readFileSync(path.join(packageRoot(path.dirname(jobCli)), 'package.json'), 'utf8')).version ?? null;
+        } catch {
+          /* gone: job-program says so */
+        }
+        if (!fs.existsSync(jobCli)) {
+          /* job-program, below, names it */
+        } else if (real(jobCli) !== mine)
+          add({ id: 'unit', status: 'warn', message: `the daemon's service runs Hallway ${installed ?? '?'} from ${show(packageRoot(path.dirname(jobCli)))}, not this one (${VERSION}, ${show(ROOT)})`, fix: '`hallway service install` points it at this one' });
+        else add({ id: 'unit', status: 'pass', message: `the daemon's service runs this install of Hallway (${show(ROOT)})` });
+        if (daemon && installed && st.running && daemon.version !== installed)
+          add({ id: 'running-version', status: 'fail', message: `the daemon answering is ${daemon.version}, but its service runs ${installed}: it hasn't been restarted since an update`, fix: '`hallway service restart`' });
+        else if (daemon && installed && st.running) add({ id: 'running-version', status: 'pass', message: `the daemon is running the installed version, ${installed}` });
+      }
       if (st.installed && kind === 'systemd') {
         const user = os.userInfo().username;
         const r = await run('loginctl', ['show-user', user, '--property=Linger']);
@@ -163,14 +218,48 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner): Promise<C
   const { networkChecks } = await import('../proxy/doctor.js');
   for (const c of await networkChecks({ store, platform: ctx.platform(), services, query: run, env: ctx.env, userHome: os.homedir() })) add(c);
 
+  // ---------------- a newer Hallway (the third thing allowed to ask the registry, after update and update --check) ----------------
+  if (opts.offline) add({ id: 'update', status: 'skip', message: "didn't ask the registry for a newer Hallway (--offline)" });
+  else {
+    try {
+      const target = await resolveTarget({ packageName: PACKAGE_NAME, registry: resolveRegistry(ctx.env, (k) => npmConfigGet(k, npm)), ...(opts.fetch ? { fetch: opts.fetch } : {}) });
+      const cmp = compareVersions(target.version, VERSION);
+      const available = cmp > 0 && !isPrerelease(target.version);
+      const command = info.canUpdate ? 'hallway update' : updateCommand(info, { packageName: PACKAGE_NAME, target: target.version }).command;
+      const check: UpdateCheck = {
+        name: PACKAGE_NAME,
+        current: VERSION,
+        target: target.version,
+        tag: target.tag,
+        updateAvailable: available,
+        installMethod: info.method,
+        canUpdate: info.canUpdate,
+        command: available ? command : null,
+        engines: target.engines,
+        nodeOk: satisfiesEngines(process.versions.node, target.engines !== null ? { node: target.engines } : undefined).ok !== false,
+        changelog: changelogUrl(target.version),
+        checkedAt: new Date().toISOString(),
+      };
+      // shared with `update --check`, for `service status` to repeat; never creating the data home (doctor is read-only)
+      if (fs.existsSync(ctx.home)) writeUpdateCheck(ctx.home, check);
+      if (available) {
+        add({ id: 'update', status: 'warn', message: `Hallway ${target.version} is available (this is ${VERSION})`, fix: `\`${command}\`` });
+        ctx.err(`${updateNotice({ name: 'Hallway', current: VERSION, target: target.version, command, changelog: check.changelog })}\n\n`);
+      } else add({ id: 'update', status: 'pass', message: `Hallway ${VERSION} is up to date (the registry's ${target.tag ?? 'latest'} is ${target.version})` });
+    } catch (e) {
+      add({ id: 'update', status: 'warn', message: `couldn't ask the registry for a newer Hallway: ${e instanceof RegistryError ? `${e.message} (${e.url})` : (e as Error).message}`, fix: '`hallway doctor --offline` skips this check' });
+    }
+  }
+
   return checks;
 }
 
-export async function doctor(ctx: Ctx, pos: string[], flags: Record<string, string>, rest?: string[], run?: Runner): Promise<number> {
-  check('doctor', flags, ['json'], pos, 0, rest);
-  const checks = await diagnose(ctx, run);
+export async function doctor(ctx: Ctx, pos: string[], flags: Record<string, string>, rest?: string[], run?: Runner, opts: DiagnoseOptions = {}): Promise<number> {
+  check('doctor', flags, ['json', 'offline'], pos, 0, rest);
+  const checks = await diagnose(ctx, run, { ...opts, offline: !!flags.offline });
   const failed = checks.some((c) => c.status === 'fail');
-  if (flags.json) ctx.out(json({ ok: !failed, checks }));
+  // the contract's schema (doctor.schema.json) has pass, warn, fail and skip: an info line is a pass, marked as info
+  if (flags.json) ctx.out(json({ ok: !failed, version: VERSION, checks: checks.map((c) => (c.status === 'info' ? { ...c, status: 'pass', info: true } : c)) }));
   else {
     for (const c of checks) ctx.out(`${MARK[c.status]} ${c.message}${c.fix ? `\n    fix: ${c.fix}` : ''}\n`);
     const n = (s: CheckStatus) => checks.filter((c) => c.status === s).length;
