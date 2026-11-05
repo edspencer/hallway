@@ -14,10 +14,11 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AppConfig, Expected } from '../../shared/api.js';
 import { ROOT, VERSION, dataPaths } from '../config.js';
-import { type Platform, type Runner, type ServiceManager, type ServiceSpec, type ServiceStatus, currentPlatform } from '../platform/index.js';
+import { type Platform, type Runner, type ServiceManager, type ServiceSpec, type ServiceStatus, currentPlatform, defaultRunner } from '../platform/index.js';
 import type { Store } from '../store/index.js';
 import type { ResolvedNode } from './resolve.js';
 import { transientInstall, transientMessage } from './transient.js';
+import { findPackageRoot, underNodeModules } from '../contract/install-method.js';
 import { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, type Forward, appLabel, appSpec, daemonSpec, forwardSpec, forwards, helperSpec, isForwardLabel, slugOfLabel } from './spec.js';
 
 export { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, forwards, isForwardLabel, logFiles, slugOfLabel } from './spec.js';
@@ -86,6 +87,7 @@ export class Services {
   private node?: ResolvedNode;
   private now: () => Date;
   private cliScript: string;
+  private run: Runner;
   /** The home `~` means in a service: block's cwd (the user's, unless a test gives another). */
   get homeDir(): string {
     return this.userHome ?? os.homedir();
@@ -98,6 +100,7 @@ export class Services {
     this.node = opts.node;
     this.now = opts.now ?? (() => new Date());
     this.cliScript = opts.cliScript ?? DEFAULT_CLI_SCRIPT;
+    this.run = opts.run ?? defaultRunner;
     this.manager = (opts.platform ?? currentPlatform()).services({ run: opts.run, env: this.env, home: opts.userHome });
   }
 
@@ -142,6 +145,47 @@ export class Services {
     if (label !== DAEMON_LABEL && !(label && isForwardLabel(label)) && this.manager.kind !== 'schtasks') return;
     const t = transientInstall(this.cliScript);
     if (t) throw new ServiceError(transientMessage(t, label === DAEMON_LABEL ? 'hallway service install' : undefined));
+  }
+
+  /**
+   * The source checkout `cli.js` is in, or null when it's an installed package (D78): the CLI contract's §6 test, from
+   * the reference's install-method.ts. A package root that isn't under a node_modules (a clone, an `npm link`), or
+   * none at all, is a checkout.
+   */
+  static checkoutOf(cliScript: string): string | null {
+    let real = cliScript;
+    try {
+      real = fs.realpathSync(cliScript);
+    } catch {
+      /* not built yet: the path as given */
+    }
+    const { root } = findPackageRoot(real, 'hallway', fs);
+    if (root !== undefined && underNodeModules(root)) return null;
+    return root ?? path.dirname(real);
+  }
+
+  /**
+   * The daemon's service mustn't run a source checkout by accident (the CLI contract's §1, D78): it would run whatever
+   * the checkout last built, and break when it's cleaned or rebuilt. Throws a ServiceError unless `fromCheckout`.
+   */
+  refuseCheckout({ fromCheckout = false } = {}) {
+    if (fromCheckout) return;
+    const checkout = Services.checkoutOf(this.cliScript);
+    if (checkout)
+      throw new ServiceError(
+        `Hallway is running from a source checkout (${checkout}), not an installed package: a service would run whatever that checkout last built, and break when it's cleaned or rebuilt. Install it first: \`npm i -g hallway\`, then run \`hallway service install\` again. To run the checkout on purpose, add --from-checkout.`,
+      );
+  }
+
+  /**
+   * On Linux, the user whose lingering is off (`loginctl show-user <user> -p Linger` says no), else null: without it the
+   * daemon stops when they log out (the contract's §7). Null where there's no systemd, or loginctl can't say.
+   */
+  async lingerOff(): Promise<string | null> {
+    if (this.manager.kind !== 'systemd') return null;
+    const user = os.userInfo().username;
+    const r = await this.run('loginctl', ['show-user', user, '--property=Linger']);
+    return r.code === 0 && /Linger=no/.test(r.stdout) ? user : null;
   }
 
   /** Write a job's definition: every write goes through here, so none can point Hallway's CLI at a cache. */

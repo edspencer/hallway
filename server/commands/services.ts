@@ -5,7 +5,7 @@ import path from 'node:path';
 import { UsageError, check, need } from '../args.js';
 import { VERSION, packageRoot, parsePort } from '../config.js';
 import { hostPort } from '../loopback.js';
-import { DAEMON_LABEL, NotInstalledError, appLabel, logFiles } from '../services/index.js';
+import { DAEMON_LABEL, NotInstalledError, Services, appLabel, logFiles } from '../services/index.js';
 import { appLogs, followFiles, formatLogs } from '../services/logs.js';
 import { isListening, waitForPort } from '../services/ports.js';
 import { runApp } from '../services/run.js';
@@ -281,7 +281,10 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
   };
   switch (sub) {
     case 'install': {
-      check('service install', flags, ['json', 'port', 'refresh'], args, 0, rest);
+      check('service install', flags, ['json', 'port', 'refresh', 'dry-run', 'from-checkout'], args, 0, rest);
+      const dryRun = !!flags['dry-run'];
+      // --dry-run writes nothing, not even the data home (D78)
+      if (dryRun) ctx.readOnly = true;
       const svc = services();
       svc.refuseTransient(DAEMON_LABEL);
       const before = await svc.status(DAEMON_LABEL);
@@ -292,9 +295,24 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
         if (flags.json) ctx.out(json({ ok: false, action: 'install', error: 'not installed', ...(await daemonReport(ctx)) }));
         return NOT_INSTALLED;
       }
+      // a source checkout only on purpose (the CLI contract's §1, D78); a refresh keeps a job that already runs one
+      const recordedCli = flags.refresh ? svc.readManifest(DAEMON_LABEL)?.program.find((p) => /cli\.js$/.test(p)) : undefined;
+      svc.refuseCheckout({ fromCheckout: !!flags['from-checkout'] || (!!recordedCli && Services.checkoutOf(recordedCli) !== null) });
       const given = portFlag(flags.port);
       const was = svc.store.currentConfig().port;
       const port = given ?? was;
+      if (dryRun) {
+        const spec = svc.daemonSpec();
+        const file = svc.manager.file(DAEMON_LABEL);
+        const unit = svc.manager.render(spec);
+        const notes = [
+          ...(given !== undefined && given !== was ? [`It would set port: ${given} in ${show(path.join(ctx.home, 'config.yaml'))} (the daemon's port lives there).`] : []),
+          ...(before.installed ? [`It's installed now${before.running ? ' and running' : ''}: the real install ${before.running ? 'replaces the running daemon' : 'starts it'}.`] : []),
+        ];
+        say(`Would write the ${svc.manager.noun} ${show(file)} (--dry-run: nothing written, nothing started):\n\n${unit}${unit.endsWith('\n') ? '' : '\n'}${notes.length ? `\n${notes.join('\n')}\n` : ''}`);
+        if (flags.json) ctx.out(json({ ok: true, action: 'install', dryRun: true, file, unit, port, installed: before.installed, running: before.running }));
+        return 0;
+      }
       if (!(before.running && port === was) && (await isListening(port)))
         throw new Error(`port ${port} is already in use (is \`hallway serve\` running in a terminal?). Stop that first, or ${given ? 'pick another --port' : 'set another port: in config.yaml'}.`);
       // the daemon's port lives in config.yaml (D44), where the CLI looks for it too
@@ -317,6 +335,10 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
         return done('install', false, { error: w.reason, ...extra });
       }
       say(`It's running: http://localhost:${port}\n${svc.manager.lifetime}\n`);
+      // the contract's §7: say how to keep it running after logout, and never run sudo ourselves
+      const lingerUser = await svc.lingerOff();
+      if (lingerUser)
+        say(`Lingering is off, so it stops when you log out and starts again only when you log in. To keep it running (and start it at boot), run this once: sudo loginctl enable-linger ${lingerUser}\n(Hallway never runs sudo itself; \`hallway doctor\` warns while lingering is off.)\n`);
       return done('install', true, extra);
     }
     case 'uninstall': {

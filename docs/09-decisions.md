@@ -2063,3 +2063,30 @@ The CLI contract's §1, §4, §7 and §8 ([edspencer/cli-contract](https://githu
   failure has a fix for each manager.
 - **The reference files from D75** (`busy-client.ts`, `exit-codes.ts`, `output.ts`, `runtime-file.ts`) are unchanged
   in the contract's 0.2, and their headers now say 0.2.
+
+### D78 — `service install --dry-run`, a checkout only with `--from-checkout`, and linger's `sudo` line at install (2026-11-05; amends D61, D76)
+
+The CLI contract's §1 ([edspencer/cli-contract](https://github.com/edspencer/cli-contract) `SPEC.md` 0.2): `install`
+must refuse to run from a checkout unless `--from-checkout` is given, and should take `--dry-run`.
+
+- **A source checkout is refused** (`Services.refuseCheckout`), as npx's cache already was (D61), for the same reason:
+  the daemon's job would run whatever the checkout last built, and break when it's cleaned, switched to another branch
+  or half-rebuilt. "A checkout" is the contract's §6 test, from the reference's `install-method.ts`
+  (`findPackageRoot`, `underNodeModules`): the package root above `cli.js` isn't under a `node_modules` (a clone, an
+  `npm link`), or there's no package root at all. The message says how to install it, and that `--from-checkout`
+  runs the checkout on purpose. **A `--refresh` keeps a job that already runs a checkout** without the flag: the
+  choice was made at install, and `update`'s hand-over mustn't undo it (`update` refuses checkouts itself, exit 5).
+  Only `service install` asks: `restart`, `start` and `regenerate` rewrite the job from where this CLI is, as before.
+  **A behaviour change for scripts:** `hallway service install` from a checkout used to work and now exits 1; CI's
+  `services-real.mjs` and `fronted-real.mjs` add `--from-checkout`. The conformance runner installs the packed
+  tarball, so it doesn't need it.
+- **`--dry-run`** prints the daemon's job as it would be written (the unit, the plist, or on Windows the job file the
+  scheduled task's supervisor reads), after the same refusals, and writes nothing: no job, no manifest, no `port:` in
+  config.yaml (it says it would set it), and not even the data home (the store is opened read-only, as doctor's is).
+  With `--json`: `{ ok, action: "install", dryRun: true, file, unit, port, installed, running }` on stdout.
+- **Linger, at install (§7):** on Linux, `install` asks `loginctl show-user <user> -p Linger` and, when it's off, says
+  that the daemon stops at logout and prints `sudo loginctl enable-linger <user>` to run once; Hallway never runs it.
+  The systemd manager's standing note no longer gives the command without `sudo`, nor says it when lingering is on.
+- **Rejected:** refusing checkouts for apps' jobs on Windows (each runs `hallway supervise` from this CLI) — an app's
+  `run` or `start` isn't the contract's `install`, and a developer running Hallway from its checkout is its likeliest
+  user there; refusing in `restart` and `start` too (they act on a job someone already installed).
