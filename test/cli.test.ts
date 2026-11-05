@@ -38,6 +38,10 @@ describe('parseArgs', () => {
     assert.deepEqual(parseArgs(['-v']), { pos: [], flags: { version: '1' } });
     assert.deepEqual(parseArgs(['guide', '--snippet']), { pos: ['guide'], flags: { snippet: '1' } });
     assert.deepEqual(parseArgs(['lost', 'dismiss', '--all']), { pos: ['lost', 'dismiss'], flags: { all: '1' } });
+    // tail's -n, and the data home for one command (D74)
+    assert.deepEqual(parseArgs(['service', 'logs', '-n', '20', '-f']), { pos: ['service', 'logs'], flags: { lines: '20', follow: '1' } });
+    assert.deepEqual(parseArgs(['--data-dir', '/tmp/x', 'status']), { pos: ['status'], flags: { 'data-dir': '/tmp/x' } });
+    assert.throws(() => parseArgs(['logs', 'demo', '-n']), /-n needs a value/);
   });
 
   test('every option a command accepts is one the parser knows', () => {
@@ -96,6 +100,39 @@ describe('hallway CLI', () => {
     assert.match(h.stdout, /--port <n> +the port \(default 4255, or \$PORT, or port: in config.yaml\)/);
     // the development-only overrides are never advertised
     assert.doesNotMatch(h.stdout, /HALLWAY_DEV|--host|--bind/);
+  });
+
+  test('--data-dir: the data home for this command, over $HALLWAY_HOME (D74)', async () => {
+    const other = tmpDir('hw-test-datadir-');
+    try {
+      const r = await hallway(['app', 'add', 'elsewhere', '--port', '3999', '--data-dir', other]);
+      assert.equal(r.code, 0, r.stderr);
+      assert.ok(fs.existsSync(path.join(other, 'apps', 'elsewhere.yaml')));
+      assert.equal(fs.existsSync(path.join(HOME, 'apps', 'elsewhere.yaml')), false);
+      const ls = await hallway(['--data-dir', other, 'app', 'ls', '--json']);
+      assert.ok(JSON.parse(ls.stdout).apps.some((a: { slug: string }) => a.slug === 'elsewhere'), ls.stdout);
+      assert.equal((await hallway(['app', 'ls', '--data-dir='])).code, 2);
+    } finally {
+      rmTmp(other);
+    }
+  });
+
+  test('service status with nothing installed exits 4, even where the service manager is missing', async () => {
+    // a throwaway HOME, so the unit directory is too, and a PATH with node alone: no systemctl or launchctl to find
+    const home = tmpDir('hw-test-nosvc-');
+    try {
+      const bin = path.join(home, 'bin');
+      fs.mkdirSync(bin);
+      fs.symlinkSync(process.execPath, path.join(bin, process.platform === 'win32' ? 'node.exe' : 'node'));
+      const r = await hallway(['service', 'status', '--json'], { HOME: home, USERPROFILE: home, LOCALAPPDATA: path.join(home, 'local'), PATH: bin, XDG_CONFIG_HOME: '' });
+      assert.equal(r.code, 4, r.stderr);
+      assert.equal(JSON.parse(r.stdout).installed, false);
+      const logs = await hallway(['service', 'logs'], { HOME: home, USERPROFILE: home, LOCALAPPDATA: path.join(home, 'local'), PATH: bin, XDG_CONFIG_HOME: '' });
+      assert.equal(logs.code, 4, logs.stderr);
+      assert.match(logs.stderr, /hallway logs daemon/);
+    } finally {
+      rmTmp(home);
+    }
   });
 
   test('usage errors exit 2 with the usage', async () => {

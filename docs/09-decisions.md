@@ -514,6 +514,8 @@ repository `edspencer/spaghetti-junction`, renamed to `edspencer/hallway` in Oct
   running onto the new definition, and leaves stopped ones stopped.
 - **Rejected:** bootout alone (the job comes back at the next login, contradicting `expected: stopped`); deleting the
   plist on stop (loses the definition `start` needs, and the dashboard's "managed" badge).
+- **Amended by D74** for the daemon's own job: `hallway service stop` doesn't disable it (the CLI contract). Apps'
+  stops stay as above.
 
 ### D42 — `$PORT` in a command, and the environment a job gets (2026-10-16)
 
@@ -1858,3 +1860,56 @@ shelves of tiles, a digest); the author had **A, the grouped list** (the recomme
 - **Unverified on a real Mac:** `docker --context rancher-desktop`, `nerdctl` from a LaunchAgent's environment,
   `kubectl --context rancher-desktop`, the Lima mux's argv as lsof and ps report it (the fixtures follow the author's
   output), OrbStack's helper's process name, and Docker Desktop's forwarders once they're no longer noise.
+
+### D74 — The daemon's service follows the CLI contract: `service start`, `stop` (not disabled), `logs`, exit 3 and 4, `--json`, `--data-dir` (2026-11-04; amends D41 for the daemon)
+
+The author's six local tools (Paddock, Managers, Hallway, Local Review, BragDoc, Localidraw) now share one
+command-line contract for running, installing and updating themselves:
+[edspencer/cli-contract](https://github.com/edspencer/cli-contract) `SPEC.md`, version 0.1. This is Hallway's
+alignment with it (that repo's `ROADMAP.md`, "Hallway"). Apps' commands are Hallway's own, and the contract leaves
+them alone ("a tool that manages other services may add sub-commands of its own beside these").
+
+- **`hallway service start` and `hallway service stop`**, for the daemon. `start` starts the installed job (its
+  definition rewritten first if it's stale, as `restart` does) and waits until the daemon answers as this CLI's
+  version (30 s), else prints the last 20 lines of its logs and exits 1. `stop` stops it and waits until nothing
+  answers.
+- **The daemon's `stop` doesn't disable it.** It stays stopped until `hallway service start` or the next login or
+  boot, whichever comes first: `systemctl --user stop` alone; `launchctl bootout` alone (a LaunchAgent in
+  `~/Library/LaunchAgents` is loaded again at the next login); on Windows the supervisor's tree and `schtasks /End`,
+  with the task left enabled for the next logon. To keep it off, `hallway service uninstall`. This is the service
+  managers' own convention, and the contract's (Ed's decision, 4 November 2026). `ServiceManager.stop` takes
+  `{ disable: false }` for it; the default stays D41's.
+- **An app's `hallway stop` stays durable** (D41): bootout plus `launchctl disable`, `systemctl --user disable`,
+  `schtasks /Change /DISABLE`, and `expected: stopped` in its YAML. An app stopped by hand is a statement about that app
+  that should survive a reboot; the daemon is the thing that shows you your apps, and a stop of it is usually for a
+  moment (an upgrade, a port to free).
+- **`hallway service logs [-n N] [-f]`**: the daemon's logs, the last 50 lines by default, as `hallway logs daemon`
+  shows them (which stays). `-n` is the short form of `--lines` everywhere. The daemon keeps writing its two files,
+  `logs/daemon.out.log` and `logs/daemon.err.log`, rotated by Hallway, rather than the contract's single
+  `logs/service.log`: the contract's point is that `logs` reads files the tool writes on every OS, which Hallway's
+  already are, and moving them would break `hallway logs daemon`, doctor and the rotation for no gain a reader would
+  notice. Revisit if the contract's conformance runner insists on the name.
+- **Exit codes:** `service status` exits 0 when the job runs and the daemon answers, **3** when it's installed but
+  not running or not answering, **4** when it isn't installed; with `--json` too. `service start`, `stop`, `restart`
+  and `logs` exit 4 when there's no job. Before, `service status` exited 0 either way and the others 1. With no
+  definition file, a service manager that can't be asked (no systemd user instance: a container) means "not
+  installed", not an error.
+- **`service status` says more:** `installedVersion` (the `package.json` above the `cli.js` the job runs),
+  `runningVersion` (what answers; `version` stays, the same value), `cliVersion`, `port`, `unit` (`file`'s value),
+  `log` (the stdout log: the contract's schema has one file) and `logs` (both), and `warnings` (the job's Node or CLI
+  gone, the daemon answering as another version than the job runs): every field the contract's
+  `schemas/service-status.schema.json` requires.
+- **`--json` on `service install`, `uninstall`, `start`, `stop` and `restart`:** one document on stdout, `ok` and
+  `action` plus everything `service status --json` has, and per verb `restartedFrom`, `forwarders`, `wasRunning`,
+  `wasInstalled`, `error`. What people read goes to stderr. The exit code means what it does without `--json`.
+- **`--data-dir <dir>`**, every command's: the data home for that run. It sets `$HALLWAY_HOME` for the process too,
+  so a `service install --data-dir …` writes a job that uses the same data home (the job already passes a set
+  `$HALLWAY_HOME` on, D42). `$HALLWAY_HOME` stays as it was; nothing is renamed.
+- **Not yet:** `service stop` and `restart` refusing with exit 75 while Hallway is busy, `--force`, `/api/busy`,
+  `hallway busy`, `hallway update` and doctor's install-method and update checks come with the contract's next wave.
+  The contract's first line for `serve` (`Hallway <version>: <url>`, where Hallway prints `Hallway on <url>`) is left
+  for when the conformance runner checks it, since scripts wait for today's line.
+- **Rejected:** making the daemon's `stop` durable like an app's (the contract says otherwise, and `uninstall` is the
+  durable off); changing apps' `stop` to match (it would quietly bring back at the next login apps people stopped,
+  against `expected: stopped`); a `service logs` that refused without a job but showed `logs daemon`'s files anyway
+  (the contract's table gives `logs` exit 4, and the message points at `hallway logs daemon`).

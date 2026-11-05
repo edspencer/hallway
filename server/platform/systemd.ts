@@ -130,10 +130,10 @@ export function systemdManager({ dir, run = defaultRunner }: SystemdOptions): Se
       await enableAsAsked(spec);
       await systemctl(['start', unitName(spec.label)]);
     },
-    async stop(label) {
+    async stop(label, { disable = true } = {}) {
       await systemctl(['stop', unitName(label)], [0, 5]);
       // so it doesn't come back at the next login either (D41); 1: no such unit, which is fine here
-      if (fs.existsSync(file(label))) await systemctl(['disable', '--quiet', unitName(label)], [0, 1]);
+      if (disable && fs.existsSync(file(label))) await systemctl(['disable', '--quiet', unitName(label)], [0, 1]);
     },
     async restart(spec) {
       // `write` already ran daemon-reload for a changed unit, and restart starts an inactive one

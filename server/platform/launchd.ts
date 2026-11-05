@@ -148,10 +148,10 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
       if (spec.socket) return;
       await launchctl(['kickstart', target(spec.label)]);
     },
-    async stop(label) {
+    async stop(label, { disable = true } = {}) {
       // bootout unloads it, so KeepAlive can't resurrect it; disable keeps it from loading at the next login
       await bootout(label);
-      await launchctl(['disable', target(label)]);
+      if (disable) await launchctl(['disable', target(label)]);
     },
     async restart(spec, { reload = false } = {}) {
       const st = await status(spec.label);

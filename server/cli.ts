@@ -2,7 +2,7 @@
 // `hallway [command] …`: the command-line entry point (the package's bin; `npm run hallway -- …` from a checkout).
 // With no command it runs the daemon in the foreground (`serve`). The full command set is docs/07-cli.md; commands
 // arrive milestone by milestone (docs/08-roadmap.md).
-import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify } from './config.js';
+import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify, useDataDir } from './config.js';
 import { UsageError, check, parseArgs } from './args.js';
 import { DEFAULT_URL, agentGuide, readGuide, snippet } from './guide.js';
 
@@ -16,8 +16,14 @@ Daemon
           --quiet, -q      print just the "Hallway on <url>" line: no banner, no hints (the banner
                            is only shown on a terminal anyway)
   open                              Open the dashboard in your browser.
-  service install                   Run the daemon as a service (a LaunchAgent / systemd user unit).
-  service uninstall | status | restart
+  service install [--json]          Run the daemon as a service (a LaunchAgent / systemd user unit).
+  service start | stop | restart [--json]
+                                    Start it, or stop it until \`service start\` or the next login or boot
+                                    (\`service uninstall\` keeps it off), or restart it.
+  service status [--json]           Installed? running? which version? Exits 3 if it isn't running, 4 if
+                                    it isn't installed.
+  service logs [-n N] [-f]          The daemon's logs (the last 50 lines; -f keeps printing).
+  service uninstall [--json]        Stop it and remove it (the data home and logs stay).
 
 Apps and discovery
   status [slug] [--json]            Every app's state, address, port and uptime.
@@ -38,7 +44,8 @@ Running servers
                                     Start a server as a service on a stable port, wait for it, print its URL.
                                     $PORT in the command (quote it: '$PORT') becomes the app's port.
   stop <slug> | start <slug> | restart <slug>
-  logs <slug> [--lines N] [--follow]
+                                    An app's stop lasts until its start, across logins too.
+  logs <slug> [-n N] [-f]           Its last N lines (--lines; default 50); -f (--follow) keeps printing.
   service add <slug> [-- <command...>]
                                     Keep a declared app running: at login, and restarted if it exits.
   service rm <slug>                 Stop managing it (the app stays declared).
@@ -78,9 +85,10 @@ Other
   doctor [--json]                   Check the daemon, the data home, the services and fronted mode, with fixes.
   guide [--snippet]                 The guide for coding agents (AGENT-GUIDE.md), or just the paragraph
                                     for an agent instruction file (CLAUDE.md, AGENTS.md).
+  --data-dir <dir>                  The data home for this command (default $HALLWAY_HOME, else ~/.hallway).
   --version | --help
 
-Data: $HALLWAY_HOME (default ~/.hallway). Exit codes: 0 ok, 1 error, 2 usage error.`;
+Exit codes: 0 ok, 1 error, 2 usage error, 3 not running, 4 not installed (the service commands).`;
 
 /** Resolves with an exit code when there's nothing to run (Hallway already answers on the port), else undefined. */
 async function serve(flags: Record<string, string>): Promise<number | undefined> {
@@ -190,6 +198,12 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
 async function main(argv: string[]): Promise<number | undefined> {
   const parsed = parseArgs(argv);
   const { pos, flags } = parsed;
+  // every command's, so it's taken here, before anything reads the data home, and not passed on
+  if (flags['data-dir'] !== undefined) {
+    if (!flags['data-dir']) throw new UsageError('--data-dir needs a directory');
+    useDataDir(flags['data-dir']);
+    delete flags['data-dir'];
+  }
   if (flags.help) {
     process.stdout.write(USAGE + '\n');
     return 0;

@@ -35,6 +35,14 @@ const hw = (...args) => {
     throw new Error(`hallway ${args.join(' ')} exited ${e.status}:\n${e.stdout}\n${e.stderr}`);
   }
 };
+/** The exit code as well: `service status` exits 3 (not running) and 4 (not installed), the CLI contract's (D74). */
+const hwExit = (...args) => {
+  try {
+    return { code: 0, stdout: execFileSync(process.execPath, [cli, ...args], { cwd: work, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+  } catch (e) {
+    return { code: e.status, stdout: String(e.stdout), stderr: String(e.stderr) };
+  }
+};
 const freePort = () =>
   new Promise((resolve) => {
     const s = net.createServer().listen(0, '127.0.0.1', () => {
@@ -80,10 +88,16 @@ const managerSays = (label) => {
     if (darwin) return execFileSync('launchctl', ['print', `gui/${uid}/${label}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     // the task's definition (its state words are localised; the supervisor's state file says whether it runs)
     if (windows) return execFileSync('schtasks', ['/Query', '/TN', `\\${label}`, '/XML'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    return execFileSync('systemctl', ['--user', 'show', label.replace(/\./g, '-') + '.service', '--property=ActiveState,LoadState'], { encoding: 'utf8' });
+    return execFileSync('systemctl', ['--user', 'show', label.replace(/\./g, '-') + '.service', '--property=ActiveState,LoadState,UnitFileState'], { encoding: 'utf8' });
   } catch {
     return null;
   }
+};
+/** Whether the manager would start the job at the next login: what `service stop` must leave alone (D74). */
+const disabled = (label) => {
+  if (darwin) return new RegExp(`"${label.replace(/\./g, '\\.')}" => (true|disabled)`).test(execFileSync('launchctl', ['print-disabled', `gui/${uid}`], { encoding: 'utf8' }));
+  if (windows) return /<Settings>[\s\S]*<Enabled>false<\/Enabled>[\s\S]*<\/Settings>/.test(managerSays(label) ?? '');
+  return !/UnitFileState=enabled/.test(managerSays(label) ?? '');
 };
 
 try {
@@ -92,6 +106,10 @@ try {
   const port = await freePort();
   // a small log limit, so the rotation step below doesn't need 10 MB of output
   fs.appendFileSync(path.join(data, 'config.yaml'), `port: ${port}\nservices:\n  logMaxBytes: 65536\n  logGenerations: 2\n`);
+
+  step('service status before install: exit 4');
+  assert.equal(hwExit('service', 'status').code, 4);
+  assert.equal(hwExit('service', 'stop').code, 4);
 
   step('service install');
   const installed = hw('service', 'install');
@@ -102,8 +120,38 @@ try {
   else if (windows) assert.match(managerSays('hallway.daemon') ?? '', /<LogonTrigger>/);
   else assert.match(managerSays('hallway.daemon') ?? '', /ActiveState=active/);
 
+  const st = JSON.parse(hw('service', 'status', '--json'));
+  assert.equal(st.running, true);
+  assert.equal(st.answering, true);
+  assert.equal(st.installedVersion, st.runningVersion);
+
+  step('service stop: stopped, not disabled (the next login starts it); status exits 3');
+  const stopped = JSON.parse(hw('service', 'stop', '--json'));
+  assert.equal(stopped.ok, true);
+  await until('the daemon to stop', () => down(`http://localhost:${port}/api/health`));
+  assert.equal(disabled('hallway.daemon'), false, 'service stop leaves the job enabled');
+  if (darwin) assert.equal(managerSays('hallway.daemon'), null, 'booted out');
+  else if (!windows) assert.match(managerSays('hallway.daemon') ?? '', /ActiveState=(inactive|failed)/);
+  const after = hwExit('service', 'status', '--json');
+  assert.equal(after.code, 3, after.stdout + after.stderr);
+  assert.equal(JSON.parse(after.stdout).installed, true);
+  // and it stays stopped: KeepAlive / Restart=always / the supervisor don't bring it back
+  await sleep(darwin || windows ? 12000 : 3000);
+  assert.ok(await down(`http://localhost:${port}/api/health`), 'still stopped');
+
+  step('service start, service logs');
+  const started = JSON.parse(hw('service', 'start', '--json'));
+  assert.equal(started.ok, true);
+  assert.equal(started.answering, true);
+  assert.equal(hwExit('service', 'status').code, 0);
+  const daemonLogs = await until('the startup line in service logs', () => {
+    const l = hw('service', 'logs', '-n', '10');
+    return l.includes(`Hallway on http://localhost:${port}`) && l;
+  });
+  console.log(daemonLogs);
+
   step('service restart');
-  hw('service', 'restart');
+  assert.equal(JSON.parse(hw('service', 'restart', '--json')).ok, true);
   await until('the daemon after a restart', () => up(`http://localhost:${port}/api/health`));
 
   step('hallway run (not persistent)');
@@ -121,7 +169,12 @@ try {
   await until('the app to stop', () => down(url));
   assert.match(fs.readFileSync(path.join(data, 'apps', 'real-demo.yaml'), 'utf8'), /^expected: stopped$/m);
   if (darwin) assert.equal(managerSays('hallway.app.real-demo'), null, 'booted out');
+  // the control for the daemon's `service stop` above: an app's stop is durable, across logins too (D41)
+  assert.equal(disabled('hallway.app.real-demo'), true, "an app's stop disables it");
   assert.match(hw('start', 'real-demo'), /real-demo started/);
+  // launchd and Task Scheduler undo the disable; systemd enables a unit only if it starts at login, which a run
+  // without --persist doesn't
+  if (darwin || windows) assert.equal(disabled('hallway.app.real-demo'), false, 'start enables it again');
   assert.match(hw('restart', 'real-demo'), /real-demo restarted/);
 
   step('--persist: KeepAlive / Restart=always / the supervisor brings it back after a crash');

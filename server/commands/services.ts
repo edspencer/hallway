@@ -1,10 +1,11 @@
 // `hallway run`, `stop`, `start`, `restart`, `logs`, and `hallway service …` for apps and for the daemon itself
 // (docs/07-cli.md, "Services and ad-hoc runs" and "Daemon"; the lifecycle is server/services/).
+import fs from 'node:fs';
 import path from 'node:path';
 import { UsageError, check, need } from '../args.js';
-import { VERSION, parsePort } from '../config.js';
+import { VERSION, packageRoot, parsePort } from '../config.js';
 import { hostPort } from '../loopback.js';
-import { DAEMON_LABEL, appLabel, logFiles } from '../services/index.js';
+import { DAEMON_LABEL, NotInstalledError, appLabel, logFiles } from '../services/index.js';
 import { appLogs, followFiles, formatLogs } from '../services/logs.js';
 import { isListening, waitForPort } from '../services/ports.js';
 import { runApp } from '../services/run.js';
@@ -105,13 +106,21 @@ export async function logs(ctx: Ctx, pos: string[], flags: Record<string, string
   check('logs', flags, ['lines', 'follow'], pos, 1, rest);
   need('logs', pos, ['slug']);
   const slug = pos[0];
-  const store = ctx.store();
-  if (!store.apps.has(slug) && slug !== 'daemon') throw new Error(`no app '${slug}'`);
+  if (!ctx.store().apps.has(slug) && slug !== DAEMON_LOGS) throw new Error(`no app '${slug}'`);
+  return showLogs(ctx, slug, flags);
+}
+
+/** `hallway logs daemon` shows the daemon's own logs, as `hallway service logs` does. */
+const DAEMON_LOGS = 'daemon';
+
+/** The last lines of a job's two logs, then (`--follow`) what it writes next. */
+function showLogs(ctx: Ctx, slug: string, flags: Record<string, string>): number | undefined {
   const l = appLogs(ctx.home, slug, linesFlag(flags.lines, 50));
   const f = logFiles(ctx.home, slug);
   const text = formatLogs(l);
   if (!flags.follow) {
-    if (!text) ctx.err(`${slug} has written nothing to ${show(f.out)} or ${show(f.err)}${store.apps.get(slug)?.value?.service ? '' : " (it isn't a managed service, so Hallway doesn't capture its output)"}.\n`);
+    const captured = slug === DAEMON_LOGS || ctx.store().apps.get(slug)?.value?.service;
+    if (!text) ctx.err(`${slug} has written nothing to ${show(f.out)} or ${show(f.err)}${captured ? '' : " (it isn't a managed service, so Hallway doesn't capture its output)"}.\n`);
     ctx.out(text);
     return 0;
   }
@@ -156,25 +165,111 @@ export async function restartStaleDaemon(ctx: Ctx): Promise<void> {
     return;
   }
   await svc.restartDaemon();
-  forwarded(ctx, await svc.restartStaleForwarders());
+  forwarded(ctx.out, await svc.restartStaleForwarders());
   const w = await waitForDaemon(ctx, svc.store.currentConfig().port);
   if (w.ok) ctx.out(`Restarted the daemon: ${d.version} → ${VERSION}.\n`);
   else ctx.err(`hallway: restarted the daemon (it was ${d.version}), but ${w.reason}.\n`);
 }
 
-const forwarded = (ctx: Ctx, labels: string[]) => labels.length && ctx.out(forwardersLine(labels));
+const forwarded = (say: (s: string) => void, labels: string[]) => labels.length && say(forwardersLine(labels));
 
 /** The forwarders `service install` and `regenerate` restarted, for people. */
 const forwardersLine = (labels: string[]) => `Restarted ${labels.length === 1 ? 'the forwarder' : `${labels.length} forwarders`} it left running (${labels.join(', ')}), onto ${VERSION}.\n`;
 
-const SERVICE_USAGE = 'service needs one of: install, uninstall, status, restart, add <slug>, rm <slug>, regenerate [slug]';
+const SERVICE_USAGE = 'service needs one of: install, uninstall, start, stop, restart, status, logs, add <slug>, rm <slug>, regenerate [slug]';
 
-export async function service(ctx: Ctx, pos: string[], flags: Record<string, string>, rest: string[] | undefined): Promise<number> {
+/** `service status` (and `start`, `stop`, `restart`, `logs`) when there's no daemon job: the CLI contract's exit 4. */
+const NOT_INSTALLED = 4;
+/** `service status` when the job is installed but isn't running, or the daemon doesn't answer: exit 3. */
+const NOT_RUNNING = 3;
+
+/** The version of the Hallway a daemon job runs: the package.json above the cli.js in its program. Null if it's gone. */
+function jobVersion(program: string[] | undefined): string | null {
+  const cli = program?.find((p) => /cli\.js$/.test(p));
+  if (!cli) return null;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(packageRoot(path.dirname(cli)), 'package.json'), 'utf8')).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The daemon's service as `service status` reports it, and as `service install|start|stop|restart --json` carry it:
+ * the job (installed, running, pid), whether the daemon answers and as which version, the version the job runs, the
+ * port, the files, and what's wrong with it.
+ */
+async function daemonReport(ctx: Ctx) {
+  const svc = ctx.services();
+  const st = await svc.status(DAEMON_LABEL);
+  const port = svc.store.currentConfig().port;
+  // asked afresh: ctx.daemon() is the answer from before a start or stop
+  const daemon = await locateDaemon(ctx.home, port);
+  const manifest = st.installed ? svc.readManifest(DAEMON_LABEL) : null;
+  const installedVersion = st.installed ? jobVersion(manifest?.program) : null;
+  const logs = logFiles(ctx.home, 'daemon');
+  const warnings: string[] = [];
+  if (manifest?.node && !fs.existsSync(manifest.node.path))
+    warnings.push(`the Node the service runs (${show(manifest.node.path)}) has gone; \`hallway service regenerate\` points it at this one`);
+  if (st.installed && manifest && !installedVersion) warnings.push("the Hallway the service runs has gone; `hallway service install` points it at this one");
+  if (daemon && installedVersion && st.running && daemon.version !== installedVersion)
+    warnings.push(`the daemon answering is ${daemon.version}, but the service runs ${installedVersion}; \`hallway service restart\``);
+  return {
+    ...st,
+    file: svc.manager.file(DAEMON_LABEL),
+    /** The contract's name for `file` (cli-contract schemas/service-status.schema.json). */
+    unit: svc.manager.file(DAEMON_LABEL),
+    manager: svc.manager.kind,
+    port,
+    url: `http://localhost:${port}`,
+    answering: !!daemon,
+    /** The version answering (kept from before `runningVersion`). */
+    version: daemon?.version ?? null,
+    runningVersion: daemon?.version ?? null,
+    installedVersion,
+    cliVersion: VERSION,
+    node: manifest?.node ?? null,
+    /** The contract's one log file: the daemon's stdout; `logs` has both. */
+    log: logs.out,
+    logs,
+    warnings,
+  };
+}
+
+/** Until the daemon stops answering (after a stop), or the time is up. */
+async function waitForGone(ctx: Ctx, port: number, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (await locateDaemon(ctx.home, port)) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return true;
+}
+
+/** The daemon's last log lines, after it didn't come up (the contract asks for 20). */
+function daemonTail(ctx: Ctx) {
+  const tail = formatLogs(appLogs(ctx.home, 'daemon', 20));
+  if (tail) ctx.err(`\nThe last lines of its logs:\n${tail}`);
+}
+
+export async function service(ctx: Ctx, pos: string[], flags: Record<string, string>, rest: string[] | undefined): Promise<number | undefined> {
   const [sub, ...args] = pos;
   const services = () => ctx.services();
+  // with --json, stdout carries the one JSON document and nothing else; what people read goes to stderr
+  const say = flags.json ? ctx.err : ctx.out;
+  const done = async (action: string, ok: boolean, extra: Record<string, unknown> = {}) => {
+    if (flags.json) ctx.out(json({ ok, action, ...extra, ...(await daemonReport(ctx)) }));
+    return ok ? 0 : 1;
+  };
+  const notInstalled = async (action: string, e: unknown) => {
+    if (!(e instanceof NotInstalledError)) throw e;
+    ctx.err(`hallway: ${e.message}.\n`);
+    if (flags.json) ctx.out(json({ ok: false, action, error: e.message, ...(await daemonReport(ctx)) }));
+    return NOT_INSTALLED;
+  };
   switch (sub) {
     case 'install': {
-      check('service install', flags, [], args, 0, rest);
+      check('service install', flags, ['json'], args, 0, rest);
       const svc = services();
       svc.refuseTransient(DAEMON_LABEL);
       const port = svc.store.currentConfig().port;
@@ -188,61 +283,113 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
       const r = await svc.installDaemon({ restart: !!from });
       const forwarders = await svc.restartStaleForwarders();
       const w = await waitForDaemon(ctx, port);
-      ctx.out(`Installed Hallway's daemon as a ${svc.manager.noun}: ${show(r.file)}\n`);
-      if (r.restarted) ctx.out(from ? `Restarted the daemon: ${from} → ${VERSION}.\n` : 'Restarted the daemon onto its new definition.\n');
-      forwarded(ctx, forwarders);
-      if (w.ok) ctx.out(`It's running: http://localhost:${port}\n`);
-      else {
+      say(`Installed Hallway's daemon as a ${svc.manager.noun}: ${show(r.file)}\n`);
+      if (r.restarted) say(from ? `Restarted the daemon: ${from} → ${VERSION}.\n` : 'Restarted the daemon onto its new definition.\n');
+      forwarded(say, forwarders);
+      const extra = { restartedFrom: r.restarted ? from : null, forwarders };
+      if (!w.ok) {
         ctx.err(`hallway: the daemon was started, but ${w.reason}.\n`);
-        const tail = formatLogs(appLogs(ctx.home, 'daemon', 30));
-        if (tail) ctx.err(`\nThe last lines of its logs:\n${tail}`);
-        return 1;
+        daemonTail(ctx);
+        return done('install', false, { error: w.reason, ...extra });
       }
-      ctx.out(`${svc.manager.lifetime}\n`);
-      return 0;
+      say(`It's running: http://localhost:${port}\n${svc.manager.lifetime}\n`);
+      return done('install', true, extra);
     }
     case 'uninstall': {
-      check('service uninstall', flags, [], args, 0, rest);
+      check('service uninstall', flags, ['json'], args, 0, rest);
       const svc = services();
       const st = await svc.uninstallDaemon();
-      ctx.out(st.installed || st.loaded ? `Removed Hallway's daemon service (${show(svc.manager.file(DAEMON_LABEL))}).\n` : "Hallway's daemon wasn't installed as a service; nothing to do.\n");
-      return 0;
+      say(st.installed || st.loaded ? `Removed Hallway's daemon service (${show(svc.manager.file(DAEMON_LABEL))}).\n` : "Hallway's daemon wasn't installed as a service; nothing to do.\n");
+      return done('uninstall', true, { wasInstalled: st.installed || st.loaded });
     }
     case 'status': {
       check('service status', flags, ['json'], args, 0, rest);
-      const svc = services();
-      const st = await svc.status(DAEMON_LABEL);
-      const port = svc.store.currentConfig().port;
-      const daemon = await ctx.daemon();
-      const manifest = svc.readManifest(DAEMON_LABEL);
-      const out = { ...st, file: svc.manager.file(DAEMON_LABEL), manager: svc.manager.kind, url: `http://localhost:${port}`, answering: !!daemon, version: daemon?.version ?? null, node: manifest?.node ?? null };
+      const out = await daemonReport(ctx);
+      const code = !out.installed ? NOT_INSTALLED : out.running && out.answering ? 0 : NOT_RUNNING;
       if (flags.json) {
         ctx.out(json(out));
-        return 0;
+        return code;
       }
       const lines = [
         `Service:   ${out.installed ? show(out.file) : 'not installed (`hallway service install`)'}`,
-        `Loaded:    ${st.loaded ? 'yes' : 'no'}${st.state ? ` (${st.state})` : ''}${st.enabled !== null ? `, ${st.enabled ? 'starts at login' : "doesn't start at login"}` : ''}`,
-        `Running:   ${st.running ? `yes, pid ${st.pid}` : 'no'}${st.lastExitCode !== null ? ` (last exit status ${st.lastExitCode})` : ''}`,
-        `Dashboard: ${daemon ? `${out.url} (version ${daemon.version})` : `nothing answering on ${out.url}`}`,
-        ...(manifest?.node ? [`Node:      ${manifest.node.version} (${show(manifest.node.path)})`] : []),
+        `Loaded:    ${out.loaded ? 'yes' : 'no'}${out.state ? ` (${out.state})` : ''}${out.enabled !== null ? `, ${out.enabled ? 'starts at login' : "doesn't start at login"}` : ''}`,
+        `Running:   ${out.running ? `yes, pid ${out.pid}` : 'no'}${out.lastExitCode !== null ? ` (last exit status ${out.lastExitCode})` : ''}`,
+        `Dashboard: ${out.answering ? `${out.url} (version ${out.runningVersion})` : `nothing answering on ${out.url}`}`,
+        ...(out.installedVersion ? [`Version:   ${out.installedVersion} installed${out.installedVersion !== VERSION ? ` (this CLI is ${VERSION})` : ''}`] : []),
+        ...(out.node ? [`Node:      ${out.node.version} (${show(out.node.path)})`] : []),
+        ...(out.installed ? [`Logs:      ${show(out.logs.out)} and ${path.basename(out.logs.err)} (\`hallway service logs\`)`] : []),
+        ...out.warnings.map((w) => `Warning:   ${w}`),
       ];
       ctx.out(lines.join('\n') + '\n');
-      return 0;
+      return code;
+    }
+    case 'start': {
+      check('service start', flags, ['json'], args, 0, rest);
+      const svc = services();
+      const port = svc.store.currentConfig().port;
+      const was = await svc.status(DAEMON_LABEL);
+      try {
+        await svc.startDaemon();
+      } catch (e) {
+        return notInstalled('start', e);
+      }
+      const w = await waitForDaemon(ctx, port, 30_000);
+      if (!w.ok) {
+        ctx.err(`hallway: started the daemon, but ${w.reason}.\n`);
+        daemonTail(ctx);
+        return done('start', false, { error: w.reason });
+      }
+      say(was.running ? `Hallway's daemon was already running: http://localhost:${port}\n` : `Started Hallway's daemon: http://localhost:${port}\n`);
+      return done('start', true, { wasRunning: was.running });
+    }
+    case 'stop': {
+      check('service stop', flags, ['json'], args, 0, rest);
+      const svc = services();
+      const port = svc.store.currentConfig().port;
+      let was;
+      try {
+        was = await svc.stopDaemon();
+      } catch (e) {
+        return notInstalled('stop', e);
+      }
+      if (!(await waitForGone(ctx, port))) {
+        // the job is stopped, so what still answers is something else: a `hallway serve` in a terminal, say
+        const reason = `the service is stopped, but a daemon still answers on http://localhost:${port} (a \`hallway serve\` in a terminal?)`;
+        ctx.err(`hallway: ${reason}.\n`);
+        return done('stop', false, { error: reason, wasRunning: was.running });
+      }
+      say(
+        `${was.running ? "Stopped Hallway's daemon" : "Hallway's daemon wasn't running"}. It stays stopped until \`hallway service start\`, or your next login or boot; \`hallway service uninstall\` keeps it off.\n`,
+      );
+      return done('stop', true, { wasRunning: was.running });
     }
     case 'restart': {
-      check('service restart', flags, [], args, 0, rest);
+      check('service restart', flags, ['json'], args, 0, rest);
       const svc = services();
       const was = await ctx.daemon();
-      await svc.restartDaemon();
+      try {
+        await svc.restartDaemon();
+      } catch (e) {
+        return notInstalled('restart', e);
+      }
       const port = svc.store.currentConfig().port;
       const w = await waitForDaemon(ctx, port);
+      const from = was && was.version !== VERSION ? was.version : null;
       if (!w.ok) {
         ctx.err(`hallway: restarted the daemon, but ${w.reason}.\n`);
-        return 1;
+        daemonTail(ctx);
+        return done('restart', false, { error: w.reason, restartedFrom: from });
       }
-      ctx.out(`Restarted Hallway's daemon${was && was.version !== VERSION ? ` (${was.version} → ${VERSION})` : ''}: http://localhost:${port}\n`);
-      return 0;
+      say(`Restarted Hallway's daemon${from ? ` (${from} → ${VERSION})` : ''}: http://localhost:${port}\n`);
+      return done('restart', true, { restartedFrom: from });
+    }
+    case 'logs': {
+      check('service logs', flags, ['lines', 'follow'], args, 0, rest);
+      if (!(await services().status(DAEMON_LABEL)).installed) {
+        ctx.err("hallway: Hallway's daemon isn't installed as a service (`hallway service install`). Logs it left from before: `hallway logs daemon`.\n");
+        return NOT_INSTALLED;
+      }
+      return showLogs(ctx, DAEMON_LOGS, flags);
     }
     case 'add': {
       check('service add', flags, [], args, 1, rest, true);

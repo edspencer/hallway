@@ -413,4 +413,5 @@ itself would answer `403 forbidden host` to a request arriving as `review.localh
 - **`tildify`** when showing paths in the UI (`/Users/x/.hallway` → `~/.hallway`).
 - **Automatic backups** of the editable files into `backups/<timestamp>/` on a schedule and before destructive
   operations.
-- **Exit codes:** 0 success, 1 error, 2 usage error (print usage).
+- **Exit codes:** 0 success, 1 error, 2 usage error (print usage). Hallway's daemon `service` commands add 3 (not
+  running) and 4 (not installed), from the author's shared CLI contract (D74).

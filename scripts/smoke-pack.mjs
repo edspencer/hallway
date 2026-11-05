@@ -152,13 +152,46 @@ try {
     const svcEnv = { ...env, PATH: `${fake}:${env.PATH}`, FAKE_RESTART_SEC: '0.2' };
     delete svcEnv.XDG_CONFIG_HOME;
     const svc = (...args) => execFileSync(bin, args, { cwd: work, env: svcEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    // the exit code too: the service commands' 3 (not running) and 4 (not installed) are the CLI contract's (D74)
+    const svcExit = (...args) => {
+      try {
+        return { code: 0, stdout: svc(...args) };
+      } catch (e) {
+        return { code: e.status, stdout: String(e.stdout), stderr: String(e.stderr) };
+      }
+    };
     const port = await freePort();
     fs.appendFileSync(path.join(data, 'config.yaml'), `port: ${port}\n`);
+    assert.equal(svcExit('service', 'status').code, 4, 'not installed: exit 4');
+    assert.equal(svcExit('service', 'start').code, 4, 'nothing to start: exit 4');
     assert.match(svc('service', 'install'), new RegExp(`It's running: http://localhost:${port}`));
     const unit = fs.readFileSync(path.join(home, '.config', 'systemd', 'user', 'hallway-daemon.service'), 'utf8');
     assert.ok(unit.includes(`${path.join(installed, 'dist', 'server', 'cli.js')} serve --quiet`), `the unit runs the installed CLI:\n${unit}`);
     assert.deepEqual(await (await get(`http://localhost:${port}`, '/api/health', /json/)).json(), { ok: true, version: pkg.version });
     assert.match(svc('service', 'status'), /Running: +yes/);
+    const st = JSON.parse(svc('service', 'status', '--json'));
+    assert.equal(st.installedVersion, pkg.version);
+    assert.equal(st.runningVersion, pkg.version);
+
+    step('services: service stop (not disabled), status exits 3, service start, service logs');
+    const stopped = JSON.parse(svc('service', 'stop', '--json'));
+    assert.equal(stopped.ok, true);
+    assert.equal(stopped.running, false);
+    await assert.rejects(fetch(`http://localhost:${port}/api/health`), 'the daemon is gone after stop');
+    assert.ok(fs.existsSync(path.join(home, '.fake-systemd', 'hallway-daemon.service.enabled')), 'stop leaves the unit enabled, so the next login starts it');
+    assert.equal(svcExit('service', 'status').code, 3, 'installed, not running: exit 3');
+    const started = JSON.parse(svc('service', 'start', '--json'));
+    assert.equal(started.ok, true);
+    assert.equal(started.answering, true);
+    assert.deepEqual(await (await get(`http://localhost:${port}`, '/api/health', /json/)).json(), { ok: true, version: pkg.version });
+    // its startup line, which it prints just after it starts answering
+    let logged = '';
+    for (let i = 0; i < 50 && !logged.includes(`Hallway on http://localhost:${port}`); i++) {
+      logged = svc('service', 'logs', '-n', '5');
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.match(logged, new RegExp(`Hallway on http://localhost:${port}`), `service logs shows the daemon's:\n${logged}`);
+    assert.equal(JSON.parse(svc('service', 'restart', '--json')).ok, true);
     fs.writeFileSync(path.join(work, 'server.js'), "require('http').createServer((q, s) => s.end('hi')).listen(Number(process.env.PORT), process.env.HOST)");
     const up = svc('run', 'smoke-run', '--', 'node', 'server.js');
     const url = up.match(/smoke-run is up: (http:\/\/localhost:\d+)/)?.[1];

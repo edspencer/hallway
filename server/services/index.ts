@@ -36,6 +36,13 @@ export interface ServiceManifest {
 
 export class ServiceError extends Error {}
 
+/** The daemon's job doesn't exist: `service start`, `stop`, `restart` and `logs` exit 4 for it (the CLI contract). */
+export class NotInstalledError extends ServiceError {
+  constructor() {
+    super("Hallway's daemon isn't installed as a service; install it with `hallway service install`");
+  }
+}
+
 /** An app can be called `daemon`, but it can't be a managed service: its logs would be the daemon's (logs/daemon.*). */
 export const RESERVED_SERVICE_SLUG = 'daemon';
 export const DAEMON_SLUG_MESSAGE = "an app called 'daemon' can't be a managed service: its logs would be Hallway's own daemon's (logs/daemon.out.log); pick another slug";
@@ -195,8 +202,17 @@ export class Services {
     return v && v !== VERSION ? v : null;
   }
 
-  status(label: string): Promise<ServiceStatus> {
-    return this.manager.status(label);
+  /**
+   * What the manager says about a job. With no definition file, a manager that can't be asked (no systemd user
+   * instance: a container, an SSH session without one) doesn't make it an error: the job isn't installed.
+   */
+  async status(label: string): Promise<ServiceStatus> {
+    try {
+      return await this.manager.status(label);
+    } catch (e) {
+      if (fs.existsSync(this.manager.file(label))) throw e;
+      return { label, installed: false, loaded: false, running: false, pid: null, lastExitCode: null, state: null, enabled: null };
+    }
   }
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -383,15 +399,34 @@ export class Services {
   }
 
   async uninstallDaemon() {
-    const st = await this.manager.status(DAEMON_LABEL);
-    await this.manager.remove(DAEMON_LABEL);
+    const st = await this.status(DAEMON_LABEL);
+    // nothing to remove: not even asking the manager, which may not be there (a container)
+    if (st.installed || st.loaded) await this.manager.remove(DAEMON_LABEL);
     this.dropManifest(DAEMON_LABEL);
     return st;
   }
 
+  /** Start the installed daemon's job, its definition rewritten first if it's stale (`service start`). */
+  async startDaemon() {
+    const st = await this.status(DAEMON_LABEL);
+    if (!st.installed) throw new NotInstalledError();
+    return this.up(this.daemonSpec());
+  }
+
+  /**
+   * Stop the daemon's job until `service start` or the next login or boot (`service stop`, D74): unlike an app's
+   * stop, it isn't disabled, as `systemctl --user stop` and a LaunchAgent's bootout leave things.
+   */
+  async stopDaemon() {
+    const st = await this.status(DAEMON_LABEL);
+    if (!st.installed) throw new NotInstalledError();
+    await this.manager.stop(DAEMON_LABEL, { disable: false });
+    return st;
+  }
+
   async restartDaemon() {
-    const st = await this.manager.status(DAEMON_LABEL);
-    if (!st.installed) throw new ServiceError("the daemon isn't installed as a service; install it with `hallway service install`");
+    const st = await this.status(DAEMON_LABEL);
+    if (!st.installed) throw new NotInstalledError();
     const spec = this.daemonSpec();
     const changed = await this.write(spec);
     this.writeManifest(spec);

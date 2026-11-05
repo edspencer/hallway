@@ -43,7 +43,16 @@ export function tildify(p: string, home = os.homedir()) {
 export function resolveHome(env: NodeJS.ProcessEnv = process.env, home = os.homedir()) {
   return path.resolve(expandHome(env.HALLWAY_HOME || path.join(home, '.hallway'), home));
 }
-export const HOME = resolveHome();
+export let HOME = resolveHome();
+
+/**
+ * `--data-dir <dir>`, every command's: the data home for this run, and `$HALLWAY_HOME` for what it starts (the daemon's
+ * job passes a set `$HALLWAY_HOME` on), so the two can't disagree. The variable stays the override it was (D74).
+ */
+export function useDataDir(dir: string, env: NodeJS.ProcessEnv = process.env) {
+  env.HALLWAY_HOME = path.resolve(expandHome(dir));
+  HOME = resolveHome(env);
+}
 
 /**
  * Where everything lives in a data home (docs/02-architecture.md, "Data home"). Human-editable files sit at the top;
