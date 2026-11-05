@@ -13,6 +13,7 @@ Every route below is in the current release. In fronted mode the same API is als
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/health` | `{ ok: true, version }`: the daemon's own health. |
+| `GET` | `/api/busy` | `{ busy, version, counts: { setup, app } }`: whether a restart would cut something short (a local-domains setup the dashboard started, app starts, stops and restarts). What `hallway busy` asks. |
 | `GET` | `/api/state` | Everything the dashboard needs, in one call: apps with live state, bookmarks, observed listeners, what was lost at the last reboot (`lost`), a config summary and any file errors. |
 | `GET` | `/api/config` | The resolved `config.yaml`, with an ETag. |
 | `GET` | `/api/apps` | Declared and discovered apps, with current state. |

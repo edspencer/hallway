@@ -113,10 +113,12 @@ try {
     const timer = setTimeout(() => reject(new Error(`the server didn't start: ${printed}`)), 30000);
     server.stdout.on('data', (d) => {
       printed += d;
-      const m = printed.match(/^Hallway on (http:\/\/localhost:\d+)\nData home: .*\n/m);
+      const m = printed.match(/^Hallway (\S+): (http:\/\/localhost:\d+)\nData home: .*\n/m);
       if (m) {
         clearTimeout(timer);
-        resolve(m[1]);
+        // the CLI contract's first line (D75): `Hallway <version>: <url>`, first on stdout
+        if (m[1] !== pkg.version || !printed.startsWith(m[0])) reject(new Error(`the first line on stdout isn't \`Hallway ${pkg.version}: <url>\`: ${printed}`));
+        else resolve(m[2]);
       }
     });
     server.on('exit', (code) => reject(new Error(`the server exited (${code}): ${printed}`)));
@@ -186,11 +188,11 @@ try {
     assert.deepEqual(await (await get(`http://localhost:${port}`, '/api/health', /json/)).json(), { ok: true, version: pkg.version });
     // its startup line, which it prints just after it starts answering
     let logged = '';
-    for (let i = 0; i < 50 && !logged.includes(`Hallway on http://localhost:${port}`); i++) {
+    for (let i = 0; i < 50 && !logged.includes(`Hallway ${pkg.version}: http://localhost:${port}`); i++) {
       logged = svc('service', 'logs', '-n', '5');
       await new Promise((r) => setTimeout(r, 100));
     }
-    assert.match(logged, new RegExp(`Hallway on http://localhost:${port}`), `service logs shows the daemon's:\n${logged}`);
+    assert.ok(logged.includes(`Hallway ${pkg.version}: http://localhost:${port}`), `service logs shows the daemon's:\n${logged}`);
     assert.equal(JSON.parse(svc('service', 'restart', '--json')).ok, true);
     fs.writeFileSync(path.join(work, 'server.js'), "require('http').createServer((q, s) => s.end('hi')).listen(Number(process.env.PORT), process.env.HOST)");
     const up = svc('run', 'smoke-run', '--', 'node', 'server.js');

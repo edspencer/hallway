@@ -4,8 +4,8 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { agentRoutes, apiRoutes } from './api.js';
-import { WEB_DIST } from './config.js';
-import { removeDaemonRecord, writeDaemonRecord } from './daemonfile.js';
+import { VERSION, WEB_DIST } from './config.js';
+import { removeRuntimeFile, writeRuntimeFile } from './contract/runtime-file.js';
 import { bus as defaultBus, type EventBus } from './events.js';
 import { providers as defaultProviders, type ProviderRegistry } from './providers.js';
 import { mcpEndpoint, type McpEndpoint } from './mcp/index.js';
@@ -78,11 +78,16 @@ export interface ServerOptions extends Omit<AppOptions, 'store'> {
   home: string;
   /** An already-loaded store for `home` (the CLI reads config.yaml's port first). */
   store?: Store;
-  /** Watch the data home, take hourly snapshots, rotate service logs and record the port in state/daemon.json
-   * (default true). */
+  /** Watch the data home, take hourly snapshots, rotate service logs and write `<home>/runtime.json` (default true). */
   watch?: boolean;
   /** Find and cache favicons for app and bookmark thumbnails (default true). */
   thumbs?: boolean;
+}
+
+/** The host for runtime.json's URL: loopback, unless the development-only HALLWAY_DEV_BIND names one address. */
+function urlHost(hostname: string): string {
+  if (hostname === '0.0.0.0' || hostname === '::' || hostname === '127.0.0.1') return '127.0.0.1';
+  return hostname.includes(':') ? `[${hostname}]` : hostname;
 }
 
 /**
@@ -112,13 +117,19 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
   const stopSnapshots = watch ? startSnapshots(home) : () => {};
   const stopRotation = watch ? startLogRotation(store) : () => {};
   await watcher?.ready;
-  // where the CLI finds this daemon when config.yaml's port doesn't say (D46)
-  if (watch) writeDaemonRecord(home, bound);
+  // where the CLI finds this daemon: `busy` only here, the other commands when config.yaml's port doesn't say (D46, D75)
+  if (watch) {
+    try {
+      writeRuntimeFile(home, { pid: process.pid, port: bound, url: `http://${urlHost(hostname)}:${bound}`, version: VERSION });
+    } catch {
+      /* best effort: the CLI still finds a daemon on config.yaml's port */
+    }
+  }
   return {
     port: bound,
     store,
     close: async () => {
-      if (watch) removeDaemonRecord(home);
+      if (watch) removeRuntimeFile(home);
       thumbnailer?.stop();
       await mcp.close();
       stopSnapshots();

@@ -14,6 +14,7 @@ import { VERSION } from '../server/config.ts';
 import { platformFor } from '../server/platform/index.ts';
 import type { RunResult } from '../server/platform/services.ts';
 import { Services, logFiles } from '../server/services/index.ts';
+import { writeRuntimeFile } from '../server/contract/runtime-file.ts';
 import { exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
 
 await exitWatchdog();
@@ -23,16 +24,21 @@ after(async () => {
   for (const f of cleanups) await f();
 });
 
-/** A stand-in daemon on a port of its own: listening while the unit is active. */
+/** A stand-in daemon on a port of its own: listening while the unit is active, answering /api/busy with `counts`. */
 async function standIn() {
   let server: http.Server | null = null;
+  const counts = { setup: 0, app: 0 };
   const probe = http.createServer();
   await new Promise<void>((r) => probe.listen(0, '127.0.0.1', r));
   const port = (probe.address() as AddressInfo).port;
   await new Promise((r) => probe.close(r));
   const up = () =>
     new Promise<void>((r) => {
-      server = http.createServer((_, res) => res.setHeader('content-type', 'application/json').end(JSON.stringify({ ok: true, version: VERSION })));
+      server = http.createServer((req, res) =>
+        res
+          .setHeader('content-type', 'application/json')
+          .end(JSON.stringify(req.url === '/api/busy' ? { busy: counts.setup + counts.app > 0, version: VERSION, counts } : { ok: true, version: VERSION })),
+      );
       server.listen(port, '127.0.0.1', r);
     });
   const down = () =>
@@ -43,7 +49,7 @@ async function standIn() {
       server = null;
     });
   cleanups.push(down);
-  return { port, up, down };
+  return { port, up, down, counts };
 }
 
 async function setup() {
@@ -86,6 +92,8 @@ async function setup() {
     }
     return { code: 0, stdout: '', stderr: '' };
   };
+  // what the daemon writes once it's listening: where `busy` and the busy check find it (D75)
+  writeRuntimeFile(t.home, { pid: process.pid, port: daemon.port, url: `http://127.0.0.1:${daemon.port}`, version: VERSION });
   const env = { PATH: '' };
   const services = new Services({ store: t.store, platform: platformFor('linux'), run, env, userHome, cliScript, node: { path: process.execPath, version: process.version } });
   unit = services.manager.file('hallway.daemon');
@@ -222,5 +230,49 @@ describe('the daemon as a service (the CLI contract, D74)', () => {
     assert.equal(r.code, 0);
     assert.equal(JSON.parse(r.out).wasInstalled, true);
     assert.equal((await s.cmd(['status'])).code, 4);
+  });
+
+  test('stop and restart refuse with 75 while the daemon is busy, and say why; --force says Overriding: and goes ahead (D75)', async () => {
+    const s = await setup();
+    await s.cmd(['install']);
+    s.daemon.counts.setup = 1;
+    s.daemon.counts.app = 2;
+    s.calls.length = 0;
+    for (const verb of ['stop', 'restart']) {
+      const r = await s.cmd([verb]);
+      assert.equal(r.code, 75, verb);
+      assert.equal(r.out, '');
+      assert.equal(
+        r.err,
+        `hallway: Hallway is busy: 1 local-domains setup and 2 app starts, stops or restarts are running. Try \`hallway service ${verb}\` again once it has finished, or add --force.\n`,
+      );
+    }
+    // with --json, still one document on stdout
+    const j = await s.cmd(['stop'], { json: '1' });
+    assert.equal(j.code, 75);
+    assert.equal(JSON.parse(j.out).error, 'busy');
+    assert.ok(!s.calls.some((c) => / (stop|restart) hallway-daemon/.test(c)), 'nothing was stopped');
+    assert.equal((await s.cmd(['status'])).code, 0);
+
+    const forced = await s.cmd(['restart'], { force: '1' });
+    assert.equal(forced.code, 0, forced.err);
+    assert.match(forced.err, /^Overriding: Hallway is busy: 1 local-domains setup and 2 app starts, stops or restarts are running\.\n/);
+    const stopped = await s.cmd(['stop'], { force: '1' });
+    assert.equal(stopped.code, 0, stopped.err);
+    assert.match(stopped.err, /^Overriding: /);
+
+    // not busy: no word about it
+    s.daemon.counts.setup = s.daemon.counts.app = 0;
+    await s.cmd(['start']);
+    const idle = await s.cmd(['stop']);
+    assert.equal(idle.code, 0);
+    assert.equal(idle.err, '');
+  });
+
+  test('not installed beats busy: stop exits 4 even when a `hallway serve` in a terminal is busy', async () => {
+    const s = await setup();
+    await s.daemon.up();
+    s.daemon.counts.app = 1;
+    assert.equal((await s.cmd(['stop'])).code, 4);
   });
 });

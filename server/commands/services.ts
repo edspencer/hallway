@@ -10,6 +10,7 @@ import { appLogs, followFiles, formatLogs } from '../services/logs.js';
 import { isListening, waitForPort } from '../services/ports.js';
 import { runApp } from '../services/run.js';
 import { appUrl } from '../views.js';
+import { refuseIfBusy } from './busy.js';
 import { type Ctx, json, locateDaemon, show, table } from './context.js';
 
 const portFlag = (v: string | undefined) => {
@@ -261,6 +262,13 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
     if (flags.json) ctx.out(json({ ok, action, ...extra, ...(await daemonReport(ctx)) }));
     return ok ? 0 : 1;
   };
+  // the contract's busy check (D75), where there's a service to stop: refused with 75 unless --force
+  const busy = async (action: string) => {
+    if (!(await services().status(DAEMON_LABEL)).installed) return null;
+    const code = await refuseIfBusy(ctx, flags, action);
+    if (code !== null && flags.json) ctx.out(json({ ok: false, action, error: 'busy', ...(await daemonReport(ctx)) }));
+    return code;
+  };
   const notInstalled = async (action: string, e: unknown) => {
     if (!(e instanceof NotInstalledError)) throw e;
     ctx.err(`hallway: ${e.message}.\n`);
@@ -343,7 +351,9 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
       return done('start', true, { wasRunning: was.running });
     }
     case 'stop': {
-      check('service stop', flags, ['json'], args, 0, rest);
+      check('service stop', flags, ['json', 'force'], args, 0, rest);
+      const refused = await busy('stop');
+      if (refused !== null) return refused;
       const svc = services();
       const port = svc.store.currentConfig().port;
       let was;
@@ -364,7 +374,9 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
       return done('stop', true, { wasRunning: was.running });
     }
     case 'restart': {
-      check('service restart', flags, ['json'], args, 0, rest);
+      check('service restart', flags, ['json', 'force'], args, 0, rest);
+      const refused = await busy('restart');
+      if (refused !== null) return refused;
       const svc = services();
       const was = await ctx.daemon();
       try {

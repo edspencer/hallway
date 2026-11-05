@@ -24,7 +24,7 @@ const cli = ['--import', 'tsx', path.join(ROOT, 'server/cli.ts')];
 
 async function daemon() {
   const home = tmpDir('hw-bridge-');
-  // the bridge finds the daemon through state/daemon.json (D46): config.yaml's 4255 is someone else's here
+  // the bridge finds the daemon through runtime.json (D46, D75): config.yaml's 4255 is someone else's here
   const server = await startServer(0, { home, webDist: null, thumbs: false, bus: new EventBus(), providers: new ProviderRegistry() });
   cleanups.push(async () => {
     await server.close();

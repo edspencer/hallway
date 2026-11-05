@@ -20,6 +20,7 @@ if (process.env.CI !== 'true' || process.env.HALLWAY_REAL_SERVICES !== '1') {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(root, 'dist', 'server', 'cli.js');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 assert.ok(fs.existsSync(cli), 'build first (npm run build)');
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'hw-real-')));
 const data = path.join(tmp, 'data');
@@ -146,9 +147,18 @@ try {
   assert.equal(hwExit('service', 'status').code, 0);
   const daemonLogs = await until('the startup line in service logs', () => {
     const l = hw('service', 'logs', '-n', '10');
-    return l.includes(`Hallway on http://localhost:${port}`) && l;
+    return l.includes(`Hallway ${pkg.version}: http://localhost:${port}`) && l;
   });
   console.log(daemonLogs);
+
+  step('busy (D75): the service daemon found through runtime.json, idle');
+  const idle = hwExit('busy', '--json');
+  assert.equal(idle.code, 0, idle.stderr);
+  const busyDoc = JSON.parse(idle.stdout);
+  assert.equal(busyDoc.running, true);
+  assert.equal(busyDoc.busy, false);
+  assert.equal(busyDoc.version, pkg.version);
+  assert.deepEqual(busyDoc.counts, { setup: 0, app: 0 });
 
   step('service restart');
   assert.equal(JSON.parse(hw('service', 'restart', '--json')).ok, true);
@@ -225,6 +235,8 @@ try {
   hw('service', 'rm', 'real-kept');
   hw('service', 'uninstall');
   await until('the daemon to go', () => down(`http://localhost:${port}/api/health`));
+  // nothing running: busy exits 3 (its runtime.json is gone, or names a pid that's gone)
+  assert.equal(hwExit('busy').code, 3);
   await until('the persistent app to go', () => down(keptUrl));
   for (const l of ['hallway.daemon', 'hallway.app.real-demo', 'hallway.app.real-kept']) {
     assert.equal(fs.existsSync(unitFile(l)), false, `${unitFile(l)} is removed`);

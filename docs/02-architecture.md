@@ -83,12 +83,13 @@ Mirror Local Review (D16). Keep dependencies minimal.
   bookmarks/
     <group-slug>.yaml         # one bookmark group per file (human/agent-editable)
   ignore.yaml                 # observed listeners the user chose to hide (human/agent-editable)
+  runtime.json                # machine-written: the running daemon's pid, port, URL and version, where the CLI
+                              # also looks for it (the CLI contract's; D46, D75)
   state/                      # machine-written; never hand-edit; safe to delete
     health.sqlite             # probe samples + hourly rollups (node:sqlite, D37)
     observed.json             # last-known identity of every observed listener, with first/last seen
     boot.json                 # last seen boot time, to detect reboots
     lost.json                 # "Lost at last reboot": the notice, until it's dismissed (D54)
-    daemon.json               # the running daemon's pid and port, where the CLI also looks for it (D46)
   cache/                      # machine-written; regenerable
     thumbs/<slug>.png, <slug>.json   # screenshots (opt-in, D56) and what was shot when, from which PID
     browser/                  # `hallway thumbs enable`: playwright-core and Chromium's headless shell (D56)
@@ -322,6 +323,7 @@ All JSON. All under the security middleware below.
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/health` | `{ ok: true, version }` — the daemon's own health |
+| GET | `/api/busy` | `{ busy, version, counts: { setup, app } }` — the CLI contract's busy check: a local-domains setup and app starts, stops and restarts the daemon is running (D75) |
 | GET | `/api/state` | Everything the dashboard needs in one call: apps merged with live state, bookmarks, observed listeners, config summary, errors |
 | GET | `/api/apps` | Declared + discovered apps with current state |
 | GET | `/api/apps/:slug` | One app, with config, state, recent history, identity, file errors |

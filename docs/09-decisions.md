@@ -591,7 +591,8 @@ port, but the CLI, reading the same broken file, fell back to the default 4255 a
 running" (while `hallway doctor`, in the same run, said the daemon keeps the last good version). The same happened
 after `hallway serve --port <n>` or `$PORT`, and after `port:` was edited under a running daemon.
 
-- On start, the daemon writes `state/daemon.json` (`pid`, `port`, `startedAt`) and removes it on a clean stop.
+- On start, the daemon writes `state/daemon.json` (`pid`, `port`, `startedAt`) and removes it on a clean stop. (D75:
+  the CLI contract's `<home>/runtime.json` now, with the same role.)
 - The CLI still looks on config.yaml's port first (D44 unchanged), then on the recorded port if its process is alive.
   Either way `/api/health` must answer as Hallway, so a stale record or a reused pid can't mislead it.
 - **Rejected:** parsing a broken `config.yaml` leniently for its `port:` line (doesn't help `--port`/`$PORT`, and
@@ -1908,8 +1909,57 @@ them alone ("a tool that manages other services may add sub-commands of its own 
 - **Not yet:** `service stop` and `restart` refusing with exit 75 while Hallway is busy, `--force`, `/api/busy`,
   `hallway busy`, `hallway update` and doctor's install-method and update checks come with the contract's next wave.
   The contract's first line for `serve` (`Hallway <version>: <url>`, where Hallway prints `Hallway on <url>`) is left
-  for when the conformance runner checks it, since scripts wait for today's line.
+  for when the conformance runner checks it, since scripts wait for today's line. (D75 did the busy check and the
+  first line.)
 - **Rejected:** making the daemon's `stop` durable like an app's (the contract says otherwise, and `uninstall` is the
   durable off); changing apps' `stop` to match (it would quietly bring back at the next login apps people stopped,
   against `expected: stopped`); a `service logs` that refused without a job but showed `logs daemon`'s files anyway
   (the contract's table gives `logs` exit 4, and the message points at `hallway logs daemon`).
+
+### D75 — The busy check (`/api/busy`, `hallway busy`, exit 75 on `service stop` and `restart`), `runtime.json`, and `serve`'s first line `Hallway <version>: <url>` (2026-11-05; amends D46, D63, D74)
+
+The next part of the CLI contract ([edspencer/cli-contract](https://github.com/edspencer/cli-contract) `SPEC.md` 0.1,
+§3 and §4; D74 has the background). The contract's reference code is copied into `server/contract/` whole
+(`exit-codes.ts`, `output.ts`, `runtime-file.ts`, `busy-client.ts`), each starting with the header that names its
+source and version; the only local change is `.js` import extensions.
+
+- **`<home>/runtime.json` replaces `state/daemon.json`.** The daemon writes `{ pid, port, url, version, startedAt }`
+  once it's listening (0600, atomically) and removes it on a clean stop, with the contract's code. It's the CLI's
+  second place to look for the daemon, after config.yaml's port, as `daemon.json` was (D46), and the only place
+  `busy` looks: an instance that's running wrote it, and guessing a port would ask whatever else listens there. The
+  URL is `http://127.0.0.1:<port>`. `state/daemon.json` is no longer written; an older daemon still running after an
+  upgrade is still found on config.yaml's port, and has no `/api/busy` anyway. Kept rather than rejected: one file,
+  the contract's name and place, not two with the same facts.
+- **`GET /api/busy`** answers `{ busy, version, counts: { setup, app } }`: `setup` is 1 while the dashboard's Turn on
+  for local domains is running (its job, D65), `app` counts app starts, stops and restarts the daemon is running (the
+  dashboard's buttons, the Lost banner's restart and make-it-a-service, D54). Both are in memory, so it's cheap, and
+  counts only, so it needs no auth beyond the loopback middleware, until the contract settles its first open question.
+  Not counted: `hallway setup`, `hallway start <slug>` and the like in a terminal (their own processes, which a daemon
+  restart doesn't touch), the scanner and prober (a restart loses nothing of theirs), and MCP tools (none starts a
+  process, D52).
+- **`hallway busy [--json]`** exits 0 when it isn't busy, 75 when it is (`Hallway is busy: 1 local-domains setup is
+  running.`), 3 when nothing answers, and 1 when something answers but not with a busy answer.
+- **`hallway service stop` and `service restart` refuse with exit 75** while the daemon is busy, saying why and how
+  to go ahead; **`--force`** prints the same sentence on stderr, prefixed `Overriding:`, and goes ahead. The check runs
+  only when the job is installed, so "not installed" (4) wins over busy. `uninstall` doesn't check (the contract:
+  removing the service is an explicit act), nor do `install` and `regenerate`, which restart the daemon only onto a
+  new version or definition (a later wave's `update` checks first).
+- **`serve`'s first line on stdout is `Hallway <version>: <url>`** (it was `Hallway on <url>`), and `Data home: …`
+  follows it, as before. The HALLWAY banner (D63's art) moves to **stderr**, written just before, so a person at a
+  terminal sees the same thing in the same order while a script reading stdout gets the contract's line first. The
+  banner is shown when stderr is a terminal; stdout's colour still follows stdout. Everything else stays where it was,
+  after the first line: there's nothing that logs to stdout during startup. A minor change, with a changeset that
+  says so, for scripts that waited for the old line; `scripts/smoke-pack.mjs`, `scripts/services-real.mjs` and the
+  tests wait for the new one.
+- **launchd: a bootout waits until the job is gone.** `launchctl bootout` can return while the job is still exiting,
+  and a bootstrap straight after fails with `5: Input/output error` (Paddock's release CI hit this on a real Mac,
+  2026-11-05). Hallway already retried the bootstrap for 5 s; now `bootout` also polls `launchctl print` (every
+  250 ms, up to 10 s) until it no longer finds the job, so a restart that reloads, a `service stop` then `start`, or a
+  remove then install find it gone rather than half there.
+- **The conformance runner** (`@edspencer/cli-conformance`, a devDependency) runs in CI against `cli-contract.json`,
+  with every check on.
+- **Rejected:** keeping the banner first on stdout and printing the line after it (the contract's line must be first,
+  and `--quiet` already showed that scripts only want the line); dropping the banner when the contract applies (it's
+  for people, and stderr is theirs too); growing `state/daemon.json` instead of the contract's file (a second
+  location for the same facts, and the reference code reads `<home>/runtime.json`); counting the CLI's own operations
+  through a lock file (a daemon restart doesn't cut them short, which is what busy is for).

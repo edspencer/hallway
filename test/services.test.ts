@@ -149,8 +149,13 @@ describe('systemd units', () => {
 /** A runner that records every call and answers from a script. */
 function mockRunner(answer: (cmd: string, args: string[]) => Partial<RunResult> | undefined = () => undefined) {
   const calls: string[] = [];
+  // as launchd does: a job booted out isn't found by `print` until it's bootstrapped again (bootout waits for that)
+  const gone = new Set<string>();
   const run = async (cmd: string, args: string[]): Promise<RunResult> => {
     calls.push([cmd, ...args].join(' '));
+    if (cmd === 'launchctl' && args[0] === 'bootout') gone.add(args[1]);
+    if (cmd === 'launchctl' && args[0] === 'bootstrap') gone.delete(`${args[1]}/${path.basename(args[2], '.plist')}`);
+    if (cmd === 'launchctl' && args[0] === 'print' && gone.has(args[1])) return { code: 113, stdout: '', stderr: 'Could not find service' };
     return { code: 0, stdout: '', stderr: '', ...answer(cmd, args) };
   };
   return { calls, run };
@@ -186,7 +191,7 @@ describe('the launchd lifecycle (runner mocked)', () => {
   test('stop: bootout (so KeepAlive cannot resurrect it), then disable (so login does not either)', async () => {
     const m = mockRunner();
     await launchdManager({ dir, uid: 501, run: m.run }).stop('hallway.app.review');
-    assert.deepEqual(m.calls, ['launchctl bootout gui/501/hallway.app.review', 'launchctl disable gui/501/hallway.app.review']);
+    assert.deepEqual(m.calls, ['launchctl bootout gui/501/hallway.app.review', 'launchctl print gui/501/hallway.app.review', 'launchctl disable gui/501/hallway.app.review']);
     // already unloaded is fine
     const gone = mockRunner((c, a) => (a[0] === 'bootout' ? { code: 3, stderr: 'No such process' } : undefined));
     await launchdManager({ dir, uid: 501, run: gone.run }).stop('hallway.app.review');
@@ -195,7 +200,7 @@ describe('the launchd lifecycle (runner mocked)', () => {
   test("stop with disable: false (the daemon's service stop, D74): bootout alone, so the next login loads it again", async () => {
     const m = mockRunner();
     await launchdManager({ dir, uid: 501, run: m.run }).stop('hallway.daemon', { disable: false });
-    assert.deepEqual(m.calls, ['launchctl bootout gui/501/hallway.daemon']);
+    assert.deepEqual(m.calls, ['launchctl bootout gui/501/hallway.daemon', 'launchctl print gui/501/hallway.daemon']);
   });
 
   test('restart: kickstart -k, or bootout + bootstrap when the plist changed', async () => {
@@ -207,10 +212,32 @@ describe('the launchd lifecycle (runner mocked)', () => {
     await mgr.restart(adhoc, { reload: true });
     assert.deepEqual(m.calls.slice(1), [
       'launchctl bootout gui/501/hallway.app.demo',
+      'launchctl print gui/501/hallway.app.demo',
       'launchctl enable gui/501/hallway.app.demo',
       `launchctl bootstrap gui/501 ${dir}/hallway.app.demo.plist`,
       'launchctl kickstart gui/501/hallway.app.demo',
     ]);
+  });
+
+  test('bootout waits until launchd no longer has the job, so the bootstrap after it finds it gone (D75)', async () => {
+    // a runner of its own: the job is still there for three looks, as one on its way out is
+    let prints = 0;
+    const naps: number[] = [];
+    const calls: string[] = [];
+    const run = async (cmd: string, args: string[]): Promise<RunResult> => {
+      calls.push([cmd, ...args].join(' '));
+      if (args[0] !== 'print') return { code: 0, stdout: '', stderr: '' };
+      return prints++ < 3 ? { code: 0, stdout: 'x = {\n\tstate = running\n\tpid = 7\n}', stderr: '' } : { code: 113, stdout: '', stderr: '' };
+    };
+    await launchdManager({ dir, uid: 501, run, sleep: async (ms) => void naps.push(ms) }).restart(adhoc, { reload: true });
+    const i = calls.indexOf('launchctl bootout gui/501/hallway.app.demo');
+    assert.deepEqual(calls.slice(i + 1, i + 5), [...Array(3).fill('launchctl print gui/501/hallway.app.demo'), 'launchctl enable gui/501/hallway.app.demo']);
+    assert.deepEqual(naps, [250, 250]);
+    // one that never goes: give up after 10 s, and let the bootstrap's own retries have it
+    const stuck: string[] = [];
+    const always = async (cmd: string, args: string[]): Promise<RunResult> => (stuck.push(args[0]), { code: 0, stdout: args[0] === 'print' ? 'x = {\n\tstate = running\n}' : '', stderr: '' });
+    await launchdManager({ dir, uid: 501, run: always, sleep: async () => {} }).stop('hallway.app.demo', { disable: false });
+    assert.equal(stuck.filter((a) => a === 'print').length, 40);
   });
 
   test('bootstrap is retried while a booted-out job is still exiting', async () => {
@@ -240,7 +267,7 @@ describe('the launchd lifecycle (runner mocked)', () => {
     fs.writeFileSync(path.join(d, 'com.other.plist'), '');
     assert.deepEqual(mgr.list(), ['hallway.app.review']);
     await mgr.remove('hallway.app.review');
-    assert.deepEqual(m.calls, ['launchctl bootout gui/501/hallway.app.review', 'launchctl enable gui/501/hallway.app.review']);
+    assert.deepEqual(m.calls, ['launchctl bootout gui/501/hallway.app.review', 'launchctl print gui/501/hallway.app.review', 'launchctl enable gui/501/hallway.app.review']);
     assert.equal(fs.existsSync(path.join(d, 'hallway.app.review.plist')), false);
   });
 });

@@ -85,7 +85,7 @@ export interface LaunchdOptions {
   dir: string;
   uid: number;
   run?: Runner;
-  /** For the bootout → bootstrap retry. */
+  /** For waiting out a bootout, and the bootstrap retry. */
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -110,8 +110,9 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
     return { label, installed, loaded: true, running: p.state === 'running' && p.pid !== null, pid: p.pid, lastExitCode: p.lastExitCode, state: p.state, enabled: null };
   };
 
-  // Right after a bootout, the job may still be on its way out, and bootstrap fails with "5: Input/output error";
-  // retrying for a few seconds is the usual cure (unverified on macOS).
+  // Right after a bootout, the job may still be on its way out, and a bootstrap fails with "5: Input/output error"
+  // (Paddock's release CI hit it on a real Mac, 2026-11-05). bootout waits for it to go (below); this retries for a few
+  // seconds more, for a job launchd hasn't finished with even then.
   const bootstrap = async (label: string) => {
     for (let i = 0; ; i++) {
       const r = await run('launchctl', ['bootstrap', domain, file(label)]);
@@ -122,8 +123,18 @@ export function launchdManager({ dir, uid, run = defaultRunner, sleep = (ms) => 
     }
   };
 
-  // exit 3 / 113: "No such process" / "Could not find service": it wasn't loaded, which is what we wanted
-  const bootout = (label: string) => launchctl(['bootout', target(label)], [0, 3, 36, 113]);
+  // exit 3 / 113: "No such process" / "Could not find service": it wasn't loaded, which is what we wanted. bootout can
+  // return while the job is still exiting, so wait (up to 10 s) until `launchctl print` no longer finds it: a start or
+  // bootstrap straight after then finds it gone, rather than half there (D75).
+  const bootout = async (label: string) => {
+    const r = await launchctl(['bootout', target(label)], [0, 3, 36, 113]);
+    for (let i = 0; i < 40; i++) {
+      const p = await run('launchctl', ['print', target(label)]);
+      if (p.code !== 0) break;
+      await sleep(250);
+    }
+    return r;
+  };
 
   return {
     kind: 'launchd',

@@ -4,6 +4,7 @@ import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { VERSION } from '../server/config.ts';
 import { createApp } from '../server/index.ts';
 import { platformFor } from '../server/platform/index.ts';
 import { ProviderRegistry } from '../server/providers.ts';
@@ -13,7 +14,7 @@ import { onWindows, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 const cleanups: (() => void)[] = [];
 after(() => cleanups.forEach((c) => c()));
 
-async function setup() {
+async function setup({ providers = new ProviderRegistry(), hold }: { providers?: ProviderRegistry; hold?: Promise<void> } = {}) {
   const s = await tmpStore();
   cleanups.push(s.cleanup);
   const userHome = tmpDir('hw-test-api-user-');
@@ -26,10 +27,12 @@ async function setup() {
     userHome,
     run: async (cmd, args) => {
       calls.push([cmd, ...args].join(' '));
+      // a stop that takes as long as the test wants: the app operation in flight, for /api/busy
+      if (hold && args[1] === 'stop') await hold;
       return { code: 0, stdout: args[1] === 'show' ? 'LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=42\n' : '', stderr: '' };
     },
   });
-  const app = createApp({ store: s.store, bus: s.bus, providers: new ProviderRegistry(), webDist: null, services: () => services });
+  const app = createApp({ store: s.store, bus: s.bus, providers, webDist: null, services: () => services });
   const req = (p: string, init: RequestInit = {}) => app.request(p, { ...init, headers: { host: 'localhost:4255', ...(init.method === 'POST' ? { 'content-type': 'application/json' } : {}) } });
   await s.store.createApp('demo', { port: 5100, expected: 'adhoc', service: { command: ['sh', '-c', 'true'], cwd: s.home, runAtLoad: false, keepAlive: false } });
   await s.store.createApp('plain', { port: 5101 });
@@ -76,5 +79,28 @@ describe('service routes', () => {
     assert.equal(cross.status, 403);
     const form = await app.request('/api/apps/demo/service/stop', { method: 'POST', body: 'x', headers: { host: 'localhost:4255', 'content-type': 'text/plain' } });
     assert.equal(form.status, 415);
+  });
+
+  test('GET /api/busy: the counts, with an app operation in flight and the dashboard\'s setup running (D75)', async () => {
+    let release = () => {};
+    const hold = new Promise<void>((r) => (release = r));
+    const providers = new ProviderRegistry();
+    let setupState: 'idle' | 'running' = 'idle';
+    providers.register({ name: 'fronting', frontingSetup: () => ({ state: setupState, trust: null, port: null, log: '', error: null, reason: null }) });
+    const { req } = await setup({ providers, hold });
+    const busy = async () => (await (await req('/api/busy')).json()) as { busy: boolean; version: string; counts: Record<string, number> };
+    assert.deepEqual(await busy(), { busy: false, version: VERSION, counts: { setup: 0, app: 0 } });
+    const stopping = req('/api/apps/demo/service/stop', { method: 'POST', body: '{}' });
+    for (let i = 0; i < 100 && (await busy()).counts.app === 0; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(await busy(), { busy: true, version: VERSION, counts: { setup: 0, app: 1 } });
+    setupState = 'running';
+    assert.deepEqual((await busy()).counts, { setup: 1, app: 1 });
+    release();
+    assert.equal((await stopping).status, 200);
+    setupState = 'idle';
+    assert.deepEqual(await busy(), { busy: false, version: VERSION, counts: { setup: 0, app: 0 } });
+    // a failed operation is no longer counted either
+    await req('/api/apps/plain/service/start', { method: 'POST', body: '{}' });
+    assert.equal((await busy()).counts.app, 0);
   });
 });
