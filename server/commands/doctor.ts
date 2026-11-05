@@ -42,6 +42,14 @@ export interface DiagnoseOptions {
   entry?: string;
 }
 
+/** What to do when the service manager can't be asked (the contract's §1: every failure has a fix). */
+export function serviceManagerFix(kind: 'launchd' | 'systemd' | 'schtasks'): string {
+  if (kind === 'systemd')
+    return "run Hallway from a login session with systemd's user instance (`systemctl --user status` should answer; check that $XDG_RUNTIME_DIR is set, usually /run/user/$(id -u)). Without one, run `hallway serve` in a terminal instead";
+  if (kind === 'launchd') return 'run Hallway from your own login session (not over SSH as another user, or with sudo): LaunchAgents live in the `gui/<uid>` domain';
+  return "check that Task Scheduler is running (`schtasks /Query` should answer); without it, run `hallway serve` in a terminal instead";
+}
+
 export async function diagnose(ctx: Ctx, run: Runner = defaultRunner, opts: DiagnoseOptions = {}): Promise<Check[]> {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
@@ -88,19 +96,23 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner, opts: Diag
   const daemon = await ctx.daemon();
   if (daemon) {
     add({ id: 'daemon', status: 'pass', message: `the daemon is answering on ${daemon.url} (version ${daemon.version})` });
+    add({ id: 'port', status: 'pass', message: `port ${new URL(daemon.url).port || cfg.port} is Hallway's` });
     // an upgrade replaces the files, not the process: the daemon keeps serving the old dashboard and API until it's
     // restarted (D70)
     if (daemon.version !== VERSION)
       add({ id: 'daemon-version', status: 'fail', message: `the daemon is running version ${daemon.version}, but this CLI is ${VERSION}: it's still running the code it started with`, fix: '`hallway service restart` (or restart the `hallway serve` it runs in)' });
   } else if (await isListening(cfg.port))
     add({ id: 'port', status: 'fail', message: `something that isn't Hallway is listening on its port, ${cfg.port}`, fix: 'stop it, or give Hallway another port: in config.yaml' });
-  else add({ id: 'daemon', status: 'warn', message: `the daemon isn't running (nothing on http://localhost:${cfg.port})`, fix: '`hallway service install` runs it as a service' });
+  else {
+    add({ id: 'daemon', status: 'warn', message: `the daemon isn't running (nothing on http://localhost:${cfg.port})`, fix: '`hallway service install` runs it as a service' });
+    add({ id: 'port', status: 'pass', message: `port ${cfg.port} is free for the daemon` });
+  }
 
   let services: ReturnType<Ctx['services']> | null = null;
   try {
     services = ctx.services();
   } catch (e) {
-    add({ id: 'service-manager', status: 'fail', message: (e as Error).message });
+    add({ id: 'service-manager', status: 'fail', message: (e as Error).message, fix: serviceManagerFix(ctx.platform().serviceManager) });
   }
   if (services) {
     const kind = services.manager.kind;
@@ -126,11 +138,11 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner, opts: Diag
         try {
           installed = JSON.parse(fs.readFileSync(path.join(packageRoot(path.dirname(jobCli)), 'package.json'), 'utf8')).version ?? null;
         } catch {
-          /* gone: job-program says so */
+          /* gone: the unit check says so */
         }
-        if (!fs.existsSync(jobCli)) {
-          /* job-program, below, names it */
-        } else if (real(jobCli) !== mine)
+        if (!fs.existsSync(jobCli))
+          add({ id: 'unit', status: 'fail', message: `the daemon's service runs ${show(jobCli)}, which no longer exists (was that copy of Hallway removed?)`, fix: '`hallway service install` points it at this one' });
+        else if (real(jobCli) !== mine)
           add({ id: 'unit', status: 'warn', message: `the daemon's service runs Hallway ${installed ?? '?'} from ${show(packageRoot(path.dirname(jobCli)))}, not this one (${VERSION}, ${show(ROOT)})`, fix: '`hallway service install` points it at this one' });
         else add({ id: 'unit', status: 'pass', message: `the daemon's service runs this install of Hallway (${show(ROOT)})` });
         if (daemon && installed && st.running && daemon.version !== installed)
@@ -141,11 +153,11 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner, opts: Diag
         const user = os.userInfo().username;
         const r = await run('loginctl', ['show-user', user, '--property=Linger']);
         if (r.code === 0 && /Linger=no/.test(r.stdout))
-          add({ id: 'linger', status: 'warn', message: "lingering is off: Hallway's services stop when you log out and start only when you log in", fix: `\`loginctl enable-linger ${user}\`` });
+          add({ id: 'linger', status: 'warn', message: "lingering is off: Hallway's services stop when you log out and start only when you log in", fix: `\`sudo loginctl enable-linger ${user}\` (Hallway never runs sudo itself)` });
         else if (r.code === 0) add({ id: 'linger', status: 'pass', message: 'lingering is on: services run without a login session' });
       }
     } catch (e) {
-      add({ id: 'service-manager', status: 'fail', message: (e as Error).message });
+      add({ id: 'service-manager', status: 'fail', message: (e as Error).message, fix: serviceManagerFix(ctx.platform().serviceManager) });
     }
 
     // ---------------- generated jobs: the PATH trap, a vanished Node, orphans ----------------

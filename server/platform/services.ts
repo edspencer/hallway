@@ -32,6 +32,13 @@ export interface ServiceSpec {
    * socket as its stdin. Such a job is never started by hand, only loaded.
    */
   socket?: { address: '127.0.0.1' | '::1'; port: number };
+  /**
+   * Windows only (D77): the job is a Node process that stops cleanly when its supervisor sends it the IPC message
+   * "stop" (Hallway's daemon). Windows has no SIGTERM, so this is how a stop lets its work finish; the service manager
+   * asks the supervisor through a stop-request file, and kills the tree only if it hasn't gone by then. launchd and
+   * systemd send SIGTERM, and ignore it.
+   */
+  ipcStop?: boolean;
 }
 
 /** What the service manager says about a job. */

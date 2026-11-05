@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { UsageError, check, parseArgs } from '../server/args.ts';
-import { exitWatchdog, ROOT, tmpDir, rmTmp, stopChild } from './fixture.ts';
+import { exitWatchdog, ROOT, onWindows, tmpDir, rmTmp, stopChild } from './fixture.ts';
 import { VERSION, tildify } from '../server/config.ts';
 
 await exitWatchdog();
@@ -256,6 +256,43 @@ describe('hallway CLI', () => {
       await stopChild(child);
     }
   });
+
+  // the CLI contract's §8 (D77): a clean stop removes runtime.json and exits 0. Windows has no SIGTERM to send, so the
+  // IPC message (what Hallway's supervisor sends) runs on every OS, and the signals everywhere else
+  for (const how of ['stop message', 'SIGTERM', 'SIGINT'] as const)
+    test(`serve stops cleanly on ${how === 'stop message' ? 'the IPC message "stop"' : how}: exit 0, runtime.json removed`, { skip: how === 'stop message' ? false : onWindows('no POSIX signals to send'), timeout: 30_000 }, async () => {
+      const home = path.join(HOME, `stop-${how.replace(/\W/g, '')}`);
+      fs.mkdirSync(home);
+      const child = spawn(process.execPath, [...CLI, '--port', '0'], { env: cliEnv({ HALLWAY_HOME: home }), cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+      try {
+        let err = '';
+        child.stderr!.on('data', (d) => (err += d));
+        await new Promise<void>((resolve, reject) => {
+          let buf = '';
+          const timer = setTimeout(() => reject(new Error(`no startup line: ${buf}`)), 15000);
+          child.stdout!.on('data', (d) => {
+            buf += d;
+            if (/Data home: /.test(buf)) {
+              clearTimeout(timer);
+              resolve();
+            }
+          });
+          child.on('exit', (code) => reject(new Error(`exited ${code}: ${buf}`)));
+        });
+        const runtime = path.join(home, 'runtime.json');
+        for (let i = 0; i < 50 && !fs.existsSync(runtime); i++) await new Promise((r) => setTimeout(r, 100));
+        assert.ok(fs.existsSync(runtime), 'runtime.json written once it listens');
+        const exited = new Promise<number | null>((r) => child.once('exit', (code) => r(code)));
+        if (how === 'stop message') child.send('stop');
+        else child.kill(how);
+        const code = await Promise.race([exited, new Promise<'hung'>((r) => setTimeout(() => r('hung'), 15000).unref())]);
+        assert.equal(code, 0, `exit ${code}; stderr: ${err}`);
+        assert.ok(!fs.existsSync(runtime), 'runtime.json removed');
+        assert.match(err, new RegExp(`hallway: stopped \\(${how}\\)`));
+      } finally {
+        await stopChild(child);
+      }
+    });
 
   test('guide prints AGENT-GUIDE.md with the reference; --snippet just the paragraph', async () => {
     const g = await hallway(['guide']);

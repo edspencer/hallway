@@ -17,7 +17,7 @@ import type {
   ObservedListener,
   ObservedResponse,
 } from '../shared/api.js';
-import { BusyTracker } from './busy.js';
+import { BusyTracker, busyCounts } from './busy.js';
 import { VERSION, tildify } from './config.js';
 import { sseHandler, type EventBus } from './events.js';
 import { agentGuide, llmsFullTxt, llmsTxt, readGuide, type GuideInput } from './guide.js';
@@ -157,7 +157,7 @@ export function apiRoutes({ store, bus, providers, startedAt, services, busy = n
   api.get('/health', (c) => c.json({ ok: true, version: VERSION }));
   // the CLI contract's busy check (D75): memory only, so it's cheap; counts only, so it needs no auth
   api.get('/busy', (c) => {
-    const counts = { setup: providers.first('frontingSetup')?.state === 'running' ? 1 : 0, app: busy.count('app') };
+    const counts = busyCounts(busy, providers);
     return c.json({ busy: counts.setup + counts.app > 0, version: VERSION, counts } satisfies BusyResponse);
   });
   api.get('/state', (c) => c.json(stateView(ctx, baseUrl(c), startedAt)));

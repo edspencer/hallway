@@ -2024,3 +2024,42 @@ the reference's `UpdateProduct`, its hooks written against Hallway's service cod
   (`CI_REAL_SERVICE=1`). Locally they pass against `test/fixtures/fake-systemctl`, which now gives units `HOME`, `USER`
   and `LOGNAME` as systemd's user manager does: without `HOME`, the daemon's `os.homedir()` fell back to the passwd
   entry, and on a test box that's somebody's real home.
+
+### D77 — A clean stop on SIGTERM (and Windows' stop request), a first install that fails leaves nothing behind, doctor's last contract gaps (2026-11-05; amends D60, D75, D76)
+
+The CLI contract's §1, §4, §7 and §8 ([edspencer/cli-contract](https://github.com/edspencer/cli-contract) `SPEC.md`
+0.2; D74 has the background), and the reference's fix for a refused first install (cli-contract#7, `d5ddc0e`).
+
+- **`serve` stops cleanly.** D75 accepted a race (work can start between the busy check and the stop), on the
+  contract's condition that SIGTERM finishes or records the work under way; until now `serve` had no handler, so a
+  stop cut an app's start or a local-domains setup off wherever it was, and left `runtime.json` behind. Now SIGTERM
+  and SIGINT (and SIGBREAK, Ctrl-Break, on Windows) run `drain` (`startServer`'s, server/index.ts): the listener
+  closes and any request on a kept-alive connection gets a 503 (`Hallway is stopping.`); the work `/api/busy` counts
+  (`busyCounts`, the same numbers) gets up to 10 s to finish, well inside launchd's 20 s and systemd's 90 s stop
+  timeouts; then everything closes, `runtime.json` is removed (the reference's pid-guarded `removeRuntimeFile`) and it
+  exits 0. What's still running after 10 s is named in the log (`stopped (SIGTERM) with 1 app start, stop or restart
+  still under way`): recorded, as the contract allows, rather than waited on past the manager's patience. A second
+  signal exits at once with 1. The scanner, prober and the rest are timers, so the process exits explicitly once
+  everything worth closing is closed.
+- **Windows has no SIGTERM** (§7: a clean stop mustn't depend on it). The daemon's job carries `ipcStop: true`; its
+  supervisor (D60) runs it with an IPC channel, and the service manager asks for a stop by writing `<label>.stop`
+  beside the job file. The supervisor sees it, sends the daemon the message `stop` (the same drain), waits for it to
+  exit (killing it after 15 s) and exits itself, without restarting it; the manager waits up to 20 s for the
+  supervisor to go, and kills the tree with `taskkill /T /F` only if it's still there, as before. The channel is
+  unref'd, so it never keeps the daemon running by itself. Apps' jobs aren't asked: an app is any program, and
+  killing its tree is the only stop that reaches an `npm run dev`'s grandchildren. Rejected: a `POST /api/shutdown`
+  (a route that stops the daemon, for anything that gets past the loopback checks), and `taskkill` without `/F` (a
+  console program with no window never sees the close message).
+- **A first install the service manager refuses leaves nothing behind.** `Services.up` wrote the job, then started
+  it; when systemd (no user instance) or launchd refused, the unit or plist and its manifest stayed, so `service
+  status` called it installed (exit 3, not 4) and the next login tried it again. Now, when the job's file didn't exist
+  before and anything from the write on fails, the job is removed (as far as the manager allows, then the file
+  whatever) with its manifest, and the error is reported as before. A reinstall keeps its job: that's what's
+  installed either way. It's in `up`, so apps' first `service add`, `run` and `start` get it too.
+- **doctor's last gaps against §1:** the `unit` check fails, with `hallway service install` as the fix, when the CLI
+  the daemon's job runs has gone (`job-program` checks the job's Node, which for the daemon is `program[0]` too, and
+  never looked at `cli.js`); `port` passes when the port is free or Hallway's, not only failing when something else
+  holds it; `linger`'s fix is `sudo loginctl enable-linger <user>`, said to be run by hand; and a `service-manager`
+  failure has a fix for each manager.
+- **The reference files from D75** (`busy-client.ts`, `exit-codes.ts`, `output.ts`, `runtime-file.ts`) are unchanged
+  in the contract's 0.2, and their headers now say 0.2.

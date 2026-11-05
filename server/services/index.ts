@@ -193,16 +193,36 @@ export class Services {
    * job was restarted.
    */
   async up(spec: ServiceSpec, { restart = false } = {}): Promise<{ changed: boolean; restarted: boolean; file: string }> {
-    const changed = await this.write(spec);
-    this.writeManifest(spec);
-    const st = await this.manager.status(spec.label);
-    let restarted = false;
-    if (st.running && (changed || restart)) {
-      await this.manager.restart(spec, { reload: changed });
-      restarted = true;
-    } else if (st.loaded && changed) await this.manager.restart(spec, { reload: true });
-    else await this.manager.start(spec);
-    return { changed, restarted, file: this.manager.file(spec.label) };
+    // a first install the service manager refuses (no systemd user instance, launchd saying no) mustn't leave a job
+    // behind: `service status` would call it installed, and the next login would try it again (D77, the contract's
+    // reference d5ddc0e). A reinstall keeps its job: that's what's installed either way.
+    const existed = fs.existsSync(this.manager.file(spec.label));
+    try {
+      const changed = await this.write(spec);
+      this.writeManifest(spec);
+      const st = await this.manager.status(spec.label);
+      let restarted = false;
+      if (st.running && (changed || restart)) {
+        await this.manager.restart(spec, { reload: changed });
+        restarted = true;
+      } else if (st.loaded && changed) await this.manager.restart(spec, { reload: true });
+      else await this.manager.start(spec);
+      return { changed, restarted, file: this.manager.file(spec.label) };
+    } catch (e) {
+      if (!existed && fs.existsSync(this.manager.file(spec.label))) await this.discard(spec.label);
+      throw e;
+    }
+  }
+
+  /** Undo a first install that failed: the job, as far as the manager lets us, then its file and manifest whatever. */
+  private async discard(label: string) {
+    try {
+      await this.manager.remove(label);
+    } catch {
+      /* the manager that refused the start may refuse this too */
+    }
+    fs.rmSync(this.manager.file(label), { force: true });
+    this.dropManifest(label);
   }
 
   /**

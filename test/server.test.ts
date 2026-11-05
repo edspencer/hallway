@@ -6,6 +6,9 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { createApp, startServer } from '../server/index.ts';
+import { BusyTracker } from '../server/busy.ts';
+import { EventBus } from '../server/events.ts';
+import { ProviderRegistry } from '../server/providers.ts';
 import { locateDaemon } from '../server/commands/context.ts';
 import { readLiveRuntimeFile, readRuntimeFile, runtimeFilePath, writeRuntimeFile } from '../server/contract/runtime-file.ts';
 import { isLocalHost, isLocalOrigin } from '../server/security.ts';
@@ -165,6 +168,41 @@ describe('startServer', () => {
     }
     assert.equal(readRuntimeFile(home), null, 'removed when the daemon stops');
     assert.equal(await locateDaemon(home, configPort), null);
+  });
+
+  test("drain (SIGTERM's clean stop, D77): no new requests, the app operation under way finishes, then it closes and removes runtime.json", async () => {
+    const home = tmpDir('hw-test-srv-');
+    const busy = new BusyTracker();
+    const s = await startServer(0, { webDist: null, home, thumbs: false, busy, bus: new EventBus(), providers: new ProviderRegistry() });
+    let release!: () => void;
+    let finished = false;
+    const op = busy.track('app', () => new Promise<void>((r) => (release = r))).then(() => (finished = true));
+    let waitingFor: unknown = null;
+    let done: Record<string, number> | null = null;
+    const drained = s.drain(5000, (c) => (waitingFor = c)).then((left) => (done = left));
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(waitingFor, { setup: 0, app: 1 });
+    assert.equal(done, null, 'still waiting for the app operation');
+    assert.ok(readRuntimeFile(home), 'runtime.json stays until it has stopped');
+    await assert.rejects(fetch(`http://127.0.0.1:${s.port}/api/health`), 'no new connections while it stops');
+    release();
+    await op;
+    assert.deepEqual(await drained, { setup: 0, app: 0 });
+    assert.ok(finished);
+    assert.equal(readRuntimeFile(home), null, 'removed once it has stopped');
+    rmTmp(home);
+  });
+
+  test('drain gives up after its timeout, and says what was still under way', async () => {
+    const home = tmpDir('hw-test-srv-');
+    const busy = new BusyTracker();
+    const s = await startServer(0, { webDist: null, home, thumbs: false, busy, bus: new EventBus(), providers: new ProviderRegistry() });
+    void busy.track('app', () => new Promise<void>(() => {}));
+    const t0 = Date.now();
+    assert.deepEqual(await s.drain(300), { setup: 0, app: 1 });
+    assert.ok(Date.now() - t0 < 3000);
+    assert.equal(readRuntimeFile(home), null);
+    rmTmp(home);
   });
 
   test('a stale runtime.json (its process gone) is ignored', () => {
