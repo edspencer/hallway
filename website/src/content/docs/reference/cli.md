@@ -31,7 +31,7 @@ Each command is marked with the milestone it belongs to. Everything on this page
 | `hallway service logs [-n N] [-f]` | The daemon's logs: the last 50 lines, or `N`; `-f` keeps printing. The same as `hallway logs daemon`. | <span class="ms ms--shipped">v2</span> |
 | `hallway service uninstall [--json]` | Stop it and remove it. The data home and the logs stay. | <span class="ms ms--v0">v0</span> |
 | `hallway busy [--json]` | Whether the running daemon is busy: setting up local domains from the dashboard, or starting, stopping or restarting an app. Exits 0 if not, 75 if it is, 3 if it isn't running. For scripts that restart Hallway. | <span class="ms ms--shipped">v2</span> |
-| `hallway update [--check] [--to <version\|tag>] [--yes] [--force] [--json]` | Install the newest Hallway with the package manager it came from, restart the daemon on it, and roll back if it doesn't answer. `--check` only says what's available. Exits 5 when this install can't update itself (it prints what to run), 6 when it rolled back, 7 when the rollback failed too, 75 when Hallway is busy. See [Updating](/getting-started/installation/#updating). | <span class="ms ms--shipped">v2</span> |
+| `hallway update [--check] [--to <version\|tag>] [--yes] [--force] [--json]` | Install the newest Hallway with the package manager it came from, restart the daemon on it, and roll back if it doesn't answer. `--check` only says what's available. Exits 5 when this install can't update itself (it prints what to run), 6 when it rolled back, 7 when the rollback failed too, 75 when Hallway is busy. See [Updating](/getting-started/updating/). | <span class="ms ms--shipped">v2</span> |
 | `hallway --version`, `hallway --help` | | <span class="ms ms--v0">v0</span> |
 
 ## Apps and discovery

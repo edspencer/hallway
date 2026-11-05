@@ -15,6 +15,7 @@ launchd jobs and systemd units inherit no shell environment, so every default wo
 | `VISUAL`, `EDITOR` | The editor `hallway app edit` and `hallway bookmark edit` open (`VISUAL` first; default `vi`). |
 | `XDG_CONFIG_HOME` | Linux: where systemd user units go (`$XDG_CONFIG_HOME/systemd/user`; default `~/.config/systemd/user`). |
 | `LOCALAPPDATA` | Windows: where the scheduled tasks' files go (`%LOCALAPPDATA%\hallway\tasks`; default `~\AppData\Local\hallway\tasks`). |
+| `HALLWAY_UPDATE_HINT` | For an install something else manages (an Ansible role, a NixOS module): `hallway update` prints it and exits 5, rather than updating. See [Updating](/getting-started/updating/#installs-that-cant-update-themselves). |
 | `HALLWAY_DEV` | Development mode, for working on Hallway itself (the API runs next to Vite's dev server, as Local Review does). |
 
 ## Set by Hallway for managed services
