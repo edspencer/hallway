@@ -1,4 +1,4 @@
-// From edspencer/cli-contract test/update.test.ts @ 0.2; local changes: imports server/contract/ and ./contract-helpers.ts (which also has the runner's schema validator)
+// From edspencer/cli-contract test/update.test.ts @ 1.0; local changes: imports server/contract/ and ./contract-helpers.ts (which also has the runner's schema validator)
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

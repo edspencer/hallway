@@ -1,4 +1,4 @@
-// From edspencer/cli-contract test/lock.test.ts @ 0.2; local changes: imports server/contract/ and ./contract-helpers.ts
+// From edspencer/cli-contract test/lock.test.ts @ 1.0; local changes: imports server/contract/ and ./contract-helpers.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
