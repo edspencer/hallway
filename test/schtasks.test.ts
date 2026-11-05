@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { RunResult, ServiceSpec } from '../server/platform/services.ts';
 import { jobPath, quoteArg, renderJob, renderTask, schtasksManager, taskEnabled } from '../server/platform/schtasks.ts';
-import { cmdQuote, launchArgs, mergeEnv, readState, stateFileOf, supervise } from '../server/platform/supervise.ts';
+import { cmdQuote, launchArgs, mergeEnv, readState, stateFileOf, stopFileOf, supervise } from '../server/platform/supervise.ts';
 import { splitCommandLine } from '../server/platform/win32.ts';
 import { candidates, which } from '../server/services/resolve.ts';
 import { exitWatchdog, ROOT, tmpDir, rmTmp } from './fixture.ts';
@@ -141,6 +141,29 @@ describe('scheduled tasks: the lifecycle (runner mocked)', () => {
     assert.deepEqual(s.m.calls, ['taskkill /PID 10 /T /F', 'schtasks /End /TN \\hallway.daemon']);
   });
 
+  test("the daemon's stop (ipcStop, D77): asked through <label>.stop, and its tree killed only if the supervisor outlives the wait", async () => {
+    const daemon: ServiceSpec = { ...review, label: 'hallway.daemon', ipcStop: true };
+    // the supervisor goes once it sees the request: no taskkill
+    let s = setup({ registered: true, alive: [10, 11] });
+    const job = path.join(s.dir, 'hallway.daemon.json');
+    fs.writeFileSync(job, renderJob(daemon));
+    fs.writeFileSync(stateFileOf(job), JSON.stringify({ supervisor: 10, pid: 11, startedAt: null, lastExitCode: null, exitedAt: null }));
+    let asked = false;
+    const mgr = schtasksManager({ dir: s.dir, run: s.m.run, ctx, isAlive: (p) => !(asked ||= fs.existsSync(stopFileOf(job))) && s.alive.has(p) });
+    await mgr.stop('hallway.daemon', { disable: false });
+    assert.ok(asked, 'the stop request was written');
+    assert.ok(!fs.existsSync(stopFileOf(job)), 'and cleaned up');
+    assert.deepEqual(s.m.calls, ['schtasks /End /TN \\hallway.daemon']);
+    // a supervisor that doesn't go: killed after the wait, as before
+    s = setup({ registered: true, alive: [10, 11] });
+    const job2 = path.join(s.dir, 'hallway.daemon.json');
+    fs.writeFileSync(job2, renderJob(daemon));
+    fs.writeFileSync(stateFileOf(job2), JSON.stringify({ supervisor: 10, pid: 11, startedAt: null, lastExitCode: null, exitedAt: null }));
+    await schtasksManager({ dir: s.dir, run: s.m.run, ctx, isAlive: (p) => s.alive.has(p), stopWaitMs: 300 }).stop('hallway.daemon', { disable: false });
+    assert.deepEqual(s.m.calls, ['taskkill /PID 10 /T /F', 'schtasks /End /TN \\hallway.daemon']);
+    assert.ok(!fs.existsSync(stopFileOf(job2)));
+  });
+
   test('status: from the state file and the task; not registered; disabled', async () => {
     let s = setup({ registered: true, alive: [10, 11] });
     const job = path.join(s.dir, 'hallway.app.review.json');
@@ -202,6 +225,30 @@ describe('the supervisor', () => {
     assert.equal(st.supervisor, process.pid);
     assert.equal(st.pid, null);
     assert.equal(st.lastExitCode, 4);
+  });
+
+  test('a stop request (<job>.stop, D77): an ipcStop job is sent "stop" and exits by itself; any other job is killed; neither is restarted', async () => {
+    const dir = tmp('hw-test-supervise-');
+    // stands in for the daemon: stops on the message, saying so
+    const script = `process.on('message',(m)=>{if(m==='stop'){console.log('asked to stop');process.exit(0)}});setInterval(()=>{},1000)`;
+    const job = path.join(dir, 'hallway.daemon.json');
+    const spec: ServiceSpec = { label: 'hallway.daemon', description: 'd', program: [process.execPath, '-e', script], cwd: dir, env: {}, runAtLoad: false, keepAlive: true, stdout: path.join(dir, 'd.out.log'), stderr: path.join(dir, 'd.err.log'), node: null, ipcStop: true };
+    fs.writeFileSync(job, JSON.stringify(spec));
+    const running = supervise(job, { restartSec: 0.05, pollMs: 50 });
+    for (let i = 0; i < 100 && !readState(stateFileOf(job))?.pid; i++) await new Promise((r) => setTimeout(r, 50));
+    fs.writeFileSync(stopFileOf(job), 'now\n');
+    assert.equal(await running, 0);
+    assert.equal(fs.readFileSync(spec.stdout, 'utf8'), 'asked to stop\n');
+    assert.ok(!fs.existsSync(stopFileOf(job)), 'the request is removed');
+
+    const other = path.join(dir, 'hallway.app.z.json');
+    const zspec: ServiceSpec = { ...spec, label: 'hallway.app.z', program: [process.execPath, '-e', 'setInterval(()=>{},1000)'], stdout: path.join(dir, 'z.out.log'), stderr: path.join(dir, 'z.err.log'), ipcStop: undefined };
+    fs.writeFileSync(other, JSON.stringify(zspec));
+    const z = supervise(other, { restartSec: 0.05, pollMs: 50 });
+    for (let i = 0; i < 100 && !readState(stateFileOf(other))?.pid; i++) await new Promise((r) => setTimeout(r, 50));
+    fs.writeFileSync(stopFileOf(other), 'now\n');
+    await z;
+    assert.equal(readState(stateFileOf(other))?.pid, null, 'stopped, and not started again');
   });
 
   test("a program that can't start: said in its error log, exit 127", async () => {

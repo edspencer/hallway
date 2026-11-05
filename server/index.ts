@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { agentRoutes, apiRoutes } from './api.js';
+import { BusyTracker, busyCounts, type BusyKind } from './busy.js';
 import { VERSION, WEB_DIST } from './config.js';
 import { removeRuntimeFile, writeRuntimeFile } from './contract/runtime-file.js';
 import { bus as defaultBus, type EventBus } from './events.js';
@@ -32,6 +33,10 @@ export interface AppOptions {
   services?: () => Services;
   /** The MCP endpoint (server/mcp/); default: one made for this app. */
   mcp?: McpEndpoint;
+  /** The app operations in flight, for /api/busy and a stopping daemon (default: one for this app). */
+  busy?: BusyTracker;
+  /** True once the daemon is stopping: every new request is answered 503 (D77). */
+  stopping?: () => boolean;
 }
 
 /**
@@ -47,14 +52,21 @@ export function allowedHosts(store: Store, extra: readonly string[] = []): strin
  * The daemon's HTTP app: the JSON API under /api, the agent documents, and the dashboard (a single-page app) for
  * everything else.
  */
-export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date(), services, mcp }: AppOptions) {
+export function createApp({ store, bus = store.bus ?? defaultBus, providers = defaultProviders, webDist = WEB_DIST, extraHosts = [], startedAt = new Date(), services, mcp, busy, stopping }: AppOptions) {
   const app = new Hono();
   app.use('*', localOnly(() => allowedHosts(store, extraHosts)));
+  // a stopping daemon finishes what it's doing and starts nothing new (D77)
+  if (stopping)
+    app.use('*', async (c, next) => {
+      if (!stopping()) return next();
+      c.header('Connection', 'close');
+      return c.json({ error: 'Hallway is stopping.' }, 503);
+    });
 
   const endpoint = mcp ?? mcpEndpoint({ store, bus, providers, startedAt });
   app.all('/mcp', (c) => endpoint.handle(c));
 
-  app.route('/api', apiRoutes({ store, bus, providers, startedAt, services }));
+  app.route('/api', apiRoutes({ store, bus, providers, startedAt, services, busy }));
   app.route('/', agentRoutes({ store, providers }));
 
   if (webDist) {
@@ -97,19 +109,29 @@ function urlHost(hostname: string): string {
  */
 export async function startServer(port: number, { hostname = '127.0.0.1', home, watch = true, thumbs = true, store: given, ...opts }: ServerOptions) {
   const store = given ?? new Store(home, { bus: opts.bus ?? defaultBus }).init();
-  const mcp = mcpEndpoint({ store, bus: opts.bus ?? store.bus ?? defaultBus, providers: opts.providers ?? defaultProviders, startedAt: opts.startedAt ?? new Date() });
-  const app = createApp({ ...opts, store, mcp });
+  const providers = opts.providers ?? defaultProviders;
+  const busy = opts.busy ?? new BusyTracker();
+  let stopping = false;
+  const mcp = mcpEndpoint({ store, bus: opts.bus ?? store.bus ?? defaultBus, providers, startedAt: opts.startedAt ?? new Date() });
+  const app = createApp({ ...opts, store, mcp, busy, stopping: () => stopping });
   const thumbnailer = thumbs ? startThumbs({ store, bus: opts.bus ?? store.bus ?? defaultBus, providers: opts.providers ?? defaultProviders }) : null;
-  const { port: bound, close: closeHttp } = await new Promise<{ port: number; close: () => Promise<void> }>((resolve, reject) => {
+  const { port: bound, close: closeHttp, refuse } = await new Promise<{ port: number; close: () => Promise<void>; refuse: () => void }>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
       server.off('error', reject);
-      const close = () =>
-        new Promise<void>((res) => {
-          server.close(() => res());
-          // idle keep-alive connections and open event streams would otherwise hold close() open
-          if ('closeAllConnections' in server) server.closeAllConnections();
-        });
-      resolve({ port: info.port, close });
+      let closed: Promise<void> | null = null;
+      // no new connections, and idle keep-alive ones closed; requests under way still get their answers
+      const refuse = () => {
+        closed ??= new Promise<void>((res) => server.close(() => res()));
+        if ('closeIdleConnections' in server) server.closeIdleConnections();
+        return closed;
+      };
+      const close = () => {
+        const done = refuse();
+        // open event streams, and anything else still open, would otherwise hold close() open
+        if ('closeAllConnections' in server) server.closeAllConnections();
+        return done;
+      };
+      resolve({ port: info.port, close, refuse });
     });
     server.once('error', reject);
   });
@@ -125,17 +147,43 @@ export async function startServer(port: number, { hostname = '127.0.0.1', home, 
       /* best effort: the CLI still finds a daemon on config.yaml's port */
     }
   }
+  const close = async () => {
+    if (watch) removeRuntimeFile(home);
+    thumbnailer?.stop();
+    await mcp.close();
+    stopSnapshots();
+    stopRotation();
+    await watcher?.close();
+    await closeHttp();
+  };
   return {
     port: bound,
     store,
-    close: async () => {
-      if (watch) removeRuntimeFile(home);
-      thumbnailer?.stop();
-      await mcp.close();
-      stopSnapshots();
-      stopRotation();
-      await watcher?.close();
-      await closeHttp();
+    busy,
+    close,
+    /**
+     * Stop the way SIGTERM asks (the CLI contract's §8, D77): refuse new connections and answer 503 to any new request,
+     * wait up to `timeoutMs` for the work /api/busy counts (the local-domains setup, app operations) to finish, then
+     * close everything and remove runtime.json. Resolves with what was still under way when it gave up (all zero when
+     * it finished), so the caller can record it. `waiting` is called once, if there's anything to wait for.
+     */
+    drain: async (timeoutMs: number, waiting?: (counts: Record<BusyKind, number>) => void): Promise<Record<BusyKind, number>> => {
+      stopping = true;
+      refuse();
+      const total = (c: Record<BusyKind, number>) => Object.values(c).reduce((a, b) => a + b, 0);
+      let counts = busyCounts(busy, providers);
+      if (total(counts) > 0) {
+        waiting?.(counts);
+        const until = Date.now() + timeoutMs;
+        while (total(counts) > 0 && Date.now() < until) {
+          await new Promise((r) => setTimeout(r, 100));
+          counts = busyCounts(busy, providers);
+        }
+        // the answer to the request that just finished, written before its connection is closed
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      await close();
+      return counts;
     },
   };
 }

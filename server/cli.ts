@@ -5,6 +5,8 @@
 import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify, useDataDir, useRecordedHome } from './config.js';
 import { UsageError, check, parseArgs } from './args.js';
 import { DEFAULT_URL, agentGuide, readGuide, snippet } from './guide.js';
+import { type BusyKind, describeBusy } from './busy.js';
+import { removeRuntimeFile } from './contract/runtime-file.js';
 
 const USAGE = `Usage: hallway [command] [options]
 
@@ -125,8 +127,9 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
   const platform = currentPlatform();
   const { frontingInfo, frontingProvider } = await import('./proxy/status.js');
   let bound: number;
+  let drain: Awaited<ReturnType<typeof startServer>>['drain'];
   try {
-    ({ port: bound } = await startServer(port, {
+    ({ port: bound, drain } = await startServer(port, {
       home: HOME,
       store,
       hostname,
@@ -151,6 +154,7 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
     if (code === 'EACCES') throw new Error(`not allowed to listen on port ${port}; pick another with --port <n>`);
     throw e;
   }
+  stopCleanly(drain);
   // the scanner, prober and uptime history (server/live.ts): plugged in once the port is ours
   const [{ startLive }, { providers }] = await Promise.all([import('./live.js'), import('./providers.js')]);
   await startLive({ store, bus: store.bus, providers, selfPorts: process.env.HALLWAY_DEV ? [bound, DEFAULT_PORT] : [bound] });
@@ -214,6 +218,56 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
       `hallway: development overrides in effect: bound to ${hostname}${dev.allowedHosts.length ? `, also accepting Host ${dev.allowedHosts.join(', ')}` : ''}. Never use these outside development.\n`,
     );
   return undefined;
+}
+
+/** How long a stopping daemon waits for the work under way; well inside launchd's 20 s and systemd's 90 s stop timeouts. */
+const DRAIN_MS = 10_000;
+
+/**
+ * A clean stop (the CLI contract's §4 and §8, D77): the service manager's SIGTERM, Ctrl-C, Ctrl-Break on Windows, or the
+ * IPC message "stop", which is how Hallway's Windows supervisor asks (Windows has no SIGTERM to catch). The daemon
+ * starts nothing new, lets the app operations and the local-domains setup under way finish (up to DRAIN_MS; what's
+ * still running then is named in the log), removes runtime.json and exits 0. A second signal stops it at once.
+ */
+function stopCleanly(drain: (timeoutMs: number, waiting?: (counts: Record<BusyKind, number>) => void) => Promise<Record<BusyKind, number>>) {
+  let stopping = false;
+  const log = (s: string) => process.stderr.write(`${new Date().toISOString()} hallway: ${s}\n`);
+  const stop = (why: string) => {
+    if (stopping) {
+      log(`stopping now (${why} again)`);
+      try {
+        removeRuntimeFile(HOME);
+      } catch {
+        /* it's going anyway */
+      }
+      process.exit(1);
+    }
+    stopping = true;
+    drain(DRAIN_MS, (counts) => log(`stopping (${why}): waiting for ${describeBusy(counts)} to finish`)).then(
+      (left) => {
+        const cut = describeBusy(left);
+        log(cut ? `stopped (${why}) with ${cut} still under way after ${DRAIN_MS / 1000} s` : `stopped (${why})`);
+        process.exitCode = 0;
+        process.disconnect?.();
+        // the scanner, prober and the rest keep timers: everything worth closing is closed, so don't wait for them
+        setTimeout(() => process.exit(), 100).unref();
+      },
+      (e) => {
+        log(`stopping (${why}) failed: ${(e as Error).message}`);
+        process.exit(1);
+      },
+    );
+  };
+  process.on('SIGTERM', () => stop('SIGTERM'));
+  process.on('SIGINT', () => stop('SIGINT'));
+  if (process.platform === 'win32') process.on('SIGBREAK', () => stop('SIGBREAK'));
+  // the channel alone mustn't keep the daemon running
+  if (process.channel) {
+    process.on('message', (m) => {
+      if (m === 'stop') stop('stop message');
+    });
+    process.channel.unref();
+  }
 }
 
 /** Resolves with the exit code, or undefined while the daemon runs. */

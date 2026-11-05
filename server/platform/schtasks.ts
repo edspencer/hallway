@@ -6,7 +6,8 @@
 //                  its action is conhost --headless (no console window) running `node cli.js supervise <label>.json`
 //   <label>.state.json  written by the supervisor: its PID, the job's, the last exit code
 // The mapping: RunAtLoad → a LogonTrigger; KeepAlive → the supervisor restarting the job; stop → the supervisor's
-// process tree killed (`taskkill /T`), the task ended and disabled, so the next logon doesn't start it either.
+// process tree killed (`taskkill /T`), the task ended and disabled, so the next logon doesn't start it either. The
+// daemon's job (`ipcStop`) is asked to stop first, through `<label>.stop`, so it stops cleanly (D77).
 // Pure where it can be (the files are golden-tested); every command goes through a Runner, mocked in the tests.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,7 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ROOT } from '../config.js';
 import { type Runner, type ServiceManager, ServiceManagerError, type ServiceSpec, type ServiceStatus, defaultRunner, removeFile, writeIfChanged } from './services.js';
-import { readState, stateFileOf } from './supervise.js';
+import { STOP_GRACE_MS, readState, stateFileOf, stopFileOf } from './supervise.js';
 
 /** The job file: the spec as JSON, with a note for people. */
 export function renderJob(spec: ServiceSpec): string {
@@ -125,6 +126,8 @@ export interface SchtasksOptions {
   ctx?: Partial<TaskContext>;
   /** Is this PID running? (Mocked in tests.) */
   isAlive?: (pid: number) => boolean;
+  /** How long a clean stop of an `ipcStop` job may take before its tree is killed (default: the supervisor's grace + 5 s). */
+  stopWaitMs?: number;
 }
 
 const defaultIsAlive = (pid: number) => {
@@ -152,7 +155,7 @@ export function defaultTaskContext(env: NodeJS.ProcessEnv = process.env): TaskCo
   };
 }
 
-export function schtasksManager({ dir, run = defaultRunner, ctx: given = {}, isAlive = defaultIsAlive }: SchtasksOptions): ServiceManager {
+export function schtasksManager({ dir, run = defaultRunner, ctx: given = {}, isAlive = defaultIsAlive, stopWaitMs = STOP_GRACE_MS + 5000 }: SchtasksOptions): ServiceManager {
   const ctx = (): TaskContext => ({ ...defaultTaskContext(), ...given });
   const file = (label: string) => path.join(dir, `${label}.json`);
   const xmlFile = (label: string) => path.join(dir, `${label}.xml`);
@@ -185,9 +188,29 @@ export function schtasksManager({ dir, run = defaultRunner, ctx: given = {}, isA
     };
   };
 
-  /** End the supervisor and everything it started (taskkill /T), then the task itself. */
+  /** Does the job stop cleanly on the supervisor's "stop" message (the daemon, D77)? */
+  const ipcStop = (label: string) => {
+    try {
+      return (JSON.parse(fs.readFileSync(file(label), 'utf8')) as Partial<ServiceSpec>).ipcStop === true;
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * End the supervisor and everything it started (taskkill /T), then the task itself. A job that stops cleanly (the
+   * daemon) is asked first, through the supervisor's stop-request file, and gets its stop timeout to finish what it's
+   * doing (D77); the tree is killed only if the supervisor is still there after that.
+   */
   const kill = async (label: string) => {
     const st = readState(stateFileOf(file(label)));
+    if (st && isAlive(st.supervisor) && ipcStop(label)) {
+      const stopFile = stopFileOf(file(label));
+      fs.writeFileSync(stopFile, `${new Date().toISOString()}\n`);
+      const until = Date.now() + stopWaitMs;
+      while (isAlive(st.supervisor) && Date.now() < until) await new Promise((r) => setTimeout(r, 200));
+      removeFile(stopFile);
+    }
     if (st && isAlive(st.supervisor)) await run('taskkill', ['/PID', String(st.supervisor), '/T', '/F']);
     // exit 1 / "not running": fine
     await run('schtasks', ['/End', '/TN', tn(label)]);

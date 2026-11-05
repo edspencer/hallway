@@ -81,6 +81,8 @@ export function daemonSpec(home: string, cliScript: string, ctx: SpecContext): S
     stdout: logs.out,
     stderr: logs.err,
     node,
+    // Windows' clean stop (D77): the supervisor sends "stop" rather than killing it
+    ipcStop: true,
   };
 }
 

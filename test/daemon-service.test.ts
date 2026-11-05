@@ -70,11 +70,13 @@ async function setup() {
   await t.store.patchConfig({ port: daemon.port });
   // where the Linux module puts it (with path.posix, on every OS: D58)
   let unit = '';
-  const state = { active: false, enabled: false };
+  // refuse: systemd says no to starting it (no user instance, say), as a first install on a box without one would see
+  const state = { active: false, enabled: false, refuse: false };
   const calls: string[] = [];
   const run = async (cmd: string, args: string[]): Promise<RunResult> => {
     calls.push([cmd, ...args].join(' '));
     const [, verb] = args;
+    if (state.refuse && (verb === 'start' || verb === 'restart')) return { code: 1, stdout: '', stderr: 'Job for hallway-daemon.service failed.' };
     if (verb === 'show')
       return {
         code: 0,
@@ -312,6 +314,27 @@ describe('service install --refresh, --port, and replacing a running daemon (the
     assert.equal(s.calls.filter((c) => / (start|restart) hallway-daemon/.test(c)).length, 1, s.calls.join('\n'));
   });
 
+  test('a first install the service manager refuses leaves no unit and no manifest behind; status still exits 4 (D77)', async () => {
+    const s = await setup();
+    s.state.refuse = true;
+    await assert.rejects(s.cmd(['install']), /systemctl --user (start|restart) hallway-daemon\.service failed/);
+    assert.equal(fs.existsSync(s.unit), false, 'the unit it wrote is removed');
+    assert.equal(fs.existsSync(path.join(s.home, 'generated', 'services', 'hallway.daemon.json')), false, 'and its manifest');
+    assert.ok(s.calls.includes('systemctl --user daemon-reload'), 'and systemd told');
+    assert.equal((await s.cmd(['status'])).code, 4);
+  });
+
+  test("a reinstall the service manager refuses keeps the unit that's installed (the control)", async () => {
+    const s = await setup();
+    assert.equal((await s.cmd(['install'])).code, 0);
+    const before = fs.readFileSync(s.unit, 'utf8');
+    s.state.refuse = true;
+    await assert.rejects(s.cmd(['install']), /failed/);
+    assert.equal(fs.readFileSync(s.unit, 'utf8'), before, 'still installed');
+    assert.ok(fs.existsSync(path.join(s.home, 'generated', 'services', 'hallway.daemon.json')));
+    assert.notEqual((await s.cmd(['status'])).code, 4);
+  });
+
   test('--port is written to config.yaml, where the daemon and the CLI read it', async () => {
     const s = await setup();
     await s.store.patchConfig({ port: 1 });
@@ -356,5 +379,39 @@ describe('service install --refresh, --port, and replacing a running daemon (the
     assert.equal(unit?.status, 'warn');
     assert.match(unit!.message, /runs Hallway .* from .*node_modules[\\/]hallway, not this one/);
     assert.equal(checks.find((c) => c.id === 'running-version')?.status, 'pass');
+    // the port is held by this tool: a pass, not silence (the contract's §1)
+    assert.deepEqual(checks.filter((c) => c.id === 'port').map((c) => c.status), ['pass']);
+  });
+
+  test("doctor (the contract's §1, D77): the unit's CLI gone is a failure with a fix; a free port passes; linger's fix has sudo", async () => {
+    const s = await setup();
+    await s.cmd(['install']);
+    await s.cmd(['stop']);
+    const m = JSON.parse(fs.readFileSync(path.join(s.home, 'generated', 'services', 'hallway.daemon.json'), 'utf8'));
+    const cli = m.program.find((p: string) => p.endsWith('cli.js'));
+    fs.rmSync(cli);
+    const loginctl = async (cmd: string) => (cmd === 'loginctl' ? { code: 0, stdout: 'Linger=no\n', stderr: '' } : { code: 1, stdout: '', stderr: '' });
+    const checks = await diagnose(s.ctx, loginctl, { offline: true });
+    const unit = checks.find((c) => c.id === 'unit');
+    assert.equal(unit?.status, 'fail');
+    assert.match(unit!.message, /runs .*cli\.js, which no longer exists/);
+    assert.match(unit!.fix ?? '', /hallway service install/);
+    assert.deepEqual(checks.filter((c) => c.id === 'port').map((c) => c.status), ['pass']);
+    assert.match(checks.find((c) => c.id === 'port')!.message, /is free/);
+    const linger = checks.find((c) => c.id === 'linger');
+    assert.equal(linger?.status, 'warn');
+    assert.match(linger!.fix ?? '', /^`sudo loginctl enable-linger \S+`/);
+    for (const c of checks.filter((x) => x.status === 'fail')) assert.ok(c.fix, `${c.id} has a fix`);
+  });
+
+  test("doctor: a service manager that can't be asked fails with a fix", async () => {
+    const s = await setup();
+    s.ctx.services = () => {
+      throw new Error("can't reach systemd's per-user instance");
+    };
+    const checks = await diagnose(s.ctx, async () => ({ code: 1, stdout: '', stderr: '' }), { offline: true });
+    const sm = checks.find((c) => c.id === 'service-manager');
+    assert.equal(sm?.status, 'fail');
+    assert.match(sm!.fix ?? '', /systemctl --user status/);
   });
 });
