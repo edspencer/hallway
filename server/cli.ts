@@ -2,7 +2,7 @@
 // `hallway [command] …`: the command-line entry point (the package's bin; `npm run hallway -- …` from a checkout).
 // With no command it runs the daemon in the foreground (`serve`). The full command set is docs/07-cli.md; commands
 // arrive milestone by milestone (docs/08-roadmap.md).
-import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify, useDataDir } from './config.js';
+import { DEFAULT_PORT, HOME, ROOT, VERSION, dataPaths, devOverrides, parsePort, tildify, useDataDir, useRecordedHome } from './config.js';
 import { UsageError, check, parseArgs } from './args.js';
 import { DEFAULT_URL, agentGuide, readGuide, snippet } from './guide.js';
 
@@ -204,7 +204,8 @@ async function main(argv: string[]): Promise<number | undefined> {
   const parsed = parseArgs(argv);
   const { pos, flags } = parsed;
   // every command's, so it's taken here, before anything reads the data home, and not passed on
-  if (flags['data-dir'] !== undefined) {
+  const dataDirGiven = flags['data-dir'] !== undefined;
+  if (dataDirGiven) {
     if (!flags['data-dir']) throw new UsageError('--data-dir needs a directory');
     useDataDir(flags['data-dir']);
     delete flags['data-dir'];
@@ -219,6 +220,18 @@ async function main(argv: string[]): Promise<number | undefined> {
   }
   const [cmd = 'serve', ...args] = pos;
   const rest = parsed.rest;
+  // `service install --refresh` and `update` act on the daemon's installed job, in the data home it records, not the
+  // one this shell's $HALLWAY_HOME names; --data-dir still wins (D76)
+  if (!dataDirGiven && ((cmd === 'service' && args[0] === 'install' && flags.refresh) || cmd === 'update' || cmd === 'upgrade')) {
+    const [{ currentPlatform }, { recordedDataHome }, os] = await Promise.all([import('./platform/index.js'), import('./services/index.js'), import('node:os')]);
+    let recorded: { home: string | null } | undefined;
+    try {
+      recorded = recordedDataHome(currentPlatform().services({ env: process.env, home: os.homedir() }));
+    } catch {
+      /* no service manager here: nothing is installed */
+    }
+    if (recorded) useRecordedHome(recorded.home);
+  }
   const commands = () => import('./commands/index.js');
   switch (cmd) {
     case 'serve':

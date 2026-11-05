@@ -36,6 +36,20 @@ export interface ServiceManifest {
 
 export class ServiceError extends Error {}
 
+/**
+ * The data home the daemon's installed job records: `{ home }` with its `$HALLWAY_HOME`, or null when it sets none
+ * (the default home). Undefined when there's no job, or it can't be read.
+ */
+export function recordedDataHome(manager: ServiceManager): { home: string | null } | undefined {
+  let text: string;
+  try {
+    text = fs.readFileSync(manager.file(DAEMON_LABEL), 'utf8');
+  } catch {
+    return undefined;
+  }
+  return { home: manager.readEnv(text).HALLWAY_HOME || null };
+}
+
 /** The daemon's job doesn't exist: `service start`, `stop`, `restart` and `logs` exit 4 for it (the CLI contract). */
 export class NotInstalledError extends ServiceError {
   constructor() {

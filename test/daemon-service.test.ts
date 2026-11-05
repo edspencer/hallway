@@ -15,6 +15,7 @@ import { platformFor } from '../server/platform/index.ts';
 import type { RunResult } from '../server/platform/services.ts';
 import { Services, logFiles } from '../server/services/index.ts';
 import { writeRuntimeFile } from '../server/contract/runtime-file.ts';
+import { writeUpdateCheck } from '../server/contract/update-check.ts';
 import { exitWatchdog, tmpDir, tmpStore } from './fixture.ts';
 
 await exitWatchdog();
@@ -274,5 +275,74 @@ describe('the daemon as a service (the CLI contract, D74)', () => {
     await s.daemon.up();
     s.daemon.counts.app = 1;
     assert.equal((await s.cmd(['stop'])).code, 4);
+  });
+});
+
+describe('service install --refresh, --port, and replacing a running daemon (the CLI contract 0.2, D76)', () => {
+  test('--refresh with nothing installed exits 4 and writes nothing; --json is still one document', async () => {
+    const s = await setup();
+    const r = await s.cmd(['install'], { refresh: '1' });
+    assert.equal(r.code, 4);
+    assert.match(r.err, /isn't installed as a service, so there's nothing to refresh/);
+    assert.equal(fs.existsSync(s.unit), false);
+    const j = await s.cmd(['install'], { refresh: '1', json: '1' });
+    assert.equal(j.code, 4);
+    assert.equal(JSON.parse(j.out).ok, false);
+    assert.ok(!s.calls.some((c) => / (start|restart|enable) /.test(c)), 'nothing was started');
+  });
+
+  test('install over a running daemon restarts it, even with nothing changed (enable --now would leave it serving)', async () => {
+    const s = await setup();
+    await s.cmd(['install']);
+    const before = fs.readFileSync(s.unit, 'utf8');
+    s.calls.length = 0;
+    const r = await s.cmd(['install'], { refresh: '1' });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(fs.readFileSync(s.unit, 'utf8'), before, 'a faithful refresh is byte-identical');
+    assert.ok(s.calls.some((c) => c === 'systemctl --user restart hallway-daemon.service'), s.calls.join('\n'));
+    assert.match(r.out, /Refreshed Hallway's daemon/);
+    assert.match(r.out, /Restarted the daemon\./);
+  });
+
+  test("a first install starts it once and doesn't restart it (systemd's start limit)", async () => {
+    const s = await setup();
+    s.calls.length = 0;
+    assert.equal((await s.cmd(['install'])).code, 0);
+    assert.equal(s.calls.filter((c) => / (start|restart) hallway-daemon/.test(c)).length, 1, s.calls.join('\n'));
+  });
+
+  test('--port is written to config.yaml, where the daemon and the CLI read it', async () => {
+    const s = await setup();
+    await s.store.patchConfig({ port: 1 });
+    const r = await s.cmd(['install'], { port: String(s.daemon.port) });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(s.store.currentConfig().port, s.daemon.port);
+    assert.match(fs.readFileSync(path.join(s.home, 'config.yaml'), 'utf8'), new RegExp(`port: ${s.daemon.port}`));
+    await assert.rejects(s.cmd(['install'], { port: 'x' }), /--port must be a port number/);
+  });
+
+  test("status --json carries `update` from the last check, and leaves it out (never null) when there's nothing", async () => {
+    const s = await setup();
+    await s.cmd(['install']);
+    const none = JSON.parse((await s.cmd(['status'], { json: '1' })).out);
+    assert.equal('update' in none, false);
+    const check = { name: 'hallway', current: VERSION, target: '99.0.0', tag: 'latest', updateAvailable: true, installMethod: 'npm-global' as const, canUpdate: true, command: 'hallway update', engines: '>=22.13', nodeOk: true, changelog: 'https://example.com/v99.0.0', checkedAt: new Date().toISOString() };
+    writeUpdateCheck(s.home, check);
+    const st = await s.cmd(['status'], { json: '1' });
+    assert.deepEqual(JSON.parse(st.out).update, { latest: '99.0.0', updateAvailable: true, checkedAt: check.checkedAt });
+    assert.equal(st.err, '', '--json: the notice is for people');
+    const prose = await s.cmd(['status']);
+    assert.match(prose.err, /Hallway 99\.0\.0 is available \(you have .*\)\.\n {2}Run: hallway update\n {2}Changes: https:\/\/example\.com\/v99\.0\.0/);
+    // a cache written for another version says nothing
+    writeUpdateCheck(s.home, { ...check, current: '0.0.1' });
+    assert.equal('update' in JSON.parse((await s.cmd(['status'], { json: '1' })).out), false);
+    assert.equal((await s.cmd(['status'])).err, '');
+  });
+
+  test('scoped flags: --refresh, --check and --to anywhere else are usage errors', async () => {
+    const s = await setup();
+    await assert.rejects(s.cmd(['status'], { refresh: '1' }), /service status doesn't take --refresh/);
+    await assert.rejects(s.cmd(['start'], { force: '1' }), /service start doesn't take --force/);
+    await assert.rejects(s.cmd(['install'], { force: '1' }), /service install doesn't take --force/);
   });
 });

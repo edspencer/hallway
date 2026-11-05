@@ -85,6 +85,8 @@ export interface ServiceManager {
   render(spec: ServiceSpec): string;
   /** The PATH a definition sets, for doctor. */
   readPath(text: string): string | null;
+  /** The whole environment a definition sets: `service install --refresh` reads the data home back from it. */
+  readEnv(text: string): Record<string, string>;
   /** Write the definition (atomically) and tell the manager. True if it changed. Doesn't start anything. */
   write(spec: ServiceSpec): Promise<boolean>;
   /** Make it run now, and at login if `runAtLoad`; a no-op if it's already running. */
