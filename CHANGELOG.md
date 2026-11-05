@@ -1,5 +1,23 @@
 # hallway
 
+## 0.14.0
+
+### Minor Changes
+
+- [#64](https://github.com/edspencer/hallway/pull/64) [`97b5db2`](https://github.com/edspencer/hallway/commit/97b5db246bd1ab3fef5907a726472928e26e17fa) Thanks [@edspencer](https://github.com/edspencer)! - `hallway service install --dry-run` prints the service file it would write (the systemd unit, the LaunchAgent, or the scheduled task's job) and writes nothing, not even the data home; with `--json` it's one document with `dryRun: true` and the `unit` text.
+  
+  `hallway service install` now refuses to run from a source checkout (a git clone or an `npm link`, rather than an installed package), because the service would run whatever the checkout last built. **A script that installed the service from a checkout now gets exit 1 with a message saying so; add `--from-checkout` to keep doing it on purpose.** `service install --refresh` (and so `hallway update`) keeps a service that already runs a checkout.
+  
+  On Linux, `hallway service install` checks lingering and, only when it's off, prints `sudo loginctl enable-linger <user>` to run once (it never runs sudo itself).
+
+### Patch Changes
+
+- [#62](https://github.com/edspencer/hallway/pull/62) [`8e282c4`](https://github.com/edspencer/hallway/commit/8e282c437932238f727ae78e0a17b5dda7bc065f) Thanks [@edspencer](https://github.com/edspencer)! - `hallway serve` (and so the daemon's service) now stops cleanly on SIGTERM and Ctrl-C, and on Windows when the service is stopped: it takes no new requests, lets an app start, stop or restart and a local-domains setup that's under way finish (up to 10 seconds), removes `runtime.json` and exits 0. Before, a stop cut that work off wherever it was.
+  
+  A first `hallway service install` (or an app's first `service add` or `run`) that the service manager refuses no longer leaves its unit or plist behind, so `service status` says "not installed" (exit 4) rather than "installed but not running". A reinstall keeps the job that's there.
+  
+  `hallway doctor`: fails the `unit` check, with a fix, when the Hallway the daemon's service runs has been removed; reports the port as free (or Hallway's) rather than saying nothing; prints `sudo loginctl enable-linger <user>` for lingering; and gives a fix when the service manager can't be asked.
+
 ## 0.13.0
 
 ### Minor Changes
