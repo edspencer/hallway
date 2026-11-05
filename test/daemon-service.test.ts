@@ -60,7 +60,8 @@ async function setup() {
   fs.mkdirSync(userHome);
   const daemon = await standIn();
   await t.store.patchConfig({ port: daemon.port });
-  const unit = path.join(userHome, '.config', 'systemd', 'user', 'hallway-daemon.service');
+  // where the Linux module puts it (with path.posix, on every OS: D58)
+  let unit = '';
   const state = { active: false, enabled: false };
   const calls: string[] = [];
   const run = async (cmd: string, args: string[]): Promise<RunResult> => {
@@ -87,6 +88,7 @@ async function setup() {
   };
   const env = { PATH: '' };
   const services = new Services({ store: t.store, platform: platformFor('linux'), run, env, userHome, cliScript, node: { path: process.execPath, version: process.version } });
+  unit = services.manager.file('hallway.daemon');
   let out = '';
   let err = '';
   const ctx = makeCtx({ home: t.home, env, cwd: root, out: (s) => void (out += s), err: (s) => void (err += s), run, platform: platformFor('linux') });
