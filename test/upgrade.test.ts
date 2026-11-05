@@ -95,11 +95,13 @@ describe('service install after an upgrade (D70)', { skip: onWindows('systemd mo
     assert.match(fs.readFileSync(h.services.manifestFile(DAEMON_LABEL), 'utf8'), new RegExp(`"hallwayVersion": "${VERSION}"`));
   });
 
-  test('already this version: nothing restarted, nothing said about it', async () => {
+  test('already this version: restarted all the same, once, with no versions in the message (the CLI contract 0.2, D76)', async () => {
+    // a reinstall replaces a running daemon, never leaves it serving: `enable --now` alone wouldn't restart it
     const h = await linuxHarness({ version: VERSION });
     assert.equal(await service(h.ctx, ['install'], {}, undefined), 0, h.errors());
-    assert.deepEqual(restarts(h.calls), []);
-    assert.doesNotMatch(h.output(), /Restarted/);
+    assert.equal(restarts(h.calls).length, 1, h.calls.join('\n'));
+    assert.match(h.output(), /Restarted the daemon\.\n/);
+    assert.doesNotMatch(h.output(), /→/);
   });
 
   test("a restart that doesn't take (still the old version after the wait) is an error, not \"It's running\"", async () => {
