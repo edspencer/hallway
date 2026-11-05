@@ -72,11 +72,12 @@ async function setup({ checkout = false } = {}) {
   // where the Linux module puts it (with path.posix, on every OS: D58)
   let unit = '';
   // refuse: systemd says no to starting it (no user instance, say), as a first install on a box without one would see
-  const state = { active: false, enabled: false, refuse: false };
+  const state = { active: false, enabled: false, refuse: false, linger: true };
   const calls: string[] = [];
   const run = async (cmd: string, args: string[]): Promise<RunResult> => {
     calls.push([cmd, ...args].join(' '));
     const [, verb] = args;
+    if (cmd === 'loginctl') return { code: 0, stdout: `Linger=${state.linger ? 'yes' : 'no'}\n`, stderr: '' };
     if (state.refuse && (verb === 'start' || verb === 'restart')) return { code: 1, stdout: '', stderr: 'Job for hallway-daemon.service failed.' };
     if (verb === 'show')
       return {
@@ -334,6 +335,18 @@ describe('service install --refresh, --port, and replacing a running daemon (the
     assert.equal(fs.readFileSync(s.unit, 'utf8'), before, 'still installed');
     assert.ok(fs.existsSync(path.join(s.home, 'generated', 'services', 'hallway.daemon.json')));
     assert.notEqual((await s.cmd(['status'])).code, 4);
+  });
+
+  test("install on Linux with lingering off says how to turn it on, with sudo, and doesn't run it (the contract's §7)", async () => {
+    const s = await setup();
+    s.state.linger = false;
+    const r = await s.cmd(['install']);
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.out, /Lingering is off, so it stops when you log out.*\n?.*run this once: sudo loginctl enable-linger \S+\n\(Hallway never runs sudo itself/);
+    assert.ok(!s.calls.some((c) => /^sudo|enable-linger/.test(c)), 'nothing ran it');
+    // on: nothing said
+    const t = await setup();
+    assert.doesNotMatch((await t.cmd(['install'])).out, /Lingering/);
   });
 
   test('install --dry-run prints the unit and writes nothing: no unit, no manifest, no port in config.yaml (D78)', async () => {

@@ -335,6 +335,10 @@ export async function service(ctx: Ctx, pos: string[], flags: Record<string, str
         return done('install', false, { error: w.reason, ...extra });
       }
       say(`It's running: http://localhost:${port}\n${svc.manager.lifetime}\n`);
+      // the contract's §7: say how to keep it running after logout, and never run sudo ourselves
+      const lingerUser = await svc.lingerOff();
+      if (lingerUser)
+        say(`Lingering is off, so it stops when you log out and starts again only when you log in. To keep it running (and start it at boot), run this once: sudo loginctl enable-linger ${lingerUser}\n(Hallway never runs sudo itself; \`hallway doctor\` warns while lingering is off.)\n`);
       return done('install', true, extra);
     }
     case 'uninstall': {
