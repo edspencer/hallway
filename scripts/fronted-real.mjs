@@ -124,7 +124,7 @@ try {
   step('before: nothing of ours is installed');
   assert.deepEqual(leftovers(), []);
   must('app', 'add', 'review', '--port', String(review.port), '--name', 'Local Review');
-  must('service', 'install');
+  must('service', 'install', '--from-checkout'); // CI runs this build from the checkout, on purpose (D78)
   await until('the daemon', async () => (await fetch('http://localhost:4255/api/health').catch(() => null))?.ok);
 
   step('migration: the System-wide setup of 0.6.0 (from npm; pf on macOS), then this build');
@@ -297,7 +297,7 @@ try {
     assert.match(r.out, /https:\/\/review\.localhost/);
     assert.match(r.out, /https:\/\/other\.localhost/);
   });
-  must('service', 'install');
+  must('service', 'install', '--from-checkout'); // CI runs this build from the checkout, on purpose (D78)
   await until('the daemon again', async () => (await fetch('http://localhost:4255/api/health').catch(() => null))?.ok);
 
   step('criterion 9: a custom domain');

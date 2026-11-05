@@ -50,6 +50,8 @@ async function linuxHarness({ version = OLD as string | null, running = true, re
   const cliScript = path.join(root, 'lib', 'node_modules', 'hallway', 'dist', 'server', 'cli.js');
   fs.mkdirSync(path.dirname(cliScript), { recursive: true });
   fs.writeFileSync(cliScript, '');
+  // an installed package, not a checkout (D78)
+  fs.writeFileSync(path.join(root, 'lib', 'node_modules', 'hallway', 'package.json'), JSON.stringify({ name: 'hallway', version: VERSION }));
   const userHome = path.join(root, 'home');
   fs.mkdirSync(userHome);
   const daemon = await fakeDaemon();

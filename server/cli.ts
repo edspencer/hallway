@@ -18,9 +18,11 @@ Daemon
           --quiet, -q      print just the "Hallway <version>: <url>" line: no banner, no hints (the
                            banner is only shown on a terminal anyway)
   open                              Open the dashboard in your browser.
-  service install [--port <n>] [--json]
+  service install [--port <n>] [--dry-run] [--from-checkout] [--json]
                                     Run the daemon as a service (a LaunchAgent / systemd user unit / scheduled
                                     task). --port sets port: in config.yaml. Over a running daemon, it restarts it.
+                                    --dry-run prints the unit and writes nothing. From a git checkout it refuses
+                                    unless --from-checkout (npx's cache, and a port something else holds, always).
   service install --refresh         Rewrite the installed service in this version's format, keeping its data
                                     home, and restart it. Exits 4 if it isn't installed.
   service start | stop | restart [--force] [--json]

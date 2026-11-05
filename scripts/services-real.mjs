@@ -113,7 +113,7 @@ try {
   assert.equal(hwExit('service', 'stop').code, 4);
 
   step('service install');
-  const installed = hw('service', 'install');
+  const installed = hw('service', 'install', '--from-checkout'); // this build, from the checkout, on purpose (D78)
   assert.match(installed, new RegExp(`It's running: http://localhost:${port}`), installed);
   assert.ok(fs.existsSync(unitFile('hallway.daemon')));
   console.log(hw('service', 'status'));

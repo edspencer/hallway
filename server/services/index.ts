@@ -18,6 +18,7 @@ import { type Platform, type Runner, type ServiceManager, type ServiceSpec, type
 import type { Store } from '../store/index.js';
 import type { ResolvedNode } from './resolve.js';
 import { transientInstall, transientMessage } from './transient.js';
+import { findPackageRoot, underNodeModules } from '../contract/install-method.js';
 import { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, type Forward, appLabel, appSpec, daemonSpec, forwardSpec, forwards, helperSpec, isForwardLabel, slugOfLabel } from './spec.js';
 
 export { CADDY_LABEL, DAEMON_LABEL, DNSMASQ_LABEL, appLabel, forwards, isForwardLabel, logFiles, slugOfLabel } from './spec.js';
@@ -142,6 +143,36 @@ export class Services {
     if (label !== DAEMON_LABEL && !(label && isForwardLabel(label)) && this.manager.kind !== 'schtasks') return;
     const t = transientInstall(this.cliScript);
     if (t) throw new ServiceError(transientMessage(t, label === DAEMON_LABEL ? 'hallway service install' : undefined));
+  }
+
+  /**
+   * The source checkout `cli.js` is in, or null when it's an installed package (D78): the CLI contract's §6 test, from
+   * the reference's install-method.ts. A package root that isn't under a node_modules (a clone, an `npm link`), or
+   * none at all, is a checkout.
+   */
+  static checkoutOf(cliScript: string): string | null {
+    let real = cliScript;
+    try {
+      real = fs.realpathSync(cliScript);
+    } catch {
+      /* not built yet: the path as given */
+    }
+    const { root } = findPackageRoot(real, 'hallway', fs);
+    if (root !== undefined && underNodeModules(root)) return null;
+    return root ?? path.dirname(real);
+  }
+
+  /**
+   * The daemon's service mustn't run a source checkout by accident (the CLI contract's §1, D78): it would run whatever
+   * the checkout last built, and break when it's cleaned or rebuilt. Throws a ServiceError unless `fromCheckout`.
+   */
+  refuseCheckout({ fromCheckout = false } = {}) {
+    if (fromCheckout) return;
+    const checkout = Services.checkoutOf(this.cliScript);
+    if (checkout)
+      throw new ServiceError(
+        `Hallway is running from a source checkout (${checkout}), not an installed package: a service would run whatever that checkout last built, and break when it's cleaned or rebuilt. Install it first: \`npm i -g hallway\`, then run \`hallway service install\` again. To run the checkout on purpose, add --from-checkout.`,
+      );
   }
 
   /** Write a job's definition: every write goes through here, so none can point Hallway's CLI at a cache. */
