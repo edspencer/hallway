@@ -354,7 +354,7 @@ describe('service install --refresh, --port, and replacing a running daemon (the
     const unit = checks.find((c) => c.id === 'unit');
     // the rig's job runs a Hallway of its own (lib/node_modules/hallway), not this checkout
     assert.equal(unit?.status, 'warn');
-    assert.match(unit!.message, /runs Hallway .* from .*node_modules\/hallway, not this one/);
+    assert.match(unit!.message, /runs Hallway .* from .*node_modules[\\/]hallway, not this one/);
     assert.equal(checks.find((c) => c.id === 'running-version')?.status, 'pass');
   });
 });

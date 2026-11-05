@@ -56,9 +56,9 @@ export async function diagnose(ctx: Ctx, run: Runner = defaultRunner, opts: Diag
   const info = detectInstall({ packageName: PACKAGE_NAME, envPrefix: 'HALLWAY', entry: opts.entry ?? process.argv[1], env: ctx.env, npmGlobalRoot: () => npmGlobalRoot(npm), fs });
   const how = describeInstall(info, PACKAGE_NAME);
   if (info.method === 'npx')
-    add({ id: 'install-method', status: 'warn', message: `Hallway is running from ${how}, which can be deleted at any time; services can't run from there`, fix: '`npm i -g hallway`' });
-  else if (info.canUpdate) add({ id: 'install-method', status: 'pass', message: `installed as ${how}: \`hallway update\` updates it` });
-  else add({ id: 'install-method', status: 'pass', message: `installed as ${how}: \`hallway update\` can't update it, and says what to run instead` });
+    add({ id: 'install-method', status: 'warn', message: `Hallway is ${how}, which can be deleted at any time; services can't run from there`, fix: '`npm i -g hallway`' });
+  else if (info.canUpdate) add({ id: 'install-method', status: 'pass', message: `Hallway is ${how}: \`hallway update\` updates it` });
+  else add({ id: 'install-method', status: 'pass', message: `Hallway is ${how}: \`hallway update\` can't update it, and says what to run instead` });
 
   // ---------------- the data home ----------------
   ctx.readOnly = true;
