@@ -20,6 +20,8 @@ export const SIDEBAR = [
 			{ label: 'Introduction', slug: 'introduction' },
 			{ label: 'Installation', slug: 'getting-started/installation' },
 			{ label: 'Quickstart', slug: 'getting-started/quickstart' },
+			{ label: 'Running as a service', slug: 'getting-started/running-as-a-service' },
+			{ label: 'Updating', slug: 'getting-started/updating' },
 		],
 	},
 	{

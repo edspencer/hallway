@@ -37,7 +37,7 @@ always there without you starting anything:
 - **macOS:** a LaunchAgent, `~/Library/LaunchAgents/hallway.daemon.plist`, loaded now and at every login.
 - **Linux:** a systemd user unit, `~/.config/systemd/user/hallway-daemon.service`, enabled and started. A user unit
   runs while you are logged in; to keep it running without a login session (and from boot), enable lingering once
-  with `loginctl enable-linger $USER`. Hallway never does that for you, and `hallway doctor` warns while it is off.
+  with `sudo loginctl enable-linger $USER`. Hallway never does that for you, and `hallway doctor` warns while it is off.
 - **Windows** (best effort): a scheduled task, `\hallway.daemon`, that starts when you log on and runs
   `hallway supervise`, which keeps the daemon running and writes its logs. Its files are in
   `%LOCALAPPDATA%\hallway\tasks\`. It runs while you're logged on. No administrator rights are needed, and none
@@ -45,7 +45,8 @@ always there without you starting anything:
   a Windows desktop yet.
 
 It is idempotent: run it again any time. Undo it with `hallway service uninstall`; `hallway service status` says
-whether it is running.
+whether it is running. Everything about the service, from `--dry-run` to the busy check and the logs, is in
+[Running as a service](/getting-started/running-as-a-service/).
 
 Finally, tell your coding agents about it. This prints a short paragraph to paste into an agent instruction file such
 as `CLAUDE.md` or `AGENTS.md`:
@@ -67,57 +68,7 @@ hallway open         # open the dashboard in your browser
 
 ## Updating
 
-<span class="ms ms--shipped">v2</span> One command:
-
-```sh
-hallway update
-```
-
-It asks the npm registry for the newest Hallway and shows what would change
-(`Update Hallway 0.12.0 → 0.13.0? The service will restart.`, with a link to the release notes), then:
-
-1. checks that Hallway isn't busy (setting up local domains, or starting or stopping an app), as
-   [`hallway busy`](/reference/cli/#the-daemon) does;
-2. fetches the new version (and the one you have, for a rollback) while the old one is still serving;
-3. stops the daemon's service, installs the new version with the package manager you installed it with, and has the
-   new version rewrite and start its service;
-4. waits until the dashboard answers as the new version. If it doesn't within 30 seconds, it prints the last lines of
-   the daemon's log, puts the old version back and starts it again (exit 6). If even that fails, it exits 7 and prints
-   the commands to run by hand.
-
-**What it does to your apps.** It says so before it asks. On macOS and Linux, your managed apps keep running: the new
-version rewrites their jobs, and an app whose job comes out different is restarted onto it. On Windows, each app's
-scheduled task runs through Hallway's own code, which Windows can't replace while it's running, so the update stops
-your running apps while it installs and starts them again afterwards.
-
-Without a terminal (a script, an agent's shell), `hallway update` needs `--yes`. The other options:
-
-| | |
-| --- | --- |
-| `--check` | Say whether there's a newer version, and change nothing. It exits 0 either way; with `--json`, read `updateAvailable`. |
-| `--to <version\|tag>` | Install that version or dist-tag (`--to next`). It's the only way to go to a lower version. |
-| `--force` | Don't wait while Hallway is busy. The health check and the rollback still run. |
-| `--json` | One JSON document on stdout; the progress goes to stderr. |
-
-**When it can't update itself**, it says what to run instead and exits 5. That happens when Hallway runs from npx's
-cache (`npx hallway@latest` already runs the newest), from a checkout (`git pull && npm install && npm run build`), as
-a dependency of some project, or from a global folder you can't write to (it prints the `sudo npm install -g …` line,
-and never runs sudo itself). An install managed by something else, such as Ansible, can set `HALLWAY_UPDATE_HINT`, and
-`hallway update` prints that instead.
-
-Nothing in Hallway asks the registry by itself: only `hallway update`, `hallway update --check` and `hallway doctor`
-do, when you run them. `hallway service status` repeats what the last of them found, and `hallway doctor --offline`
-doesn't ask.
-
-If you'd rather do it by hand:
-
-```sh
-npm i -g hallway@latest && hallway service install
-```
-
-`hallway service install` restarts the daemon onto the version you just installed, and restarts the forwarders
-`hallway setup` installed on macOS if they're still running the old code. `hallway doctor` flags a daemon that's a
-different version from its service.
+`hallway update`: see [Updating](/getting-started/updating/).
 
 ## Requirements
 

@@ -23,13 +23,16 @@ hallway service uninstall    # stopped and removed; the data home and logs stay
 ```
 
 `hallway service stop` stops Hallway the way `systemctl --user stop` and `launchctl bootout` do: it isn't disabled,
-so your next login (or boot, with lingering) starts it again. To keep it off, uninstall it. Each of these takes
-`--json` for scripts. Stopping an *app* is different: [`hallway stop`](#managed-services) keeps it stopped across logins too.
+so your next login (or boot, with lingering) starts it again. To keep it off, uninstall it. `stop` and `restart`
+refuse with exit 75 while Hallway is busy (setting up local domains, or starting or stopping an app), unless you add
+`--force`. All of these but `logs` take `--json` for scripts. Stopping an *app* is different:
+[`hallway stop`](#managed-services) keeps it stopped across logins too. The whole story, with `--dry-run`, the logs
+and the exit codes, is in [Running as a service](/getting-started/running-as-a-service/).
 
 On macOS the job is `~/Library/LaunchAgents/hallway.daemon.plist`; on Linux it is
 `~/.config/systemd/user/hallway-daemon.service`; on Windows it is the scheduled task `\hallway.daemon` (see
 [Windows](#windows)). All start at **login**, not at boot, which is the right behaviour
-for a laptop. On Linux, enabling lingering once (`loginctl enable-linger $USER`) keeps Hallway's units running
+for a laptop. On Linux, enabling lingering once (`sudo loginctl enable-linger $USER`) keeps Hallway's units running
 without a login session and starts them at boot; Hallway never enables it itself, and `hallway doctor` warns while it
 is off.
 
