@@ -184,9 +184,20 @@ can trust the same root again.
 ```sh
 hallway doctor
 hallway doctor --json
+hallway doctor --offline     # without asking the registry for a newer Hallway
 ```
 
-Read-only diagnostics. Each check prints pass, warn, fail or info, with a suggested fix.
+Read-only diagnostics. Each check prints pass, warn, fail or info, with a suggested fix. It exits 1 if any check
+fails; warnings don't change that. In `--json`, an info line is a pass marked `"info": true`.
+
+**<span class="ms ms--shipped">v2</span> This install:**
+
+- this Node satisfies the Node version Hallway needs;
+- how Hallway was installed (a global npm install, npx's cache, a checkout, …), and so whether `hallway update` can
+  update it;
+- the daemon's service runs this install of Hallway, and the daemon answering is the version its service runs;
+- whether a newer Hallway is out. This is the one check that asks the npm registry; `--offline` skips it, and a
+  registry it can't reach is a warning, not a failure. What it finds is what `hallway service status` repeats.
 
 **<span class="ms ms--v0">v0</span> The daemon, your data and your services:**
 
