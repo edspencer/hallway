@@ -1,4 +1,4 @@
-// From edspencer/cli-contract test/helpers.ts @ 0.2; local changes: imports server/contract/; loadSchema and validate re-exported from the runner
+// From edspencer/cli-contract test/helpers.ts @ 1.0; local changes: imports server/contract/; loadSchema and validate re-exported from the runner
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
