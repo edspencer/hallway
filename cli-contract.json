@@ -2,7 +2,12 @@
   "$schema": "./node_modules/@edspencer/cli-conformance/schemas/cli-contract.schema.json",
   "name": "Hallway",
   "serve": { "args": ["serve", "--port", "{port}"] },
-  "env": { "HALLWAY_HOME": null, "PORT": null, "HALLWAY_DEV": null, "HALLWAY_DEV_BIND": null, "HALLWAY_DEV_ALLOWED_HOSTS": null },
+  "env": { "HALLWAY_HOME": null, "PORT": null, "HOST": null, "HALLWAY_DEV": null, "HALLWAY_DEV_BIND": null, "HALLWAY_DEV_ALLOWED_HOSTS": null },
+  "update": {
+    "runtimeFile": "{home}/.hallway/runtime.json",
+    "serviceInstall": ["service", "install", "--port", "{port}"],
+    "timeoutMs": 600000
+  },
   "checks": {
     "version": true,
     "help": true,
@@ -12,6 +17,17 @@
     "busy": true,
     "busy-json": true,
     "serve-banner": true,
-    "serve-health": true
+    "serve-health": true,
+    "update-up-to-date": true,
+    "update-check-json": true,
+    "update-no-tty": true,
+    "update-busy": true,
+    "update-npx": true,
+    "update-checkout": true,
+    "update-not-writable": true,
+    "update": true,
+    "update-to-lower": true,
+    "update-service": true,
+    "update-rollback": true
   }
 }
