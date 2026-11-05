@@ -13,17 +13,20 @@ Daemon
                                     http://localhost:<port> (127.0.0.1 only). If Hallway already answers on
                                     the port, it says where and exits.
           --port <n>       the port (default ${DEFAULT_PORT}, or $PORT, or port: in config.yaml)
-          --quiet, -q      print just the "Hallway on <url>" line: no banner, no hints (the banner
-                           is only shown on a terminal anyway)
+          --quiet, -q      print just the "Hallway <version>: <url>" line: no banner, no hints (the
+                           banner is only shown on a terminal anyway)
   open                              Open the dashboard in your browser.
   service install [--json]          Run the daemon as a service (a LaunchAgent / systemd user unit).
-  service start | stop | restart [--json]
+  service start | stop | restart [--force] [--json]
                                     Start it, or stop it until \`service start\` or the next login or boot
-                                    (\`service uninstall\` keeps it off), or restart it.
+                                    (\`service uninstall\` keeps it off), or restart it. Stop and restart
+                                    refuse (exit 75) while the daemon is busy, unless --force.
   service status [--json]           Installed? running? which version? Exits 3 if it isn't running, 4 if
                                     it isn't installed.
   service logs [-n N] [-f]          The daemon's logs (the last 50 lines; -f keeps printing).
   service uninstall [--json]        Stop it and remove it (the data home and logs stay).
+  busy [--json]                     Is the daemon busy (setting up local domains, starting or stopping an
+                                    app)? Exits 0 if not, 75 if it is, 3 if it isn't running.
 
 Apps and discovery
   status [slug] [--json]            Every app's state, address, port and uptime.
@@ -88,7 +91,7 @@ Other
   --data-dir <dir>                  The data home for this command (default $HALLWAY_HOME, else ~/.hallway).
   --version | --help
 
-Exit codes: 0 ok, 1 error, 2 usage error, 3 not running, 4 not installed (the service commands).`;
+Exit codes: 0 ok, 1 error, 2 usage error, 3 not running, 4 not installed (the service commands), 75 busy.`;
 
 /** Resolves with an exit code when there's nothing to run (Hallway already answers on the port), else undefined. */
 async function serve(flags: Record<string, string>): Promise<number | undefined> {
@@ -171,22 +174,24 @@ async function serve(flags: Record<string, string>): Promise<number | undefined>
   const [{ startupMessage }, { transientInstall }] = await Promise.all([import('./banner.js'), import('./services/transient.js')]);
   const f = frontingInfo(store.currentConfig(), platform);
   const problems = store.allProblems().filter((p) => p.severity === 'error');
-  process.stdout.write(
-    startupMessage(
-      {
-        version: VERSION,
-        url: `http://localhost:${bound}`,
-        home: tildify(dataPaths(HOME).home),
-        dashboardUrl: f.mode === 'fronted' ? f.dashboardUrl : null,
-        localDomains: f.mode === 'direct' && !f.unsupported ? { dashboard: f.dashboardUrl, app: f.appUrl } : null,
-        transient: transientInstall(ROOT)?.where ?? null,
-        notes: problems.length ? [`${problems.length} file${problems.length === 1 ? ' has' : 's have'} errors (shown on the dashboard): ${problems.map((p) => p.file).join(', ')}`] : [],
-        quiet: !!flags.quiet,
-        dev: !!process.env.HALLWAY_DEV,
-      },
-      { isTTY: process.stdout.isTTY, columns: process.stdout.columns, env: process.env },
-    ),
+  const startup = startupMessage(
+    {
+      version: VERSION,
+      url: `http://localhost:${bound}`,
+      home: tildify(dataPaths(HOME).home),
+      dashboardUrl: f.mode === 'fronted' ? f.dashboardUrl : null,
+      localDomains: f.mode === 'direct' && !f.unsupported ? { dashboard: f.dashboardUrl, app: f.appUrl } : null,
+      transient: transientInstall(ROOT)?.where ?? null,
+      notes: problems.length ? [`${problems.length} file${problems.length === 1 ? ' has' : 's have'} errors (shown on the dashboard): ${problems.map((p) => p.file).join(', ')}`] : [],
+      quiet: !!flags.quiet,
+      dev: !!process.env.HALLWAY_DEV,
+    },
+    { isTTY: process.stdout.isTTY, columns: process.stdout.columns, env: process.env },
+    { isTTY: process.stderr.isTTY, columns: process.stderr.columns, env: process.env },
   );
+  // the banner first, on stderr, so stdout's first line is `Hallway <version>: <url>` (D75)
+  if (startup.banner) process.stderr.write(startup.banner);
+  process.stdout.write(startup.text);
   if (hostname !== '127.0.0.1' || dev.allowedHosts.length)
     process.stderr.write(
       `hallway: development overrides in effect: bound to ${hostname}${dev.allowedHosts.length ? `, also accepting Host ${dev.allowedHosts.join(', ')}` : ''}. Never use these outside development.\n`,

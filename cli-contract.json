@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/@edspencer/cli-conformance/schemas/cli-contract.schema.json",
+  "name": "Hallway",
+  "serve": { "args": ["serve", "--port", "{port}"] },
+  "env": { "HALLWAY_HOME": null, "PORT": null, "HALLWAY_DEV": null, "HALLWAY_DEV_BIND": null, "HALLWAY_DEV_ALLOWED_HOSTS": null },
+  "checks": {
+    "version": true,
+    "help": true,
+    "unknown-flag": true,
+    "service-status": true,
+    "service-status-json": true,
+    "busy": true,
+    "busy-json": true,
+    "serve-banner": true,
+    "serve-health": true
+  }
+}

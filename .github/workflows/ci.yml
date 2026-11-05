@@ -63,6 +63,11 @@ jobs:
       # Packs the package, installs the tarball into a temp prefix and runs it as a user would (scripts/smoke-pack.mjs).
       - name: Smoke-test the npm package
         run: npm run smoke:pack
+      # The CLI contract's conformance runner (edspencer/cli-contract, D75): packs and installs the package the same
+      # way, then checks --version, --help, a bad flag, service status, busy and serve's first line against
+      # cli-contract.json, where every check is on.
+      - name: CLI contract conformance
+        run: npx cli-conformance
 
   # ---------------------------------------------------------------------------------------------------------------
   # Managed services against the REAL service manager: launchd's gui/<uid> domain on the macOS runner, systemd's

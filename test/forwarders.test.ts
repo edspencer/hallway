@@ -22,8 +22,13 @@ function golden(name: string, text: string) {
 
 function mockRunner(answer: (cmd: string, args: string[]) => Partial<RunResult> | undefined = () => undefined) {
   const calls: string[] = [];
+  // as launchd does: a job booted out isn't found by `print` until it's bootstrapped again (bootout waits for that)
+  const gone = new Set<string>();
   const run = async (cmd: string, args: string[]): Promise<RunResult> => {
     calls.push([cmd, ...args].join(' '));
+    if (cmd === 'launchctl' && args[0] === 'bootout') gone.add(args[1]);
+    if (cmd === 'launchctl' && args[0] === 'bootstrap') gone.delete(`${args[1]}/${path.basename(args[2], '.plist')}`);
+    if (cmd === 'launchctl' && args[0] === 'print' && gone.has(args[1])) return { code: 113, stdout: '', stderr: 'Could not find service' };
     return { code: 0, stdout: '', stderr: '', ...answer(cmd, args) };
   };
   return { calls, run };
@@ -101,7 +106,7 @@ describe('the launchd lifecycle of an on-demand job (runner mocked)', () => {
   test('restart: unload and load again (launchd binds the socket afresh), never a kickstart', async () => {
     const m = mockRunner(loaded);
     await launchdManager({ dir, uid: 501, run: m.run }).restart(forwardHttps);
-    assert.deepEqual(m.calls.slice(1), ['launchctl bootout gui/501/hallway.forward.https', 'launchctl enable gui/501/hallway.forward.https', `launchctl bootstrap gui/501 ${dir}/hallway.forward.https.plist`]);
+    assert.deepEqual(m.calls.slice(1), ['launchctl bootout gui/501/hallway.forward.https', 'launchctl print gui/501/hallway.forward.https', 'launchctl enable gui/501/hallway.forward.https', `launchctl bootstrap gui/501 ${dir}/hallway.forward.https.plist`]);
   });
 });
 

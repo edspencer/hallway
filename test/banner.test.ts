@@ -1,6 +1,6 @@
 // The startup text (server/banner.ts): the HALLWAY banner only on a terminal (or with FORCE_COLOR), colour by Node's
-// rules, a one-line title on a narrow terminal; the "Hallway on" line always first, with "Data home:" after it, for
-// scripts; the local-domains hint in direct mode (D63); the npx hint (D61); --quiet and `npm run dev` just the line.
+// rules, a one-line title on a narrow terminal, and on stderr; stdout's first line always `Hallway <version>: <url>` (the
+// CLI contract's, D75), with "Data home:" after it, for scripts; the local-domains hint in direct mode (D63); the npx hint (D61); --quiet and `npm run dev` just the line.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { alreadyRunning, bannerLines, startupMessage, type Startup, type Terminal } from '../server/banner.ts';
@@ -13,7 +13,12 @@ const o: Startup = {
   localDomains: { dashboard: 'https://hallway.localhost', app: 'https://<app>.localhost' },
   transient: null,
 };
-const msg = (t: Partial<Terminal>, extra: Partial<Startup> = {}) => startupMessage({ ...o, ...extra }, { env: {}, ...t });
+const parts = (t: Partial<Terminal>, extra: Partial<Startup> = {}) => startupMessage({ ...o, ...extra }, { env: {}, ...t });
+/** What a terminal shows: the banner (stderr) first, then stdout's text. */
+const msg = (t: Partial<Terminal>, extra: Partial<Startup> = {}) => {
+  const r = parts(t, extra);
+  return r.banner + r.text;
+};
 const ESC = '\x1b[';
 const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 
@@ -31,7 +36,7 @@ describe('startup banner', () => {
     assert.equal(
       text,
       [
-        'Hallway on http://localhost:4255',
+        'Hallway 1.2.3: http://localhost:4255',
         'Data home: ~/.hallway',
         '',
         'Local domains are off. Run hallway setup to reach this dashboard at',
@@ -50,7 +55,20 @@ describe('startup banner', () => {
     const p = plain(text);
     assert.ok(p.includes(bannerLines()[0]!));
     assert.match(p, /^ v1\.2\.3$/m);
-    assert.match(p, /^Hallway on http:\/\/localhost:4255\nData home: ~\/\.hallway\n/m, 'scripts/smoke-pack.mjs waits for these two lines together');
+    assert.match(p, /^Hallway 1\.2\.3: http:\/\/localhost:4255\nData home: ~\/\.hallway\n/m, 'scripts/smoke-pack.mjs waits for these two lines together');
+  });
+
+  test("on a terminal the banner is stderr's, so stdout's first line is still the contract's (D75)", () => {
+    const r = parts({ isTTY: true, columns: 100, depth: 24 });
+    assert.ok(plain(r.banner).includes(bannerLines()[0]!));
+    assert.equal(r.text.split('\n')[0], 'Hallway 1.2.3: http://localhost:4255');
+    assert.ok(!r.text.includes('█'));
+    // stderr a terminal, stdout piped: the banner, but no colour on stdout
+    const piped = startupMessage(o, { env: {}, isTTY: false }, { env: {}, isTTY: true, depth: 24 });
+    assert.ok(piped.banner.includes(ESC));
+    assert.ok(!piped.text.includes(ESC));
+    // stdout a terminal, stderr piped (2>log): no banner, nothing drawn into the log
+    assert.equal(startupMessage(o, { env: {}, isTTY: true, depth: 24 }, { env: {}, isTTY: false }).banner, '');
   });
 
   test('256 and 16 colours', () => {
@@ -80,18 +98,18 @@ describe('startup banner', () => {
   test('a narrow terminal: a one-line title instead', () => {
     const text = msg({ isTTY: true, columns: 40, depth: 1 });
     assert.ok(!text.includes('█'));
-    assert.ok(text.startsWith('\n ▌ HALLWAY v1.2.3\n\nHallway on '));
+    assert.ok(text.startsWith('\n ▌ HALLWAY v1.2.3\n\nHallway 1.2.3: '));
   });
 
   test('fronted mode: the dashboard address, the direct one as a fallback, and no hint', () => {
     const text = msg({ isTTY: false }, { dashboardUrl: 'https://hallway.localhost', localDomains: null });
     assert.match(text, /^Dashboard: https:\/\/hallway\.localhost {2}\(http:\/\/localhost:4255 works too\)$/m);
     assert.doesNotMatch(text, /Local domains are off/);
-    assert.ok(text.startsWith('Hallway on http://localhost:4255\nData home: ~/.hallway\n'));
+    assert.ok(text.startsWith('Hallway 1.2.3: http://localhost:4255\nData home: ~/.hallway\n'));
   });
 
   test('where fronted mode can’t work (Windows): no hint', () => {
-    assert.equal(msg({ isTTY: false }, { localDomains: null }), 'Hallway on http://localhost:4255\nData home: ~/.hallway\n');
+    assert.equal(msg({ isTTY: false }, { localDomains: null }), 'Hallway 1.2.3: http://localhost:4255\nData home: ~/.hallway\n');
   });
 
   test('from npx: one line on how to keep it running', () => {
@@ -101,12 +119,12 @@ describe('startup banner', () => {
 
   test('notes (files with errors) come after the data home', () => {
     const text = msg({ isTTY: false }, { notes: ['1 file has errors (shown on the dashboard): apps/x.yaml'], localDomains: null });
-    assert.equal(text, 'Hallway on http://localhost:4255\nData home: ~/.hallway\n1 file has errors (shown on the dashboard): apps/x.yaml\n');
+    assert.equal(text, 'Hallway 1.2.3: http://localhost:4255\nData home: ~/.hallway\n1 file has errors (shown on the dashboard): apps/x.yaml\n');
   });
 
   test('--quiet (the service jobs) and npm run dev: just the line, even on a terminal', () => {
     for (const extra of [{ quiet: true }, { dev: true }, { quiet: true, transient: "npx's cache" }])
-      assert.equal(msg({ isTTY: true, depth: 24 }, extra), 'Hallway on http://localhost:4255\n');
+      assert.equal(msg({ isTTY: true, depth: 24 }, extra), 'Hallway 1.2.3: http://localhost:4255\n');
   });
 
   test('already running: where, and the fronted address first when there is one', () => {

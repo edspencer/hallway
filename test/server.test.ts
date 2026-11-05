@@ -7,7 +7,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { createApp, startServer } from '../server/index.ts';
 import { locateDaemon } from '../server/commands/context.ts';
-import { readDaemonRecord, writeDaemonRecord } from '../server/daemonfile.ts';
+import { readLiveRuntimeFile, readRuntimeFile, runtimeFilePath, writeRuntimeFile } from '../server/contract/runtime-file.ts';
 import { isLocalHost, isLocalOrigin } from '../server/security.ts';
 import { exitWatchdog, ROOT, tmpDir, tmpStore, rmTmp } from './fixture.ts';
 
@@ -142,7 +142,7 @@ describe('startServer', () => {
     }
   });
 
-  test('records its port in state/daemon.json, where the CLI finds it when config.yaml is broken (D46)', async () => {
+  test('writes <home>/runtime.json (the CLI contract\'s, D75), where the CLI finds it when config.yaml is broken (D46)', async () => {
     const home = tmpDir('hw-test-srv-');
     const s = await startServer(0, { webDist: null, home, thumbs: false });
     // a port nothing listens on, standing in for config.yaml's
@@ -151,23 +151,26 @@ describe('startServer', () => {
     const configPort = (free.address() as net.AddressInfo).port;
     await new Promise((r) => free.close(r));
     try {
-      assert.equal(readDaemonRecord(home)?.port, s.port);
-      assert.equal(readDaemonRecord(home)?.pid, process.pid);
+      const rt = readRuntimeFile(home);
+      assert.equal(rt?.port, s.port);
+      assert.equal(rt?.pid, process.pid);
+      assert.equal(rt?.url, `http://127.0.0.1:${s.port}`);
+      assert.equal(rt?.version, VERSION);
+      if (process.platform !== 'win32') assert.equal(fs.statSync(runtimeFilePath(home)).mode & 0o777, 0o600, 'readable only by this user');
       fs.writeFileSync(path.join(home, 'config.yaml'), 'version: 1\nport: [oops\n');
       const found = await locateDaemon(home, configPort);
       assert.equal(found?.url, `http://localhost:${s.port}`);
     } finally {
       await s.close();
     }
-    assert.equal(readDaemonRecord(home), null, 'removed when the daemon stops');
+    assert.equal(readRuntimeFile(home), null, 'removed when the daemon stops');
     assert.equal(await locateDaemon(home, configPort), null);
   });
 
-  test('a stale state/daemon.json (its process gone) is ignored', () => {
+  test('a stale runtime.json (its process gone) is ignored', () => {
     const home = tmpDir('hw-test-srv-');
-    fs.mkdirSync(path.join(home, 'state'), { recursive: true });
-    writeDaemonRecord(home, 4999, 2 ** 22 + 12345);
-    assert.equal(readDaemonRecord(home), null);
+    writeRuntimeFile(home, { pid: 2 ** 22 + 12345, port: 4999, url: 'http://127.0.0.1:4999', version: '0.0.1' });
+    assert.equal(readLiveRuntimeFile(home), null);
   });
 
   test('rejects with EADDRINUSE when the port is taken', async () => {

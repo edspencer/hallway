@@ -8,7 +8,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { UsageError, check, parseArgs } from '../server/args.ts';
 import { exitWatchdog, ROOT, tmpDir, rmTmp, stopChild } from './fixture.ts';
-import { tildify } from '../server/config.ts';
+import { VERSION, tildify } from '../server/config.ts';
 
 await exitWatchdog();
 
@@ -88,6 +88,21 @@ describe('hallway CLI', () => {
     const code = await new Promise<number | null>((r) => child.on('close', (c) => r(c)));
     assert.equal(stderr, '');
     assert.equal(code, 0);
+  });
+
+  test('busy with nothing running: exit 3, and --json says running: false (the CLI contract, D75)', async () => {
+    const home = tmpDir('hw-test-cli-busy-');
+    try {
+      const r = await hallway(['busy'], { HALLWAY_HOME: home });
+      assert.equal(r.code, 3);
+      assert.equal(r.stdout, "Hallway isn't running.\n");
+      const j = await hallway(['busy', '--json'], { HALLWAY_HOME: home });
+      assert.equal(j.code, 3);
+      assert.deepEqual(JSON.parse(j.stdout), { running: false, busy: false });
+      assert.equal((await hallway(['busy', 'extra'], { HALLWAY_HOME: home })).code, 2);
+    } finally {
+      rmTmp(home);
+    }
   });
 
   test('--version and --help', async () => {
@@ -184,7 +199,7 @@ describe('hallway CLI', () => {
         });
         child.on('exit', (code) => reject(new Error(`exited ${code}: ${buf}`)));
       });
-      const url = out.match(/^Hallway on (http:\/\/localhost:\d+)$/m)?.[1];
+      const url = out.match(/^Hallway \S+: (http:\/\/localhost:\d+)$/m)?.[1];
       assert.ok(url, out);
       assert.match(out, new RegExp(`^Data home: ${tildify(HOME).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
       const res = await fetch(`${url}/api/health`);
@@ -192,7 +207,16 @@ describe('hallway CLI', () => {
       assert.equal(((await res.json()) as { ok: boolean }).ok, true);
       // not a terminal: no banner and no colour, but the hint that local domains are off (D63)
       assert.ok(!out.includes('█') && !out.includes('\x1b['), out);
-      assert.ok(out.startsWith('Hallway on '), out);
+      assert.ok(out.startsWith(`Hallway ${VERSION}: http://localhost:`), out);
+
+      // `hallway busy` finds it through runtime.json (D75): idle, so 0
+      const idle = await hallway(['busy']);
+      assert.equal(idle.code, 0, idle.stderr);
+      assert.equal(idle.stdout, "Hallway isn't busy.\n");
+      const doc = await hallway(['busy', '--json']);
+      assert.equal(doc.code, 0);
+      assert.deepEqual(JSON.parse(doc.stdout), { running: true, busy: false, url: url!.replace('localhost', '127.0.0.1'), version: VERSION, counts: { setup: 0, app: 0 } });
+      assert.equal(doc.stderr, "Hallway isn't busy.\n");
 
       // `npx hallway` with the service already running: say where it is, exit 0 (not EADDRINUSE)
       const again = await hallway(['serve', '--port', url!.split(':').pop()!]);
@@ -225,7 +249,7 @@ describe('hallway CLI', () => {
         });
         child.on('exit', (code) => reject(new Error(`exited ${code}: ${buf}`)));
       });
-      assert.match(out, new RegExp(`^Hallway on http://localhost:${free}$`, 'm'));
+      assert.ok(out.startsWith(`Hallway ${VERSION}: http://localhost:${free}\n`), out);
       for (const d of ['apps', 'bookmarks', 'state', 'cache', 'generated', 'logs', 'backups', '.gitignore', 'ignore.yaml']) assert.ok(fs.existsSync(path.join(home, d)), d);
       assert.equal(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8'), `version: 1\nport: ${free}\n`, 'never replaced');
     } finally {

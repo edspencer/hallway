@@ -1,14 +1,16 @@
-// What `hallway` (serve) prints once it's listening: the HALLWAY banner and version, the "Hallway on …" line, the
-// dashboard's address, the data home, and two hints: that local domains (fronted mode, D47) are there to turn on, and
-// that `npx hallway` lasts only as long as the terminal (D61). Modelled on Local Review's banner (server/banner.ts
+// What `hallway` (serve) prints once it's listening: the HALLWAY banner and version, the `Hallway <version>: <url>` line,
+// the dashboard's address, the data home, and two hints: that local domains (fronted mode, D47) are there to turn on,
+// and that `npx hallway` lasts only as long as the terminal (D61). Modelled on Local Review's banner (server/banner.ts
 // there): hand-rolled, no dependency, a 12-pixel-high font drawn with half blocks (▀ ▄ █), so it's 6 rows and fits an
 // 80-column terminal, coloured from copper to lamplight amber (the dashboard's accent, src/theme/tokens.css).
 //
-// The banner is only for a person at a terminal: none when stdout isn't a TTY (piped, a service's log file, CI) unless
+// The banner is only for a person at a terminal: none when stderr isn't a TTY (piped, a service's log file, CI) unless
 // FORCE_COLOR is set, none with --quiet, a one-line title when the terminal is too narrow. Colour follows Node's own
-// rules (tty.WriteStream#getColorDepth: NO_COLOR, FORCE_COLOR, TERM=dumb, COLORTERM, Windows 10+). The "Hallway on"
-// line is always printed and always first after the banner, with "Data home:" right after it: scripts and tests wait
-// for it (scripts/smoke-pack.mjs). --quiet (what the service jobs run) prints that line alone.
+// rules (tty.WriteStream#getColorDepth: NO_COLOR, FORCE_COLOR, TERM=dumb, COLORTERM, Windows 10+). The banner goes to
+// stderr, written just before stdout's text, so a terminal shows it on top while stdout's first line is always
+// `Hallway <version>: <url>`, the CLI contract's (SPEC §3, D75), with "Data home:" right after it: scripts and tests wait
+// for them (scripts/smoke-pack.mjs, the contract's conformance runner). --quiet (what the service jobs run) prints that
+// line alone.
 import tty from 'node:tty';
 
 // Each glyph: 12 pixel rows, `#` set. Rows pair up into one text row each.
@@ -119,20 +121,28 @@ export interface Startup {
   dev?: boolean;
 }
 
-/** The startup text, for a terminal (or not: `t.isTTY`). */
-export function startupMessage(o: Startup, t: Terminal): string {
+/** The first line of `serve`'s stdout, the CLI contract's (SPEC §3, D75). */
+export const firstLine = (version: string, url: string) => `Hallway ${version}: ${url}`;
+
+/**
+ * The startup text: `banner` for stderr (`err`), written first, empty unless that's a terminal; then `text` for stdout
+ * (`t`), which starts with `Hallway <version>: <url>`.
+ */
+export function startupMessage(o: Startup, t: Terminal, err: Terminal = t): { banner: string; text: string } {
   const depth = colorDepth(t);
-  const line = `Hallway on ${o.url}`;
-  if (o.quiet || o.dev) return line + '\n';
+  const line = firstLine(o.version, o.url);
+  if (o.quiet || o.dev) return { banner: '', text: line + '\n' };
+  const banner: string[] = [];
   const out: string[] = [];
-  const showBanner = t.isTTY || (t.env.FORCE_COLOR !== undefined && depth > 1);
+  const errDepth = colorDepth(err);
+  const showBanner = err.isTTY || (err.env.FORCE_COLOR !== undefined && errDepth > 1);
   if (showBanner) {
     const lines = bannerLines();
     const width = Math.max(...lines.map((l) => l.length));
     // 2 columns of margin; narrower than that, a one-line title rather than a wrapped banner
     // 0 or unset: the terminal didn't say (a bare pty), so assume the usual 80
-    if ((t.columns || 80) >= width + 2) out.push('', ...lines.map((l) => ' ' + paint(l, width, depth)), ' ' + dim(`v${o.version}`, depth), '');
-    else out.push('', ' ' + bold(paint('▌ HALLWAY', 9, depth), depth) + ' ' + dim(`v${o.version}`, depth), '');
+    if ((err.columns || 80) >= width + 2) banner.push('', ...lines.map((l) => ' ' + paint(l, width, errDepth)), ' ' + dim(`v${o.version}`, errDepth), '');
+    else banner.push('', ' ' + bold(paint('▌ HALLWAY', 9, errDepth), errDepth) + ' ' + dim(`v${o.version}`, errDepth), '');
   }
   out.push(line, `Data home: ${o.home}`);
   if (o.dashboardUrl) out.push(`Dashboard: ${bold(o.dashboardUrl, depth)}  (${o.url} works too)`);
@@ -146,7 +156,7 @@ export function startupMessage(o: Startup, t: Terminal): string {
     );
   if (o.transient)
     out.push('', `Running from ${o.transient}, so it stops with this terminal. To keep it running:`, `  ${bold('npm i -g hallway && hallway service install', depth)}`);
-  return out.join('\n') + '\n';
+  return { banner: banner.length ? banner.join('\n') + '\n' : '', text: out.join('\n') + '\n' };
 }
 
 /** What `hallway serve` prints when a Hallway daemon already answers on the port: not an error (exit 0). */

@@ -12,6 +12,16 @@ export interface HealthResponse {
   version: string;
 }
 
+/** `GET /api/busy`: the CLI contract's busy check (SPEC §4, D75). Counts only: no labels, ids or titles. */
+export interface BusyResponse {
+  /** True while any count is above zero: work a restart of the daemon would cut short. */
+  busy: boolean;
+  version: string;
+  /** `setup`: the dashboard's Turn on for local domains, running; `app`: app starts, stops and restarts the daemon is
+   *  running. */
+  counts: { setup: number; app: number };
+}
+
 /** An app's health classification (docs/04-apps-health-services.md, "Health states"; D12). */
 export type AppState = 'healthy' | 'unhealthy' | 'down' | 'stopped' | 'unknown';
 

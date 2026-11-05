@@ -15,9 +15,9 @@ just works.
   bookmarks/
     <group-slug>.yaml         # one bookmark group per file              (yours to edit)
   ignore.yaml                 # observed listeners you chose to hide     (yours to edit)
+  runtime.json                # machine-written: the running daemon's port and version, so the CLI can find it
 
   state/                      # machine-written; never hand-edit
-    daemon.json               # the running daemon's port, so the CLI can find it
     health.sqlite             # probe samples and hourly rollups
     observed.json             # last-known identity of every observed listener, first and last seen
     boot.json                 # the last boot time seen, to detect reboots

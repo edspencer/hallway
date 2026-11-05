@@ -5,6 +5,7 @@ import { Hono, type Context } from 'hono';
 import type {
   AppsResponse,
   BookmarksResponse,
+  BusyResponse,
   ClaimRequest,
   ErrorResponse,
   FrontingResponse,
@@ -16,6 +17,7 @@ import type {
   ObservedListener,
   ObservedResponse,
 } from '../shared/api.js';
+import { BusyTracker } from './busy.js';
 import { VERSION, tildify } from './config.js';
 import { sseHandler, type EventBus } from './events.js';
 import { agentGuide, llmsFullTxt, llmsTxt, readGuide, type GuideInput } from './guide.js';
@@ -37,6 +39,8 @@ export interface ApiOptions {
   startedAt: Date;
   /** Managed services (start/stop/restart). Created on first use; tests pass one with a mocked runner. */
   services?: () => Services;
+  /** The app operations in flight, for /api/busy (default: one for these routes). */
+  busy?: BusyTracker;
 }
 
 const WINDOWS: HistoryWindow[] = ['24h', '7d', '90d'];
@@ -144,13 +148,18 @@ export async function ignoreObserved({ store, providers }: Pick<ApiOptions, 'sto
   return store.addIgnore(by, value);
 }
 
-export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOptions) {
+export function apiRoutes({ store, bus, providers, startedAt, services, busy = new BusyTracker() }: ApiOptions) {
   const ctx = { store, providers };
   let svc: Services | undefined;
   const getServices = services ?? (() => (svc ??= new Services({ store })));
   const api = new Hono();
 
   api.get('/health', (c) => c.json({ ok: true, version: VERSION }));
+  // the CLI contract's busy check (D75): memory only, so it's cheap; counts only, so it needs no auth
+  api.get('/busy', (c) => {
+    const counts = { setup: providers.first('frontingSetup')?.state === 'running' ? 1 : 0, app: busy.count('app') };
+    return c.json({ busy: counts.setup + counts.app > 0, version: VERSION, counts } satisfies BusyResponse);
+  });
   api.get('/state', (c) => c.json(stateView(ctx, baseUrl(c), startedAt)));
   api.get('/events', sseHandler(bus));
   api.get('/config', (c) => {
@@ -301,12 +310,10 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
       const slug = c.req.param('slug');
       const action = c.req.param('action');
       if (!store.apps.has(slug)) return fail(c, 404, { error: `no app '${slug}'` });
+      if (action !== 'start' && action !== 'stop' && action !== 'restart') return fail(c, 404, { error: 'the action must be start, stop or restart' });
       const s = getServices();
       if (action === 'start' || action === 'restart') providers.first('serviceStarting', slug);
-      if (action === 'start') await s.startApp(slug);
-      else if (action === 'stop') await s.stopApp(slug);
-      else if (action === 'restart') await s.restartApp(slug);
-      else return fail(c, 404, { error: 'the action must be start, stop or restart' });
+      await busy.track<unknown>('app', () => (action === 'start' ? s.startApp(slug) : action === 'stop' ? s.stopApp(slug) : s.restartApp(slug)));
       return c.json({ ok: true, app: declaredView(ctx, slug), service: await s.status(`hallway.app.${slug}`) });
     } catch (e) {
       return handle(c, e);
@@ -413,7 +420,8 @@ export function apiRoutes({ store, bus, providers, startedAt, services }: ApiOpt
       } catch {
         throw new ValidationError('the body is not valid JSON');
       }
-      return c.json(await reviveLost({ services: getServices(), providers, bus, run: { timeoutMs: 20_000 } }, c.req.param('id'), c.req.param('action') === 'service', body));
+      const deps = { services: getServices(), providers, bus, run: { timeoutMs: 20_000 } };
+      return c.json(await busy.track('app', () => reviveLost(deps, c.req.param('id'), c.req.param('action') === 'service', body)));
     } catch (e) {
       return handle(c, e);
     }

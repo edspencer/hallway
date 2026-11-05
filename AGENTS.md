@@ -67,9 +67,10 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   cli.ts           `hallway` entry point (the package's bin); args.ts parses its arguments; banner.ts is what
                    `serve` prints at startup (D63)
   commands/        every other command, by name in index.ts: services.ts (run, stop, start, restart, logs, service …),
-                   apps.ts (app, bookmark), status.ts (status, scan, claim, ignore, open), offline.ts (the scan with no
-                   daemon), lost.ts, setup.ts (setup, teardown), thumbs.ts, agents.ts (mcp, hook), doctor.ts;
-                   context.ts is what they share
+                   apps.ts (app, bookmark), busy.ts (busy, and the busy check before a service stop or restart),
+                   status.ts (status, scan, claim, ignore, open), offline.ts (the scan with no daemon), lost.ts,
+                   setup.ts (setup, teardown), thumbs.ts, agents.ts (mcp, hook), doctor.ts; context.ts is what they
+                   share
   client.ts        the CLI's side of the HTTP API (finds the daemon on config.yaml's port, D44)
   services/        managed services: spec.ts (YAML → resolved job), resolve.ts (the PATH trap), index.ts (the
                    lifecycle and the YAML side of it), run.ts (`hallway run`), ports.ts, logs.ts, rotate.ts, probe.ts
@@ -84,7 +85,10 @@ server/            the daemon and CLI (Node, TypeScript ESM, Hono)
   config.ts        package root, data home ($HALLWAY_HOME, ~/.hallway) and its layout, ports, dev overrides
   port.ts          DEFAULT_PORT (4255 = HALL), alone so vite.config.ts can import it
   live.ts          plugs the scanner, prober and uptime store into the core: one StateProvider + bus events (D35, D38)
-  daemonfile.ts    state/daemon.json: where the running daemon listens, the CLI's second place to look (D46)
+  busy.ts          what /api/busy counts: the dashboard's local-domains setup and app operations in flight (D75)
+  contract/        copied from edspencer/cli-contract reference/ (each file's header says which version): exit codes,
+                   output, runtime.json (where the running daemon listens, the CLI's second place to look, D46) and
+                   the busy client (`hallway busy`, the 75 refusal; D75)
   forward.ts       `hallway forward <port>` (internal): the byte pipe launchd's sockets hand connections to (D65)
   hook.ts          `hallway hook check-command`: the optional PreToolUse hook that blocks bare dev-server starts (D51)
   platform/        macOS (launchd, lsof/ps) / Linux (systemd user units, ss or /proc) / Windows (win32.ts, D58) behind one interface; the

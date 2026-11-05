@@ -2,6 +2,7 @@
 // undefined while it keeps running (`logs --follow`).
 import { hook, mcp } from './agents.js';
 import { app, bookmark } from './apps.js';
+import { busy } from './busy.js';
 import type { Ctx } from './context.js';
 import { doctor } from './doctor.js';
 import { lost } from './lost.js';
@@ -30,6 +31,7 @@ export const COMMANDS: Record<string, Command> = {
   restart,
   logs,
   service,
+  busy,
   setup,
   teardown,
   mcp,
