@@ -192,6 +192,12 @@ describe('the launchd lifecycle (runner mocked)', () => {
     await launchdManager({ dir, uid: 501, run: gone.run }).stop('hallway.app.review');
   });
 
+  test("stop with disable: false (the daemon's service stop, D74): bootout alone, so the next login loads it again", async () => {
+    const m = mockRunner();
+    await launchdManager({ dir, uid: 501, run: m.run }).stop('hallway.daemon', { disable: false });
+    assert.deepEqual(m.calls, ['launchctl bootout gui/501/hallway.daemon']);
+  });
+
   test('restart: kickstart -k, or bootout + bootstrap when the plist changed', async () => {
     const m = mockRunner(running);
     const mgr = launchdManager({ dir, uid: 501, run: m.run });
@@ -274,6 +280,10 @@ describe('the systemd lifecycle (runner mocked)', () => {
     m.calls.length = 0;
     await mgr.stop('hallway.app.review');
     assert.deepEqual(m.calls, ['systemctl --user stop hallway-app-review.service', 'systemctl --user disable --quiet hallway-app-review.service']);
+    // the daemon's `service stop` (D74): stopped, still enabled, so the next login or boot starts it
+    m.calls.length = 0;
+    await mgr.stop('hallway.app.review', { disable: false });
+    assert.deepEqual(m.calls, ['systemctl --user stop hallway-app-review.service']);
   });
 
   test('restart and remove', async () => {

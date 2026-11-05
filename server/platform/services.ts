@@ -89,8 +89,12 @@ export interface ServiceManager {
   write(spec: ServiceSpec): Promise<boolean>;
   /** Make it run now, and at login if `runAtLoad`; a no-op if it's already running. */
   start(spec: ServiceSpec): Promise<void>;
-  /** Stop it and keep it stopped, across logins too, until `start`. */
-  stop(label: string): Promise<void>;
+  /**
+   * Stop it. By default it stays stopped across logins too, until `start` (an app's `hallway stop`, D41); with
+   * `disable: false` it stays stopped only until `start` or the next login or boot, the managers' own convention
+   * (the daemon's `hallway service stop`, D74).
+   */
+  stop(label: string, opts?: { disable?: boolean }): Promise<void>;
   /** Restart it. `reload`: the definition changed, so re-read it first. Starts it if it wasn't loaded. */
   restart(spec: ServiceSpec, opts?: { reload?: boolean }): Promise<void>;
   status(label: string): Promise<ServiceStatus>;

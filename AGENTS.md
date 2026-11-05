@@ -158,7 +158,8 @@ Run `npm test` and `npm run typecheck` before committing, and `npm run smoke:pac
 
 ## Conventions
 
-- **CLI exit codes:** 0 success, 1 error, 2 usage error (with the usage printed). Throw `UsageError` (`server/args.ts`)
+- **CLI exit codes:** 0 success, 1 error, 2 usage error (with the usage printed); the daemon's `service` commands add
+  3 (not running) and 4 (not installed), from the CLI contract (D74). Throw `UsageError` (`server/args.ts`)
   for bad usage, a plain `Error` for anything else; `cli.ts` turns them into messages and exit codes. Set
   `process.exitCode`, never call `process.exit()` (it can cut off piped output).
 - **No environment variable is required** for normal operation: launchd/systemd jobs and agents' non-login shells

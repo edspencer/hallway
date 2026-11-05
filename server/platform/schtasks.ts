@@ -215,9 +215,9 @@ export function schtasksManager({ dir, run = defaultRunner, ctx: given = {}, isA
       if ((await status(spec.label)).running) return;
       await schtasks(['/Run', '/TN', tn(spec.label)]);
     },
-    async stop(label) {
+    async stop(label, { disable = true } = {}) {
       await kill(label);
-      await schtasks(['/Change', '/TN', tn(label), '/DISABLE'], [0, 1]);
+      if (disable) await schtasks(['/Change', '/TN', tn(label), '/DISABLE'], [0, 1]);
     },
     async restart(spec) {
       // the supervisor reads the job file at every start, so a changed one needs nothing more than this

@@ -1,11 +1,12 @@
 // Command-line parsing for `hallway`, kept apart from cli.ts (which runs on import) so it can be unit-tested.
-// Exit codes (docs/07-cli.md): 0 success, 1 error, 2 usage error (with the usage printed): a UsageError is the 2.
+// Exit codes (docs/07-cli.md): 0 success, 1 error, 2 usage error (with the usage printed): a UsageError is the 2. The
+// service commands add 3 (not running) and 4 (not installed), the CLI contract's (D74).
 
 /** Bad usage: exit 2, with the usage. Anything else thrown exits 1. */
 export class UsageError extends Error {}
 
 /** Options that take a value (`--port 5050` or `--port=5050`). */
-const VALUE_FLAGS = ['port', 'cwd', 'name', 'expected', 'health', 'slug', 'by', 'title', 'description', 'lines', 'domain', 'trust', 'listen'];
+const VALUE_FLAGS = ['data-dir', 'port', 'cwd', 'name', 'expected', 'health', 'slug', 'by', 'title', 'description', 'lines', 'domain', 'trust', 'listen'];
 /** Options that don't. */
 const BOOLEAN_FLAGS = ['snippet', 'json', 'persist', 'follow', 'print', 'uninstall-packages', 'all', 'yes'];
 
@@ -26,6 +27,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (a === '-v' || a === '--version') flags.version = '1';
     else if (a === '-q' || a === '--quiet') flags.quiet = '1';
     else if (a === '-f') flags.follow = '1';
+    else if (a === '-n') {
+      // `-n <lines>`, as tail has it: the short form of --lines
+      if (argv[i + 1] === undefined) throw new UsageError('-n needs a value');
+      flags.lines = argv[++i];
+    }
     else if (a.startsWith('--')) {
       if (BOOLEAN_FLAGS.includes(a.slice(2))) {
         flags[a.slice(2)] = '1';

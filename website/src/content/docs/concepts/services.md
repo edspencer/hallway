@@ -14,10 +14,17 @@ unit on Linux, or a scheduled task on Windows:
 
 ```sh
 hallway service install      # loaded now and at every login
-hallway service status
+hallway service status       # exits 3 if it isn't running, 4 if it isn't installed
+hallway service logs         # its last 50 lines; -n 200, -f to follow
+hallway service stop         # until `service start`, or your next login or boot
+hallway service start
 hallway service restart
-hallway service uninstall
+hallway service uninstall    # stopped and removed; the data home and logs stay
 ```
+
+`hallway service stop` stops Hallway the way `systemctl --user stop` and `launchctl bootout` do: it isn't disabled,
+so your next login (or boot, with lingering) starts it again. To keep it off, uninstall it. Each of these takes
+`--json` for scripts. Stopping an *app* is different: [`hallway stop`](#managed-services) keeps it stopped across logins too.
 
 On macOS the job is `~/Library/LaunchAgents/hallway.daemon.plist`; on Linux it is
 `~/.config/systemd/user/hallway-daemon.service`; on Windows it is the scheduled task `\hallway.daemon` (see

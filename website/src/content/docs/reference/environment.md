@@ -10,7 +10,7 @@ launchd jobs and systemd units inherit no shell environment, so every default wo
 
 | Variable | Meaning |
 | --- | --- |
-| `HALLWAY_HOME` | The [data home](/reference/data-home/). Default `~/.hallway`. |
+| `HALLWAY_HOME` | The [data home](/reference/data-home/). Default `~/.hallway`. `--data-dir <dir>` does the same for one command. |
 | `PORT` | The daemon's port for `hallway serve`. Default `4255`. `--port` does the same. |
 | `VISUAL`, `EDITOR` | The editor `hallway app edit` and `hallway bookmark edit` open (`VISUAL` first; default `vi`). |
 | `XDG_CONFIG_HOME` | Linux: where systemd user units go (`$XDG_CONFIG_HOME/systemd/user`; default `~/.config/systemd/user`). |

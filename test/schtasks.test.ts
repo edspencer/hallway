@@ -134,6 +134,13 @@ describe('scheduled tasks: the lifecycle (runner mocked)', () => {
     assert.deepEqual(s.m.calls, ['taskkill /PID 10 /T /F', 'schtasks /End /TN \\hallway.app.review', 'schtasks /Change /TN \\hallway.app.review /DISABLE']);
   });
 
+  test("stop with disable: false (the daemon's service stop, D74): ended, but the next logon starts it", async () => {
+    const s = setup({ registered: true, alive: [10, 11] });
+    fs.writeFileSync(stateFileOf(path.join(s.dir, 'hallway.daemon.json')), JSON.stringify({ supervisor: 10, pid: 11, startedAt: null, lastExitCode: null, exitedAt: null }));
+    await s.mgr.stop('hallway.daemon', { disable: false });
+    assert.deepEqual(s.m.calls, ['taskkill /PID 10 /T /F', 'schtasks /End /TN \\hallway.daemon']);
+  });
+
   test('status: from the state file and the task; not registered; disabled', async () => {
     let s = setup({ registered: true, alive: [10, 11] });
     const job = path.join(s.dir, 'hallway.app.review.json');
