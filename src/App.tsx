@@ -14,6 +14,7 @@ import { Help } from './components/Help';
 import { LocalDomainsDialog, LocalDomainsPanel, type TurnOn } from './components/LocalDomains';
 import { LostBanner } from './components/Lost';
 import { ObservedTray } from './components/Observed';
+import { CardsLab, cardsVariant } from './lab/cards/Lab';
 import { ProblemBanner } from './components/Problems';
 import { Toasts, useToasts } from './components/Toasts';
 import { focusFirstItem, useKeyboard, type KeyboardActions } from './keyboard';
@@ -252,11 +253,16 @@ export function App() {
             <span className="hw-section-count">{found ? `${apps.length} of ${state.apps.length}` : state.apps.length}</span>
             {!checking && <span className="hw-section-note">Health checks aren’t running, so no door has been checked yet.</span>}
           </header>
-          <div className="hw-doors">
-            {apps.map((a: AppView) => (
-              <Door key={a.slug} app={a} checking={checking} onCopy={(u, w) => void copy(u, w)} onDetails={setDrawer} />
-            ))}
-          </div>
+          {/* design exploration (icon-cards-lab): `?cards=a|b|c` swaps the doors for an icon-first card */}
+          {cardsVariant() ? (
+            <CardsLab initial={cardsVariant()!} apps={apps} checking={checking} onCopy={(u, w) => void copy(u, w)} onDetails={setDrawer} />
+          ) : (
+            <div className="hw-doors">
+              {apps.map((a: AppView) => (
+                <Door key={a.slug} app={a} checking={checking} onCopy={(u, w) => void copy(u, w)} onDetails={setDrawer} />
+              ))}
+            </div>
+          )}
         </section>
       ) : null,
     observed: () =>

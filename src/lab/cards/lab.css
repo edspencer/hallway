@@ -1,0 +1,719 @@
+/*
+ * Design exploration only (icon-cards-lab branch): three icon-first app cards behind `?cards=a|b|c`. Every colour is a
+ * token from src/theme/tokens.css or a mix of one with the app's own icon colour (`--hue`, data, set inline); nothing
+ * is hard-coded (D28). Nothing here is shipped.
+ */
+
+/* ---- shared ---------------------------------------------------------------------------------------------------- */
+
+.lc-grid {
+  display: grid;
+  align-items: start;
+  gap: 16px;
+}
+.lc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--hw-radius);
+  background: var(--hw-bg-raised);
+  border: 1px solid var(--hw-line);
+  box-shadow: var(--hw-shadow);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.3s ease;
+  isolation: isolate;
+}
+.lc-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--hw-shadow-lifted);
+  border-color: var(--hw-line-strong);
+}
+.lc-card:has(.lc-link:focus-visible) {
+  border-color: var(--hw-accent);
+  box-shadow:
+    0 0 0 3px var(--hw-accent-soft),
+    var(--hw-shadow-lifted);
+}
+.lc--down {
+  border-color: color-mix(in oklab, var(--hw-down) 50%, var(--hw-line));
+}
+.lc-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.lc-link:focus-visible {
+  outline: none;
+}
+.lc-copy,
+.lc-more,
+.lc-card .hw-bar,
+.lc-card .hw-badges,
+.lc-error {
+  position: relative;
+  z-index: 2;
+}
+.lc-card .hw-bar {
+  cursor: pointer;
+}
+.lc-name {
+  margin: 0;
+  font-family: var(--hw-font-display);
+  font-size: 16px;
+  font-weight: 600;
+  font-variation-settings: 'opsz' 24;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.lc-sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--hw-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lc-addr {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.lc-addr--center {
+  justify-content: center;
+  padding: 0 24px;
+}
+.lc-addr--center .lc-copy {
+  position: absolute;
+  right: 0;
+}
+.lc-url {
+  font-family: var(--hw-font-mono);
+  font-size: 12px;
+  color: var(--hw-accent-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lc--nourl .lc-url {
+  color: var(--hw-text-subtle);
+  font-family: var(--hw-font-ui);
+}
+.lc-copy {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.lc-more {
+  width: 26px;
+  height: 26px;
+  opacity: 0.55;
+}
+.lc-card:hover .lc-copy,
+.lc-card:focus-within .lc-copy,
+.lc-card:hover .lc-more,
+.lc-card:focus-within .lc-more {
+  opacity: 1;
+}
+.lc-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 7px;
+}
+.lc-foot--end {
+  justify-content: flex-end;
+}
+.lc-foot--end:empty {
+  display: none;
+}
+.lc-stats {
+  font-family: var(--hw-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--hw-text-subtle);
+  white-space: nowrap;
+}
+.lc-card .hw-badges {
+  margin-top: 8px;
+}
+
+/* ---- the icon: the protagonist ---------------------------------------------------------------------------------- */
+
+.lc-icon {
+  --s: 64px;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--s);
+  height: var(--s);
+  border-radius: calc(var(--s) * 0.24);
+  flex-shrink: 0;
+  transition:
+    filter 0.6s ease,
+    opacity 0.6s ease;
+}
+/* a favicon is drawn as itself: it carries its own shape. A hairline halo keeps a dark, transparent one legible. */
+.lc-icon--img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 0.5px var(--hw-panel-light)) drop-shadow(0 4px 10px color-mix(in oklab, var(--hw-paint-shade) 35%, transparent));
+}
+/* no favicon: a proper app icon in the app's colour (brand hex, or the hashed paint) */
+.lc-icon--mono,
+.lc-icon--brand,
+.lc-icon--glyph {
+  background: linear-gradient(160deg, color-mix(in oklab, var(--hue) 78%, var(--hw-paint-lift)) 0%, color-mix(in oklab, var(--hue) 82%, var(--hw-paint-mute)) 45%, color-mix(in oklab, var(--hue), var(--hw-paint-shade) 30%) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--hw-panel-light),
+    0 4px 12px -4px color-mix(in oklab, var(--hw-paint-shade) 45%, transparent);
+}
+.lc-icon--brand svg {
+  width: 58%;
+  height: 58%;
+  fill: var(--hw-paint-lift);
+}
+.lc-icon-mono {
+  font-family: var(--hw-font-display);
+  font-weight: 650;
+  font-size: calc(var(--s) * 0.42);
+  font-variation-settings: 'opsz' 48;
+  letter-spacing: -0.01em;
+  color: var(--hw-paint-lift);
+}
+.lc-icon-glyph {
+  font-size: calc(var(--s) * 0.55);
+  line-height: 1;
+}
+
+/* states, on the icon (or picture). Never the only signal: every variant also prints the word. */
+.lc--stopped .lc-icon,
+.lc--stopped .lc-a-pic,
+.lc--stopped .lc-b-pic {
+  filter: saturate(0.25);
+  opacity: 0.72;
+}
+.lc--down .lc-icon,
+.lc--down .lc-a-pic,
+.lc--down .lc-b-pic {
+  filter: saturate(0.12) brightness(0.62);
+}
+:root[data-theme='light'] .lc--down .lc-icon {
+  filter: saturate(0.12) brightness(0.8) contrast(0.8);
+  opacity: 0.8;
+}
+.lc--unknown .lc-icon {
+  filter: saturate(0.4);
+  opacity: 0.45;
+}
+.lc--unchecked .lc-icon {
+  filter: saturate(0.8);
+}
+.lc--starting .lc-icon {
+  animation: lc-breathe 2.4s ease-in-out infinite alternate;
+}
+@keyframes lc-breathe {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- A: launcher ------------------------------------------------------------------------------------------------ */
+
+.lc-grid--a {
+  grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+}
+.lc-a {
+  padding: 8px 10px 11px;
+  text-align: center;
+}
+.lc-a-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 108px;
+  margin-bottom: 10px;
+  border-radius: calc(var(--hw-radius) - 4px);
+  background: radial-gradient(ellipse 60% 75% at 50% 50%, color-mix(in oklab, var(--hue) 24%, transparent), transparent 75%), color-mix(in oklab, var(--hue) 7%, var(--hw-bg-sunken));
+  overflow: hidden;
+}
+.lc--stopped .lc-a-stage,
+.lc--down .lc-a-stage,
+.lc--unknown .lc-a-stage {
+  background: var(--hw-bg-sunken);
+}
+.lc-a-icon {
+  --s: 64px;
+}
+.lc-a-pic {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+/* the state's shape as a badge on the icon's corner: ● ▲ ■ ○ ◌ ◐ */
+.lc-dot {
+  position: absolute;
+  left: calc(50% + 20px);
+  top: calc(50% + 18px);
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--hw-unknown);
+  box-shadow: 0 0 0 3px var(--hw-bg-raised);
+}
+.lc--pic .lc-dot {
+  left: auto;
+  top: auto;
+  right: 9px;
+  bottom: 9px;
+}
+.lc--healthy .lc-dot {
+  background: var(--hw-healthy);
+}
+.lc--unhealthy .lc-dot {
+  background: var(--hw-unhealthy);
+  border-radius: 0;
+  clip-path: polygon(50% 4%, 100% 96%, 0 96%);
+  box-shadow: none;
+  width: 20px;
+  height: 18px;
+  filter: drop-shadow(0 0 1.5px var(--hw-bg-raised)) drop-shadow(0 0 1.5px var(--hw-bg-raised));
+}
+.lc--down .lc-dot {
+  background: var(--hw-down);
+  border-radius: 3px;
+}
+.lc--stopped .lc-dot {
+  background: var(--hw-bg-raised);
+  box-shadow:
+    inset 0 0 0 2.5px var(--hw-stopped),
+    0 0 0 3px var(--hw-bg-raised);
+}
+.lc--unknown .lc-dot,
+.lc--unchecked .lc-dot {
+  background: var(--hw-bg-raised);
+  border: 2px dashed var(--hw-unknown);
+}
+.lc--starting .lc-dot {
+  background: conic-gradient(var(--hw-starting) 0 50%, var(--hw-bg-raised) 50% 100%);
+  box-shadow:
+    inset 0 0 0 2px var(--hw-starting),
+    0 0 0 3px var(--hw-bg-raised);
+}
+.lc-a .lc-name {
+  padding: 0 4px;
+}
+.lc-a .hw-bar {
+  margin-top: 7px;
+}
+.lc-a .lc-foot {
+  text-align: left;
+}
+.lc-a .lc-more {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.lc-a .hw-badges {
+  justify-content: center;
+}
+
+/* ---- B: row, with a 10 px door for the state's shape ------------------------------------------------------------ */
+
+.lc-grid--b {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px 14px;
+}
+.lc-b {
+  padding: 12px 12px 9px;
+}
+/* healthy keeps the light-spill (the one gradient that means something, 05-ui.md), very faint, from the state */
+.lc-b.lc--healthy {
+  background: radial-gradient(ellipse 40% 70% at 100% 0%, color-mix(in oklab, var(--hw-glow) 60%, transparent), transparent 70%), var(--hw-bg-raised);
+}
+.lc-b-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.lc-b-icon {
+  --s: 52px;
+}
+.lc-b-pic {
+  width: 84px;
+  height: 52px;
+  flex-shrink: 0;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: var(--hw-radius-small);
+  box-shadow: 0 0 0 1px var(--hw-line);
+}
+.lc-b-text {
+  flex: 1;
+  min-width: 0;
+}
+.lc-b-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.lc-b-head .lc-name {
+  flex: 1;
+}
+.lc-b-state {
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.lc-b .lc-addr {
+  margin-top: 1px;
+}
+.lc-b-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+}
+.lc-b-bar .hw-bar {
+  flex: 1;
+  min-width: 0;
+}
+.lc-b-bar .lc-more {
+  margin: -4px -4px -4px -4px;
+}
+
+/* the door glyph: an arched leaf 10 px wide in the state's colour */
+.lc-dg {
+  position: relative;
+  display: inline-block;
+  width: 10px;
+  height: 13px;
+  border-radius: 5px 5px 1px 1px;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.lc-dg-leaf {
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0.3;
+}
+.lc-dg-light {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--hw-lamplight);
+}
+/* healthy: ajar, a sliver of light */
+.lc-dg--healthy .lc-dg-leaf {
+  opacity: 1;
+}
+.lc-dg--healthy .lc-dg-light {
+  width: 3px;
+}
+/* unhealthy: the light flickers */
+.lc-dg--unhealthy .lc-dg-leaf {
+  opacity: 1;
+}
+.lc-dg--unhealthy .lc-dg-light {
+  width: 3px;
+  animation: lc-flicker 4.5s steps(1) infinite;
+}
+@keyframes lc-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  8% {
+    opacity: 0.2;
+  }
+  12% {
+    opacity: 1;
+  }
+  14% {
+    opacity: 0.3;
+  }
+}
+/* starting: opening */
+.lc-dg--starting .lc-dg-leaf {
+  opacity: 0.6;
+}
+.lc-dg--starting .lc-dg-light {
+  animation: lc-open 2.4s ease-in-out infinite alternate;
+}
+@keyframes lc-open {
+  from {
+    width: 0;
+  }
+  to {
+    width: 4px;
+  }
+}
+/* down: boarded */
+.lc-dg--down .lc-dg-leaf {
+  opacity: 1;
+  background:
+    linear-gradient(20deg, transparent 38%, var(--hw-bg-raised) 38% 52%, transparent 52%),
+    linear-gradient(-20deg, transparent 50%, var(--hw-bg-raised) 50% 64%, transparent 64%),
+    currentColor;
+}
+/* unknown, unchecked: in shadow, an outline */
+.lc-dg--unknown,
+.lc-dg--unchecked {
+  box-shadow: none;
+  outline: 1.5px dashed currentColor;
+  outline-offset: -1.5px;
+}
+.lc-dg--unknown .lc-dg-leaf,
+.lc-dg--unchecked .lc-dg-leaf {
+  opacity: 0;
+}
+
+/* ---- C: poster -------------------------------------------------------------------------------------------------- */
+
+.lc-grid--c {
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+}
+.lc-c {
+  --fh: 132px;
+  padding: 0;
+}
+/* the field: the icon's own colour, arched at the top (the door's outline, and nothing else of it) */
+.lc-c-field {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--fh);
+  margin: 7px 7px 0;
+  /* the icon sits a little high, clear of the state pill along the bottom */
+  padding-bottom: 22px;
+  border-radius: 999px 999px 6px 6px / 44px 44px 6px 6px;
+  background:
+    radial-gradient(circle at 50% 55%, color-mix(in oklab, var(--hue) 55%, var(--hw-paint-lift)) 0%, transparent 62%),
+    color-mix(in oklab, var(--hue) 72%, var(--hw-paint-mute));
+  overflow: hidden;
+  transition: filter 0.6s ease;
+}
+.lc-c-blur {
+  position: absolute;
+  inset: -30%;
+  width: 160%;
+  height: 160%;
+  object-fit: cover;
+  filter: blur(26px) saturate(1.4);
+  opacity: 0.5;
+}
+.lc-c-icon {
+  --s: 70px;
+}
+.lc-c .lc-icon--img img {
+  filter: drop-shadow(0 6px 14px color-mix(in oklab, var(--hw-paint-shade) 45%, transparent));
+}
+/* on a field of its own colour, a monogram or brand plate inverts: light plate, coloured mark */
+.lc-c .lc-icon--mono,
+.lc-c .lc-icon--brand,
+.lc-c .lc-icon--glyph {
+  background: var(--hw-paint-tile);
+  box-shadow: 0 8px 18px -8px color-mix(in oklab, var(--hw-paint-shade) 60%, transparent);
+}
+.lc-c .lc-icon--brand svg {
+  fill: color-mix(in oklab, var(--hue), var(--hw-paint-shade) 20%);
+}
+.lc-c .lc-icon-mono {
+  color: color-mix(in oklab, var(--hue), var(--hw-paint-shade) 25%);
+}
+.lc-c-pic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+.lc-c-pill {
+  position: absolute;
+  z-index: 2;
+  left: 15px;
+  top: calc(7px + var(--fh) - 31px);
+  align-items: center;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--hw-radius-pill);
+  background: color-mix(in oklab, var(--hw-bg-raised) 92%, transparent);
+  box-shadow: 0 2px 8px -2px color-mix(in oklab, var(--hw-paint-shade) 50%, transparent);
+  font-size: 12px;
+  pointer-events: none;
+}
+.lc-c-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px 12px 11px;
+}
+.lc-c .hw-bar {
+  margin-top: 7px;
+}
+.lc-c .lc-foot {
+  margin-top: 6px;
+}
+.lc-c .lc-more {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--hw-bg-raised) 85%, transparent);
+}
+/* states, on the field */
+.lc-c.lc--stopped .lc-c-field {
+  filter: saturate(0.25) brightness(0.9);
+}
+:root[data-theme='light'] .lc-c.lc--stopped .lc-c-field {
+  filter: saturate(0.25) brightness(1.05) contrast(0.85);
+}
+.lc-c.lc--down .lc-c-field {
+  filter: saturate(0.12) brightness(0.45);
+}
+:root[data-theme='light'] .lc-c.lc--down .lc-c-field {
+  filter: saturate(0.15) brightness(0.6);
+}
+.lc-c.lc--down .lc-c-pill,
+.lc-c.lc--unhealthy .lc-c-pill {
+  box-shadow:
+    0 0 0 1.5px currentColor,
+    0 2px 8px -2px color-mix(in oklab, var(--hw-paint-shade) 50%, transparent);
+}
+.lc-c.lc--unknown .lc-c-field {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--hue) 60%, var(--hw-line-strong));
+}
+.lc-c.lc--unknown .lc-c-blur {
+  display: none;
+}
+.lc-c.lc--unchecked .lc-c-field {
+  filter: saturate(0.7);
+}
+/* the icon's own state filters are the field's job here */
+.lc-c.lc--stopped .lc-icon,
+.lc-c.lc--down .lc-icon {
+  filter: none;
+  opacity: 1;
+}
+
+/* ---- the lab switch --------------------------------------------------------------------------------------------- */
+
+.lc-switch {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border-radius: var(--hw-radius-pill);
+  background: var(--hw-text);
+  box-shadow: var(--hw-shadow-lifted);
+}
+.lc-switch-label {
+  padding: 0 8px 0 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--hw-bg);
+  opacity: 0.6;
+}
+.lc-switch button {
+  border: 0;
+  border-radius: var(--hw-radius-pill);
+  padding: 6px 12px;
+  background: none;
+  color: var(--hw-bg);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lc-switch button span {
+  font-weight: 400;
+  opacity: 0.75;
+}
+.lc-switch button.is-on {
+  background: var(--hw-accent);
+  color: var(--hw-ink);
+}
+
+/* ---- narrow ----------------------------------------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .lc-grid--a,
+  .lc-grid--c {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .lc-grid--b {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .lc-a-stage {
+    height: 88px;
+  }
+  .lc-a-icon {
+    --s: 52px;
+  }
+  .lc-dot {
+    left: calc(50% + 16px);
+    top: calc(50% + 14px);
+  }
+  .lc-c {
+    --fh: 112px;
+  }
+  .lc-c-icon {
+    --s: 56px;
+  }
+  .lc-stats {
+    font-size: 10.5px;
+  }
+  .lc-switch span {
+    display: none;
+  }
+  .lc-switch-label {
+    display: none;
+  }
+  .lc-copy,
+  .lc-more {
+    opacity: 1;
+  }
+}
+@media (hover: none) {
+  .lc-copy,
+  .lc-more {
+    opacity: 1;
+  }
+}

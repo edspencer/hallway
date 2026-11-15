@@ -120,7 +120,7 @@ export function Door({ app, checking, onCopy, onDetails }: DoorProps) {
   );
 }
 
-function Badges({ app, warnings }: { app: AppView; warnings: number }) {
+export function Badges({ app, warnings }: { app: AppView; warnings: number }) {
   const id = app.identity;
   const out: { key: string; text: string; tone?: 'warn' | 'alarm'; title: string; tip?: boolean }[] = [];
   // an error is shown in full on the card; warnings get a badge
